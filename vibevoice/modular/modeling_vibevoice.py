@@ -238,7 +238,6 @@ class VibeVoiceForConditionalGeneration(VibeVoicePreTrainedModel):
         self.vocab_size = config.decoder_config.vocab_size
         self.lm_head = AutoCast.Linear(config.decoder_config.hidden_size, self.vocab_size, bias=False)
 
-        self.post_init()
 
     def get_input_embeddings(self):
         return self.model.get_input_embeddings()
@@ -487,6 +486,7 @@ class VibeVoiceForConditionalGeneration(VibeVoicePreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
 
 __all__ = [
     "VibeVoiceModel",
