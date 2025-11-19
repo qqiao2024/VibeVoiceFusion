@@ -13,13 +13,13 @@ from transformers.modeling_outputs import BaseModelOutputWithPast, ModelOutput
 from transformers.cache_utils import Cache, DynamicCache
 from transformers import modeling_utils
 from transformers.modeling_utils import PreTrainedModel
-from transformers.utils import logging
 
 from vibevoice.modular.modular_vibevoice_tokenizer import VibeVoiceTokenizerStreamingCache, VibeVoiceTokenizerEncoderOutput
 from config.configuration_vibevoice import InferencePhase, VibeVoiceConfig
 from vibevoice.modular.modeling_vibevoice import VibeVoiceModel
 from vibevoice.modular.streamer import AudioStreamer, AsyncAudioStreamer
 from util.rand_init import get_generator
+from util.logger import logging
 from util.float8_scale import AutoCast
 from accelerate import init_empty_weights
 

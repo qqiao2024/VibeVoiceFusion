@@ -1,10 +1,10 @@
 """Tokenization classes for vibevoice."""
 
-from transformers.utils import logging
 from transformers.models.qwen2.tokenization_qwen2 import Qwen2Tokenizer
 from transformers.models.qwen2.tokenization_qwen2_fast import Qwen2TokenizerFast
+from util.logger import get_logger
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class VibeVoiceTextTokenizer(Qwen2Tokenizer):

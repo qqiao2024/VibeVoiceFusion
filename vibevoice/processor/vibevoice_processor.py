@@ -1,5 +1,4 @@
 import math
-import warnings
 from typing import List, Optional, Union, Dict, Any, Tuple
 import os
 import re
@@ -8,11 +7,12 @@ import numpy as np
 import torch
 
 from transformers.tokenization_utils_base import BatchEncoding, PaddingStrategy, PreTokenizedInput, TextInput, TruncationStrategy
-from transformers.utils import TensorType, logging
+from transformers.utils import TensorType
 from .vibevoice_tokenizer_processor import AudioNormalizer
 from util import vibevoice_root_dir
+from util.logger import get_logger
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 
@@ -90,11 +90,11 @@ class VibeVoiceProcessor:
                 },
                 "language_model_pretrained_name": "Qwen/Qwen2.5-7B"
             }
-        
+
         # Extract main processor parameters
         speech_tok_compress_ratio = config.get("speech_tok_compress_ratio", 3200)
         db_normalize = config.get("db_normalize", True)
-        
+
         # Load tokenizer - try from model path first, then fallback to Qwen        
         language_model_pretrained_name = config.get("language_model_pretrained_name", None) or kwargs.pop("language_model_pretrained_name", "Qwen/Qwen2.5-1.5B")
         logger.info(f"Loading tokenizer from {language_model_pretrained_name}")
@@ -104,7 +104,7 @@ class VibeVoiceProcessor:
             local_files_only=True,
             **kwargs
         )
-        
+
         # Load audio processor
         if "audio_processor" in config:
             # Create audio processor from config
@@ -310,7 +310,7 @@ class VibeVoiceProcessor:
         padding: Union[bool, str, PaddingStrategy] = True,
         truncation: Union[bool, str, TruncationStrategy] = False,
         max_length: Optional[int] = None,
-        return_tensors: Optional[Union[str, TensorType]] = None,
+        return_tensors: Optional[Union[str, torch.Tensor]] = None,
         return_attention_mask: bool = True,
     ) -> BatchEncoding:
         """Combine multiple encodings into a batch with padding."""
@@ -442,16 +442,16 @@ class VibeVoiceProcessor:
             
             # Build tokens and masks
             speaker_tokens = (prefix_tokens + 
-                            [self.tokenizer.speech_start_id] + 
-                            [vae_token_id] * vae_tok_len + 
-                            [self.tokenizer.speech_end_id] + 
-                            self.tokenizer.encode('\n', add_special_tokens=False))
+                              [self.tokenizer.speech_start_id] + 
+                              [vae_token_id] * vae_tok_len + 
+                              [self.tokenizer.speech_end_id] + 
+                              self.tokenizer.encode('\n', add_special_tokens=False))
             
             vae_input_mask = ([False] * len(prefix_tokens) + 
-                            [False] + 
-                            [True] * vae_tok_len + 
-                            [False] + 
-                            [False])
+                              [False] + 
+                              [True] * vae_tok_len + 
+                              [False] + 
+                              [False])
             
             voice_full_tokens.extend(speaker_tokens)
             voice_speech_masks.extend(vae_input_mask)

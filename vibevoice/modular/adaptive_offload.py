@@ -96,13 +96,7 @@ class AdaptiveOffloadManager:
         # ===== SAFETY BUFFER =====
         buffer_gb = 0.5
 
-        total_gb = (
-            weights_gb +
-            kv_cache_gb +
-            activation_gb +
-            upcast_buffer_gb +
-            buffer_gb
-        )
+        total_gb = (weights_gb + kv_cache_gb + activation_gb + upcast_buffer_gb + buffer_gb)
 
         return total_gb
 

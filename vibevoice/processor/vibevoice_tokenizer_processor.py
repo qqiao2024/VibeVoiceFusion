@@ -3,17 +3,15 @@ Processor class for VibeVoice models.
 """
 
 import os
-import json
-import warnings
 from typing import List, Optional, Union, Dict, Any
 
 import numpy as np
 import torch
 
 from transformers.feature_extraction_utils import FeatureExtractionMixin
-from transformers.utils import logging
+from util.logger import get_logger
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class AudioNormalizer:

@@ -6,8 +6,6 @@ import torch.nn.functional as F
 import torch.distributed as dist
 
 from transformers.modeling_outputs import BaseModelOutputWithPast, ModelOutput
-from transformers.utils import logging
-
 
 from vibevoice.modular.modular_vibevoice_tokenizer import VibeVoiceAcousticTokenizerModel, VibeVoiceSemanticTokenizerModel
 from vibevoice.modular.modular_vibevoice_diffusion_head import VibeVoiceDiffusionHead
@@ -16,10 +14,10 @@ from vibevoice.schedule.dpm_solver import DPMSolverMultistepScheduler
 from config.configuration_vibevoice import VibeVoiceConfig
 from .modular_vibevoice_qwen import QwenModel, QwenConfig
 from util.float8_scale import AutoCast
+from util.logger import get_logger
 
 
-logger = logging.get_logger(__name__)
-
+logger = get_logger(__name__)
 
 @dataclass
 class VibeVoiceCausalLMOutputWithPast(ModelOutput):

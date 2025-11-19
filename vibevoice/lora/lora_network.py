@@ -273,7 +273,7 @@ class LoRANetwork(nn.Module):
 
         logger.info(f"LoRA+ UNet LR Ratio: {self.loraplus_lr_ratio}")
 
-    def prepare_optimizer_params(self, unet_lr: float = 1e-4, **kwargs):
+    def prepare_optimizer_params(self, learning_rate: float = 1e-4, **kwargs):
         self.requires_grad_(True)
 
         all_params = []
@@ -312,9 +312,9 @@ class LoRANetwork(nn.Module):
             return params, descriptions
 
         if self.lora_layers:
-            params, descriptions = assemble_params(self.lora_layers, unet_lr, self.loraplus_lr_ratio)
+            params, descriptions = assemble_params(self.lora_layers, learning_rate, self.loraplus_lr_ratio)
             all_params.extend(params)
-            lr_descriptions.extend(["unet" + (" " + d if d else "") for d in descriptions])
+            lr_descriptions.extend(["vibevoice" + (" " + d if d else "") for d in descriptions])
 
         return all_params, lr_descriptions
 
