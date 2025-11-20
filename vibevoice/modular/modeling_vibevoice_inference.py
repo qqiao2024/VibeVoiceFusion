@@ -31,6 +31,13 @@ if not hasattr(modeling_utils, "ALL_PARALLEL_STYLES") or modeling_utils.ALL_PARA
 @dataclass
 class VibeVoiceCausalLMOutputWithPast(BaseModelOutputWithPast):
     logits: Optional[torch.FloatTensor] = None
+    loss: Optional[torch.FloatTensor] = None
+    diffusion_loss: Optional[torch.FloatTensor] = None
+    speech_token_num: Optional[int] = None
+    logits: torch.FloatTensor = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor, ...]] = None
+    attentions: Optional[Tuple[torch.FloatTensor, ...]] = None
 
 @dataclass
 class VibeVoiceGenerationOutput(ModelOutput):
@@ -1291,14 +1298,37 @@ class VibeVoiceForConditionalInference(nn.Module):
                        acoustic_input_mask: Optional[torch.BoolTensor] = None,
                        acoustic_loss_mask: Optional[torch.BoolTensor] = None,
                        ddpm_batch_mul: int = 1,
-                       **kwargs: Optional[Dict[str, Union[torch.Tensor, str]]]) -> Dict[str, Any]:
+                       **kwargs: Optional[Dict[str, Union[torch.Tensor, str]]]) -> VibeVoiceCausalLMOutputWithPast:
 
         x = self.get_input_embeddings()(input_ids)
-
-        speech_features, speech_connect_features = self.forward_speech_features(
-            speech_tensors=speech_tensors.type_as(x) if speech_tensors is not None else None,
-            speech_masks=speech_masks,
-            speech_type=kwargs.get("speech_type", "audio"))
+        semantic_speech_all_connect_features = self.model.semantic_connector(speech_semantic_tensors)
+        if speeches_loss_input is not None:
+            # only part audio need diffuse
+            speech_all_features, speech_all_connect_features = self.forward_speech_features(
+                speech_tensors=speech_tensors.type_as(x) if speech_tensors is not None else None,
+                speech_masks=speech_masks,
+                speech_type=kwargs.get("speech_type", "audio"),
+                return_unmask=True)
+            if speech_tensors is not None:
+                if semantic_speech_all_connect_features is not None:
+                    x[acoustic_input_mask] = speech_all_connect_features[speech_masks] + semantic_speech_all_connect_features[speech_masks]
+                else:
+                    x[acoustic_input_mask] = speech_all_connect_features[speech_masks]
+                speech_features = speech_all_features[speeches_loss_input & speech_masks]  # only part audio need diffuse
+                speech_connect_features = speech_all_connect_features[speeches_loss_input & speech_masks]
+                # Forward-time consistency check: selected latent count should match number of acoustic placeholders
+                try:
+                    if acoustic_input_mask is not None:
+                        assert speech_connect_features.shape[0] == int(acoustic_input_mask.sum().item()), (
+                            f"Mismatch between selected speech connectors ({speech_connect_features.shape[0]}) and acoustic_input_mask sum ({int(acoustic_input_mask.sum().item())})"
+                        )
+                except Exception:
+                    pass
+        else:
+            speech_features, speech_connect_features = self.forward_speech_features(
+                speech_tensors=speech_tensors.type_as(x) if speech_tensors is not None else None,
+                speech_masks=speech_masks,
+                speech_type=kwargs.get("speech_type", "audio"))
 
         if speech_tensors is not None:
             x[acoustic_input_mask] = speech_connect_features
@@ -1316,6 +1346,7 @@ class VibeVoiceForConditionalInference(nn.Module):
 
         hidden_states = outputs.last_hidden_state
         logits = self.lm_head(hidden_states)
+
         shift_logits = logits[:, :-1, :].contiguous()
         labels = input_ids.get("input_ids")
         attention_mask = input_ids.get("attention_mask")
@@ -1325,9 +1356,20 @@ class VibeVoiceForConditionalInference(nn.Module):
         loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), ce_labels.view(-1))
 
         diffusion_loss = None
-        condition_features = hidden_states[acoustic_loss_mask]
+        cond_mask = torch.zeros_like(acoustic_loss_mask, dtype=torch.bool)
+        cond_mask[:, :-1] = acoustic_loss_mask[:, 1:]
+        cond_mask[:, 0] = False
+        condition_features = hidden_states[cond_mask]
 
         speech_len, latent_size = speech_features.shape
+        # Sanity check: ensure 1:1 alignment between selected conditions and latents
+        try:
+            assert condition_features.shape[0] == speech_len, (
+                f"Mismatch: condition_features={condition_features.shape[0]} vs speech_features={speech_len}"
+            )
+        except Exception:
+            pass
+        condition_features = hidden_states[cond_mask]
 
         noise = torch.randn(
             (speech_len * ddpm_batch_mul, latent_size),
@@ -1370,8 +1412,15 @@ class VibeVoiceForConditionalInference(nn.Module):
         else:
             diffusion_loss = torch.tensor(0.0, device=diffusion_loss.device)
 
-        output = (logits, speech_len) + outputs.to_tuple()[1:]
-        return (loss, diffusion_loss) + output
+        return VibeVoiceCausalLMOutputWithPast(
+            loss=loss,
+            diffusion_loss=diffusion_loss,
+            speech_token_num=speech_len if speech_tensors is not None else 0,
+            logits=logits,
+            past_key_values=outputs.past_key_values,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions
+        )
 
     def mask_for_ce(self, labels: torch.Tensor, attention_mask: torch.Tensor, acoustic_input_mask: torch.Tensor, pad_id: int = -100) -> torch.Tensor:
         shifted = labels[:, 1:].contiguous()

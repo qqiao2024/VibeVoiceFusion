@@ -79,13 +79,18 @@ class VibeVoiceTrainer:
         network.prepare_optimizer_params(self.train_config.learning_rate)
         optimizer_name, optimizer_args, optimizer, optimizer_train_fn, optimizer_eval_fn = self._get_optimizer(network.get_trainable_params())
 
-        optimizer.zero_grad()
+        logger.info(f"Optimizer: {optimizer_name}({optimizer_args}) | Learning Rate: {self.train_config.learning_rate}")
         for epoch in range(self.train_config.epochs):
             logger.info(f"\nepoch {epoch + 1}/{self.train_config.epochs}")
             for _ in range(self.train_config.dataset_repeats):
                 for step, inputs in enumerate(train_dataloader):
+                    output = model.call_for_train(**inputs)
+                    real_loss = self.train_config.ce_loss_weight * output.loss + self.train_config.diffusion_loss_weight * output.diffusion_loss
+                    real_loss.backward()
                     optimizer.step()
-                
+                    optimizer.zero_grad()
+            logger.info(f"Epoch {epoch + 1} completed, and current loss is {real_loss.item(): .4f}")
+
     def get_model_config(self) -> dict:
         config_dict = {}
         config = self.train_config.model_config_path
