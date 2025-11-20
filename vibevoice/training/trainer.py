@@ -40,7 +40,8 @@ class TrainConfig:
     dataset_repeats: int = 1
     speech_compress_ratio: int = 3200
     semantic_dim: int = 128
-
+    diffusion_loss_weight: float = 1.4 
+    ce_loss_weight: float = 0.04 
 
 
 class VibeVoiceTrainer:
