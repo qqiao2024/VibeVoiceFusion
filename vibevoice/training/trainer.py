@@ -1,6 +1,7 @@
 import os
 import torch
 import ast
+import json
 
 from typing import Optional
 from pathlib import Path
@@ -12,6 +13,9 @@ from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForCondition
 from vibevoice.modular.adaptive_offload import OffloadConfig
 from vibevoice.lora.lora_network import create_network
 from util.logger import get_logger
+from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
+
+from dataset import VibeVoiceCollator, VibeVoiceDataset
 
 logger = get_logger(__name__)
 
@@ -32,6 +36,10 @@ class TrainConfig:
     model_config_path: Optional[str] = None
     optimizer_type: str = "AdamW8bit"
     optimizer_args: Optional[list[str]] = None
+    seeds: Optional[int] = 42
+    dataset_repeats: int = 1
+    speech_compress_ratio: int = 3200
+    semantic_dim: int = 128
 
 
 
@@ -73,8 +81,9 @@ class VibeVoiceTrainer:
         optimizer.zero_grad()
         for epoch in range(self.train_config.epochs):
             logger.info(f"\nepoch {epoch + 1}/{self.train_config.epochs}")
-            for step, inputs in enumerate(train_dataloader):
-                optimizer.step()
+            for _ in range(self.train_config.dataset_repeats):
+                for step, inputs in enumerate(train_dataloader):
+                    optimizer.step()
                 
     def get_model_config(self) -> dict:
         config_dict = {}
@@ -177,4 +186,32 @@ class VibeVoiceTrainer:
         return optimizer_name, optimizer_args, optimizer, train_fn, eval_fn
     
     def _get_dataloader(self) -> DataLoader:
-        pass
+        processor = VibeVoiceProcessor.from_pretrained(None)
+        compute_semantics_flag = hasattr(processor, "semantic_tokenizer") and processor.semantic_tokenizer is not None
+
+        dataset = []
+        try:
+            with open(self.train_config.dataset_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        dataset.append(json.loads(line))
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to load dataset from {self.train_config.dataset_path}: {e}")
+       
+        if len(dataset) == 0:
+            raise ValueError(f"Dataset is empty. Please check the dataset jsonl file at {self.train_config.dataset_path}.")
+
+        train_dataset = VibeVoiceDataset(dataset)
+        data_collator = VibeVoiceCollator(processor=processor,
+                                          speech_compress_ratio=self.train_config.speech_compress_ratio,
+                                          semantic_vae_dim=self.train_config.semantic_dim,
+                                          compute_semantics=compute_semantics_flag,
+                                          debug_checks=False)
+        return DataLoader(train_dataset,
+                          batch_size=1,
+                          shuffle=True,
+                          collate_fn=data_collator,
+                          num_workers=1,
+                          persistent_workers=1)
