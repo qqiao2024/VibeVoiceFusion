@@ -2,6 +2,7 @@ import os
 import torch
 import ast
 import json
+import toml
 
 from typing import Optional
 from pathlib import Path
@@ -25,7 +26,7 @@ class TrainConfig:
     batch_size: int = 1
     learning_rate: float = 1e-4
     dataset_path: Optional[str] = None
-    output_dir: Optional[str] = None
+    output_dir: Optional[str] = "./lora_output"
     multiplier: float = 1.0
     lora_dim: int = 4
     lora_alpha: Optional[float] = None
@@ -42,6 +43,39 @@ class TrainConfig:
     semantic_dim: int = 128
     diffusion_loss_weight: float = 1.4 
     ce_loss_weight: float = 0.04 
+
+    @classmethod
+    def from_dict(cls, config_dict: dict) -> "TrainConfig":
+        return cls(
+            epochs=config_dict.get("epochs", 10),
+            batch_size=config_dict.get("batch_size", 1),
+            learning_rate=config_dict.get("learning_rate", 1e-4),
+            dataset_path=config_dict.get("dataset_path"),
+            output_dir=config_dict.get("output_dir", "./lora_output"),
+            multiplier=config_dict.get("multiplier", 1.0),
+            lora_dim=config_dict.get("lora_dim", 4),
+            lora_alpha=config_dict.get("lora_alpha"),
+            lora_dropout=config_dict.get("lora_dropout"),
+            model_path=config_dict.get("model_path"),
+            number_of_layers=config_dict.get("number_of_layers", 0),
+            dtype=config_dict.get("dtype", "bfloat16"),
+            model_config_path=config_dict.get("model_config_path"),
+            optimizer_type=config_dict.get("optimizer_type", "AdamW8bit"),
+            optimizer_args=config_dict.get("optimizer_args"),
+            seeds=config_dict.get("seeds", 42),
+            dataset_repeats=config_dict.get("dataset_repeats", 1),
+            speech_compress_ratio=config_dict.get("speech_compress_ratio", 3200),
+            semantic_dim=config_dict.get("semantic_dim", 128),
+            diffusion_loss_weight=config_dict.get("diffusion_loss_weight", 1.4),
+            ce_loss_weight=config_dict.get("ce_loss_weight", 0.04),
+        )
+    
+    @classmethod
+    def from_toml(cls, toml_path: str) -> "TrainConfig":
+        config_dict = {}
+        with open(toml_path, 'r') as f:
+            config_dict = toml.load(f)
+        return cls.from_dict(config_dict)
 
 
 class VibeVoiceTrainer:

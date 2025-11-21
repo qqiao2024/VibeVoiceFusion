@@ -7,12 +7,11 @@ import torch
 
 from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalInference
 from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
-from transformers.utils import logging
+from util.logger import get_logger
 from config.configuration_vibevoice import VibeVoiceConfig, DEFAULT_CONFIG
 from util.rand_init import get_generator
 
-logging.set_verbosity_info()
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 class VoiceMapper:
     """Maps speaker names to voice file paths"""

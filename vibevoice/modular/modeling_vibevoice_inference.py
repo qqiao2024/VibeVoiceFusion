@@ -19,11 +19,11 @@ from config.configuration_vibevoice import InferencePhase, VibeVoiceConfig
 from vibevoice.modular.modeling_vibevoice import VibeVoiceModel
 from vibevoice.modular.streamer import AudioStreamer, AsyncAudioStreamer
 from util.rand_init import get_generator
-from util.logger import logging
+from util.logger import get_logger
 from util.float8_scale import AutoCast
 from accelerate import init_empty_weights
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 if not hasattr(modeling_utils, "ALL_PARALLEL_STYLES") or modeling_utils.ALL_PARALLEL_STYLES is None:
     modeling_utils.ALL_PARALLEL_STYLES = ["tp", "none", "colwise", "rowwise"]

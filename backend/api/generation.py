@@ -12,11 +12,9 @@ from backend.services.speaker_service import SpeakerService
 from backend.services.project_service import ProjectService
 from backend.gen_voice.task import gm
 from backend.i18n import t
-from transformers.utils import logging
+from util.logger import get_logger
 
-logging.set_verbosity_info()
-logger = logging.get_logger(__name__)
-
+logger = get_logger(__name__)
 
 def _enrich_generation_with_session_name(generation: Generation, dialog_service: DialogSessionService) -> Dict[str, Any]:
     """

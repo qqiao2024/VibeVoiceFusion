@@ -51,13 +51,11 @@ from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForCondition
 from vibevoice.modular.adaptive_offload import AdaptiveOffloadManager
 from vibevoice.modular.custom_offloading_utils import OffloadConfig
 from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
-from transformers.utils import logging
 from config.configuration_vibevoice import VibeVoiceConfig, DEFAULT_CONFIG
 from util.rand_init import get_generator
+from util.logger import get_logger
 
-logging.set_verbosity_info()
-logger = logging.get_logger(__name__)
-
+logger = get_logger(__name__)
 
 @dataclass
 class GenerationMetrics:

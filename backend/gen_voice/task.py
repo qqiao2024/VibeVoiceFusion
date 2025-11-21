@@ -1,16 +1,16 @@
 import threading
 
+from pathlib import Path
+
 from time import sleep
 from typing import Any, Dict, List
-from transformers.utils import logging
 from backend.inference.inference import InferenceBase
 from backend.models.generation import Generation
 from config.configuration_vibevoice import InferencePhase
 from utils.file_handler import FileHandler
-from pathlib import Path
+from util.logger import get_logger
 
-logging.set_verbosity_info()
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 class Task:
 

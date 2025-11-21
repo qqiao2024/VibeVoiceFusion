@@ -7,7 +7,7 @@ This module provides a flexible logging system that follows:
 
 Usage:
     Basic (uses defaults):
-        from backend.utils.logging import get_logger
+        from utils.logger import get_logger
         logger = get_logger(__name__)
         logger.info("Hello world")
 

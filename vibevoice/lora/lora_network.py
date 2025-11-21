@@ -5,7 +5,7 @@ import os
 
 from typing import List, Optional, Union, Type, Dict
 from torch import nn
-from transformers.utils.logging import get_logger
+from util.logger import get_logger
 
 logger = get_logger(__name__)
 
