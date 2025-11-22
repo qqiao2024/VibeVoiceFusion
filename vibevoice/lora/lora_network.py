@@ -131,7 +131,7 @@ class LoRANetwork(nn.Module):
             loras = []
             for name, module in root_module.named_modules():
                 if module.__class__.__name__ == "Linear":
-                    original_name = (name + "." if name else "") + name
+                    original_name = name
                     lora_name = f"{pfx}.{original_name}".replace(".", "_")
 
                     # exclude/include filter
@@ -165,6 +165,9 @@ class LoRANetwork(nn.Module):
             return loras
 
         self.lora_layers: List[LoRAModule] = create_modules(self.prefix, model)
+
+        if not self.lora_layers or len(self.lora_layers) == 0:
+            raise RuntimeError("No LoRA modules were created. Please check the configuration.")
 
         logger.info(f"create LoRA for Vibevoice: {len(self.lora_layers)} modules.")
         if verbose:
