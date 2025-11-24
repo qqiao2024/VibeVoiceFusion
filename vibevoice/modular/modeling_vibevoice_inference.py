@@ -1372,8 +1372,7 @@ class VibeVoiceForConditionalInference(nn.Module):
         noise = torch.randn(
             (speech_len * ddpm_batch_mul, latent_size),
             device=hidden_states.device,
-            dtype=hidden_states.dtype,
-            generator=get_generator()
+            dtype=hidden_states.dtype
         )
 
         timesteps = torch.multinomial(

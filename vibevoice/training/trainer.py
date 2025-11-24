@@ -79,6 +79,30 @@ class TrainConfig:
         with open(toml_path, 'r') as f:
             config_dict = toml.load(f)
         return cls.from_dict(config_dict)
+    
+    def to_metadata(self) -> Dict[str, Any]:
+        return {
+            "epochs": str(self.epochs),
+            "batch_size": str(self.batch_size),
+            "learning_rate": str(self.learning_rate),
+            "dataset_path": self.dataset_path,
+            "output_dir": self.output_dir,
+            "multiplier": str(self.multiplier),
+            "lora_dim": str(self.lora_dim),
+            "lora_alpha": str(self.lora_alpha),
+            "lora_dropout": str(self.lora_dropout),
+            "model_path": self.model_path,
+            "number_of_layers": str(self.number_of_layers),
+            "dtype": self.dtype,
+            "model_config_path": self.model_config_path,
+            "optimizer":  self.optimizer_type + (f"({self.optimizer_args})" if len(self.optimizer_args) > 0 else ""),
+            "seeds": str(self.seeds),
+            "dataset_repeats": str(self.dataset_repeats),
+            "speech_compress_ratio": str(self.speech_compress_ratio),
+            "semantic_dim": str(self.semantic_dim),
+            "diffusion_loss_weight": str(self.diffusion_loss_weight),
+            "ce_loss_weight": str(self.ce_loss_weight),
+        }   
 
 
 class VibeVoiceTrainer:
@@ -102,8 +126,9 @@ class VibeVoiceTrainer:
 
     def train(self):
 
+        metadata = self.train_config.to_metadata()
+        logger.info(f"Training configuration: {metadata}")
         get_generator(seeds = self.train_config.seeds)
-
         model_file = Path(self.train_config.model_path) / Path(f"vibevoice7b_{'bf16' if self.dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors")
         config_dict = self.get_model_config()
         model = self._load_model(model_file, self.dtype, config_dict)
@@ -136,6 +161,7 @@ class VibeVoiceTrainer:
                     optimizer.step()
                     optimizer.zero_grad()
             logger.info(f"Epoch {epoch + 1} completed, and current loss is {real_loss.item(): .4f}")
+        metadata["last_loss"] = real_loss.item()
     
     def _preprocess_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         inputs = self._to_device(inputs)
