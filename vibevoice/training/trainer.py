@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from torch.utils.data import DataLoader
 
 from config.configuration_vibevoice import VibeVoiceConfig, DEFAULT_CONFIG
+from util.rand_init import get_generator
 from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalInference
 from vibevoice.modular.adaptive_offload import OffloadConfig
 from vibevoice.lora.lora_network import create_network
@@ -101,6 +102,8 @@ class VibeVoiceTrainer:
 
     def train(self):
 
+        get_generator(seeds = self.train_config.seeds)
+
         model_file = Path(self.train_config.model_path) / Path(f"vibevoice7b_{'bf16' if self.dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors")
         config_dict = self.get_model_config()
         model = self._load_model(model_file, self.dtype, config_dict)
@@ -115,10 +118,11 @@ class VibeVoiceTrainer:
                                  self.train_config.lora_alpha,
                                  self.train_config.lora_dropout)
         network.apply_to()
-        network.prepare_optimizer_params(self.train_config.learning_rate)
-        optimizer_name, optimizer_args, optimizer, optimizer_train_fn, optimizer_eval_fn = self._get_optimizer(network.get_trainable_params())
+        network.to(device=self.device, dtype=torch.bfloat16)  # only support cuda and bfloat16 for training
+        trainable_parameter, _ = network.prepare_optimizer_params(self.train_config.learning_rate)
+        optimizer_name, optimizer_args, optimizer, optimizer_train_fn, optimizer_eval_fn = self._get_optimizer(trainable_parameter)
 
-        self._patch_acoustic_encode_for_legacy_indexing(model)
+        self._patch_acoustic_encode_for_legacy_indexing(model)  # 
 
         logger.info(f"Optimizer: {optimizer_name}({optimizer_args}) | Learning Rate: {self.train_config.learning_rate}")
         for epoch in range(self.train_config.epochs):

@@ -49,6 +49,7 @@ class LoRAModule(nn.Module):
         self.org_module = original_module  # remove in applying
         self.dropout = dropout
         self.rank_dropout = rank_dropout
+        self.module_dropout = module_dropout
 
         nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         nn.init.zeros_(self.lora_up.weight)

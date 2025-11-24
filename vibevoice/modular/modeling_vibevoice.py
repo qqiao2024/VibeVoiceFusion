@@ -20,7 +20,7 @@ from util.logger import get_logger
 logger = get_logger(__name__)
 
 @dataclass
-class VibeVoiceCausalLMOutputWithPast(ModelOutput):
+class VibeVoiceCausalLMOutputWithPast:
     loss: Optional[torch.FloatTensor] = None
     diffusion_loss: Optional[torch.FloatTensor] = None
     speech_token_num: Optional[int] = None
@@ -197,8 +197,6 @@ class VibeVoiceModel(VibeVoicePreTrainedModel):
                 return_dict: Optional[bool] = None,
                 cache_position: Optional[torch.LongTensor] = None,
                 **kwargs) -> Union[Tuple, BaseModelOutputWithPast]:
-
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # Forward through language model
         outputs = self.language_model(

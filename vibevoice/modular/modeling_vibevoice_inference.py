@@ -1330,8 +1330,8 @@ class VibeVoiceForConditionalInference(nn.Module):
                 speech_masks=speech_masks,
                 speech_type=kwargs.get("speech_type", "audio"))
 
-        if speech_tensors is not None:
-            x[acoustic_input_mask] = speech_connect_features
+            if speech_tensors is not None:
+                x[acoustic_input_mask] = speech_connect_features
 
         outputs = self.model(input_ids=None,
                              attention_mask=attention_mask,
@@ -1348,9 +1348,7 @@ class VibeVoiceForConditionalInference(nn.Module):
         logits = self.lm_head(hidden_states)
 
         shift_logits = logits[:, :-1, :].contiguous()
-        labels = input_ids.get("input_ids")
-        attention_mask = input_ids.get("attention_mask")
-        acoustic_input_mask = input_ids.get("acoustic_input_mask")
+        labels = input_ids
         ce_labels = self.mask_for_ce(labels, attention_mask, acoustic_input_mask)
         loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
         loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), ce_labels.view(-1))
@@ -1374,7 +1372,8 @@ class VibeVoiceForConditionalInference(nn.Module):
         noise = torch.randn(
             (speech_len * ddpm_batch_mul, latent_size),
             device=hidden_states.device,
-            dtype=hidden_states.dtype
+            dtype=hidden_states.dtype,
+            generator=get_generator()
         )
 
         timesteps = torch.multinomial(
