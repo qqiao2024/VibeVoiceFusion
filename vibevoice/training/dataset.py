@@ -204,6 +204,7 @@ class VibeVoiceCollator:
     audio_field: str = "audio"
     voice_prompts_field: str = "voice_prompts"
     voice_prompt_drop_rate: float = 0.0
+    dataset_root_path: Optional[str] = None
 
     def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         batch_size = len(features)
@@ -229,6 +230,9 @@ class VibeVoiceCollator:
             elif _drop_rate > 1.0:
                 _drop_rate = 1.0
 
+            if self.dataset_root_path is not None and voice_prompts is not None:
+                voice_prompts = [f"{self.dataset_root_path}/{str(vp)}" if not str(vp).startswith('/') else str(vp) for vp in voice_prompts]
+                
             proc = self.processor(
                 text=[text],
                 voice_samples=[voice_prompts] if voice_prompts is not None and random.random() >= _drop_rate else None,
@@ -244,6 +248,9 @@ class VibeVoiceCollator:
             if speech_input_mask is None:
                 speech_input_mask = torch.zeros_like(proc["input_ids"], dtype=torch.bool)
             speech_input_mask_list = speech_input_mask[0].tolist()
+
+            if self.dataset_root_path is not None and isinstance(target_audio, str):
+                target_audio = f"{self.dataset_root_path}/{target_audio}" if not target_audio.startswith('/') else target_audio
 
             wav_target = _load_audio_to_24k(target_audio, target_sr=24000, augment_with_silence=True)
             # Prefer exact frame count from acoustic tokenizer if available; fallback to compress ratio

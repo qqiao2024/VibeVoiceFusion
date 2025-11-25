@@ -7,6 +7,7 @@ import toml
 from typing import Any, Dict, Optional
 from pathlib import Path
 from dataclasses import dataclass
+from datetime import datetime
 from torch.utils.data import DataLoader
 
 from config.configuration_vibevoice import VibeVoiceConfig, DEFAULT_CONFIG
@@ -46,6 +47,8 @@ class TrainConfig:
     diffusion_loss_weight: float = 1.4 
     ce_loss_weight: float = 0.04 
     device : str = "cuda"
+    gradient_accumulation_steps: int = 16
+    dataload_workers: int = 2
 
     @classmethod
     def from_dict(cls, config_dict: dict) -> "TrainConfig":
@@ -71,6 +74,9 @@ class TrainConfig:
             semantic_dim=config_dict.get("semantic_dim", 128),
             diffusion_loss_weight=config_dict.get("diffusion_loss_weight", 1.4),
             ce_loss_weight=config_dict.get("ce_loss_weight", 0.04),
+            device=config_dict.get("device", "cuda"),
+            gradient_accumulation_steps=config_dict.get("gradient_accumulation_steps", 16),
+            dataload_workers=config_dict.get("dataload_workers", 2),
         )
     
     @classmethod
@@ -102,6 +108,8 @@ class TrainConfig:
             "semantic_dim": str(self.semantic_dim),
             "diffusion_loss_weight": str(self.diffusion_loss_weight),
             "ce_loss_weight": str(self.ce_loss_weight),
+            "gradient_accumulation_steps": str(self.gradient_accumulation_steps),
+            "dataload_workers": str(self.dataload_workers),
         }   
 
 
@@ -149,7 +157,13 @@ class VibeVoiceTrainer:
 
         self._patch_acoustic_encode_for_legacy_indexing(model)  # 
 
+        optimizer.zero_grad()
+        gradient_accumulation_steps = self.train_config.gradient_accumulation_steps
+        current_step = 0
+        time = datetime.now()
         logger.info(f"Optimizer: {optimizer_name}({optimizer_args}) | Learning Rate: {self.train_config.learning_rate}")
+        total_steps = self.train_config.epochs * len(train_dataloader) // (self.train_config.batch_size) * self.train_config.dataset_repeats
+        logger.info(f"Starting training for {self.train_config.epochs} epochs | total_steps is approx. {total_steps} | batch_size: {self.train_config.batch_size} | gradient_accumulation_steps: {gradient_accumulation_steps}")
         for epoch in range(self.train_config.epochs):
             logger.info(f"\nepoch {epoch + 1}/{self.train_config.epochs}")
             for _ in range(self.train_config.dataset_repeats):
@@ -158,10 +172,21 @@ class VibeVoiceTrainer:
                     output = model.call_for_train(**inputs)
                     real_loss = self.train_config.ce_loss_weight * output.loss + self.train_config.diffusion_loss_weight * output.diffusion_loss
                     real_loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-            logger.info(f"Epoch {epoch + 1} completed, and current loss is {real_loss.item(): .4f}")
+                    current_step += 1
+                    if current_step % gradient_accumulation_steps == 0:
+                        optimizer.step()
+                        optimizer.zero_grad()
+            logger.info(f"Epoch {epoch + 1} completed, and current loss is {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, diffusion_loss: {output.diffusion_loss.item():.4f}")
+        end_time = datetime.now()
+        elapsed_time = end_time - time
+        elapsed_seconds = elapsed_time.total_seconds()
         metadata["last_loss"] = real_loss.item()
+        metadata["last_ce_loss"] = output.loss.item()
+        metadata["last_diffusion_loss"] = output.diffusion_loss.item()  
+
+        logger.info(f"Training completed. Final loss: {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, "
+                    f"diffusion_loss: {output.diffusion_loss.item():.4f}, total training steps: {current_step}, "
+                    f"total time elapsed: {elapsed_seconds:.2f} seconds")
     
     def _preprocess_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         inputs = self._to_device(inputs)
@@ -320,12 +345,13 @@ class VibeVoiceTrainer:
                                           speech_compress_ratio=self.train_config.speech_compress_ratio,
                                           semantic_vae_dim=self.train_config.semantic_dim,
                                           compute_semantics=compute_semantics_flag,
-                                          debug_checks=False)
+                                          debug_checks=False, 
+                                          dataset_root_path=os.path.dirname(self.train_config.dataset_path))
         return DataLoader(train_dataset,
-                          batch_size=1,
+                          batch_size=self.train_config.batch_size,
                           shuffle=True,
                           collate_fn=data_collator,
-                          num_workers=1,
+                          num_workers=self.train_config.dataload_workers,
                           persistent_workers=1)
 
     def _patch_acoustic_encode_for_legacy_indexing(self, model_obj):
