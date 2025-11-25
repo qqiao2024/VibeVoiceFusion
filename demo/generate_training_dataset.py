@@ -129,6 +129,7 @@ def generate_dataset(
     text_path: str,
     utt2dialect_path: str,
     output_path: str,
+    phase: str = "phase1",
     selected_dialect: str = None,
     max_files: int = 5000,
     num_voice_prompts: int = 2,
@@ -142,6 +143,7 @@ def generate_dataset(
         text_path: Path to text metadata file
         utt2dialect_path: Path to dialect metadata file
         output_path: Path to output directory
+        phase: Phase subdirectory name (default: "phase1")
         selected_dialect: Specific dialect to filter (None for all)
         max_files: Maximum number of files to select (-1 for unlimited)
         num_voice_prompts: Number of voice prompt files per sample
@@ -225,10 +227,10 @@ def generate_dataset(
         dataset.append(entry)
         
         # Track all audio files for copy script
-        all_audio_files.add((utt_id, category, 'target'))
+        all_audio_files.add((utt_id, category, phase, 'target'))
         for vp in voice_prompts:
             vp_category, _ = parse_filename(vp)
-            all_audio_files.add((vp, vp_category, 'voice_prompt'))
+            all_audio_files.add((vp, vp_category, phase, 'voice_prompt'))
     
     print()  # New line after progress
     print(f"Generated {len(dataset)} dataset entries")
@@ -245,7 +247,7 @@ def write_dataset_jsonl(dataset: List[Dict], output_path: str):
 
 
 def generate_copy_script(
-    audio_files: Set[Tuple[str, str, str]],
+    audio_files: Set[Tuple[str, str, str, str]],
     audio_root: str,
     output_path: str
 ) -> str:
@@ -253,7 +255,7 @@ def generate_copy_script(
     Generate bash script to copy audio files.
     
     Args:
-        audio_files: Set of (utt_id, category, target_type) tuples
+        audio_files: Set of (utt_id, category, phase, target_type) tuples
         audio_root: Root directory of source audio files
         output_path: Output dataset directory
     
@@ -276,8 +278,8 @@ def generate_copy_script(
         sorted_files = sorted(audio_files)
         
         f.write("# Copy audio files\n")
-        for utt_id, category, target_type in sorted_files:
-            src_path = os.path.join(audio_root, category, f"{utt_id}.wav")
+        for utt_id, category, phase, target_type in sorted_files:
+            src_path = os.path.join(audio_root, category, phase, f"{utt_id}.wav")
             dst_path = os.path.join(output_path, target_type, f"{utt_id}.wav")
             f.write(f'cp "{src_path}" "{dst_path}"\n')
         
@@ -310,6 +312,12 @@ def main():
         "--utt2dialect-path",
         required=True,
         help="Path to utt2subdialect metadata file"
+    )
+    
+    parser.add_argument(
+        "--phase",
+        default="phase1",
+        help="Phase subdirectory name (default: phase1)"
     )
     
     parser.add_argument(
@@ -377,6 +385,7 @@ def main():
     print(f"Audio root: {args.audio_path}")
     print(f"Text metadata: {args.text_path}")
     print(f"Dialect metadata: {args.utt2dialect_path}")
+    print(f"Phase: {args.phase}")
     print(f"Selected dialect: {args.dialect or 'All'}")
     print(f"Max files: {args.max_files if args.max_files > 0 else 'Unlimited'}")
     print(f"Voice prompts per sample: {args.num_voice_prompts}")
@@ -389,6 +398,7 @@ def main():
         text_path=args.text_path,
         utt2dialect_path=args.utt2dialect_path,
         output_path=args.output_path,
+        phase=args.phase,
         selected_dialect=args.dialect,
         max_files=args.max_files,
         num_voice_prompts=args.num_voice_prompts,
