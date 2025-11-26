@@ -1404,7 +1404,7 @@ class VibeVoiceForConditionalInference(nn.Module):
         else:
             raise NotImplementedError(f"Prediction type {prediction_type} not implemented")
 
-        diffusion_loss = F.mse_loss(model_output.float(), target_for_loss.float(), reduction='sum')
+        diffusion_loss = F.mse_loss(model_output.float(), target_for_loss.float(), reduction='mean')
         if latent_size > 0 and ddpm_batch_mul > 0:
             diffusion_loss = diffusion_loss / latent_size / ddpm_batch_mul
         else:

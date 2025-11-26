@@ -14,7 +14,7 @@ from config.configuration_vibevoice import VibeVoiceConfig, DEFAULT_CONFIG
 from util.rand_init import get_generator
 from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalInference
 from vibevoice.modular.adaptive_offload import OffloadConfig
-from vibevoice.lora.lora_network import create_network
+from vibevoice.lora.lora_network import create_network, LoRANetwork
 from util.logger import get_logger
 from vibevoice.modular.modular_vibevoice_tokenizer import VibeVoiceTokenizerEncoderOutput
 from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class TrainConfig:
+    lora_name: str = "vibevoice_lora"
     epochs: int = 10
     batch_size: int = 1
     learning_rate: float = 1e-4
@@ -44,8 +45,8 @@ class TrainConfig:
     dataset_repeats: int = 1
     speech_compress_ratio: int = 3200
     semantic_dim: int = 128
-    diffusion_loss_weight: float = 1.4 
-    ce_loss_weight: float = 0.04 
+    diffusion_loss_weight: float = 10.4
+    ce_loss_weight: float = 0.004 
     device : str = "cuda"
     gradient_accumulation_steps: int = 16
     dataload_workers: int = 2
@@ -53,6 +54,7 @@ class TrainConfig:
     @classmethod
     def from_dict(cls, config_dict: dict) -> "TrainConfig":
         return cls(
+            lora_name=config_dict.get("lora_name", "vibevoice_lora"),
             epochs=config_dict.get("epochs", 10),
             batch_size=config_dict.get("batch_size", 1),
             learning_rate=config_dict.get("learning_rate", 1e-4),
@@ -72,8 +74,8 @@ class TrainConfig:
             dataset_repeats=config_dict.get("dataset_repeats", 1),
             speech_compress_ratio=config_dict.get("speech_compress_ratio", 3200),
             semantic_dim=config_dict.get("semantic_dim", 128),
-            diffusion_loss_weight=config_dict.get("diffusion_loss_weight", 1.4),
-            ce_loss_weight=config_dict.get("ce_loss_weight", 0.04),
+            diffusion_loss_weight=config_dict.get("diffusion_loss_weight", 10.4),
+            ce_loss_weight=config_dict.get("ce_loss_weight", 0.004),
             device=config_dict.get("device", "cuda"),
             gradient_accumulation_steps=config_dict.get("gradient_accumulation_steps", 16),
             dataload_workers=config_dict.get("dataload_workers", 2),
@@ -88,6 +90,7 @@ class TrainConfig:
     
     def to_metadata(self) -> Dict[str, Any]:
         return {
+            "lora_name": self.lora_name,
             "epochs": str(self.epochs),
             "batch_size": str(self.batch_size),
             "learning_rate": str(self.learning_rate),
@@ -136,7 +139,10 @@ class VibeVoiceTrainer:
 
         metadata = self.train_config.to_metadata()
         logger.info(f"Training configuration: {metadata}")
-        get_generator(seeds = self.train_config.seeds)
+
+        torch.manual_seed(self.train_config.seeds)
+        torch.cuda.manual_seed_all(self.train_config.seeds)
+
         model_file = Path(self.train_config.model_path) / Path(f"vibevoice7b_{'bf16' if self.dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors")
         config_dict = self.get_model_config()
         model = self._load_model(model_file, self.dtype, config_dict)
@@ -145,11 +151,11 @@ class VibeVoiceTrainer:
         processor = VibeVoiceProcessor.from_pretrained(None)
         train_dataloader = self._get_dataloader(processor, model)
 
-        network = create_network(model,
-                                 self.train_config.multiplier,
-                                 self.train_config.lora_dim,
-                                 self.train_config.lora_alpha,
-                                 self.train_config.lora_dropout)
+        network :LoRANetwork = create_network(model,
+                                              self.train_config.multiplier,
+                                              self.train_config.lora_dim,
+                                              self.train_config.lora_alpha,
+                                              self.train_config.lora_dropout)
         network.apply_to()
         network.to(device=self.device, dtype=torch.bfloat16)  # only support cuda and bfloat16 for training
         trainable_parameter, _ = network.prepare_optimizer_params(self.train_config.learning_rate)
@@ -162,8 +168,12 @@ class VibeVoiceTrainer:
         current_step = 0
         time = datetime.now()
         logger.info(f"Optimizer: {optimizer_name}({optimizer_args}) | Learning Rate: {self.train_config.learning_rate}")
+
         total_steps = self.train_config.epochs * len(train_dataloader) // (self.train_config.batch_size) * self.train_config.dataset_repeats
+
         logger.info(f"Starting training for {self.train_config.epochs} epochs | total_steps is approx. {total_steps} | batch_size: {self.train_config.batch_size} | gradient_accumulation_steps: {gradient_accumulation_steps}")
+        optimizer_train_fn()
+
         for epoch in range(self.train_config.epochs):
             logger.info(f"\nepoch {epoch + 1}/{self.train_config.epochs}")
             for _ in range(self.train_config.dataset_repeats):
@@ -177,6 +187,7 @@ class VibeVoiceTrainer:
                         optimizer.step()
                         optimizer.zero_grad()
             logger.info(f"Epoch {epoch + 1} completed, and current loss is {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, diffusion_loss: {output.diffusion_loss.item():.4f}")
+
         end_time = datetime.now()
         elapsed_time = end_time - time
         elapsed_seconds = elapsed_time.total_seconds()
@@ -187,6 +198,14 @@ class VibeVoiceTrainer:
         logger.info(f"Training completed. Final loss: {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, "
                     f"diffusion_loss: {output.diffusion_loss.item():.4f}, total training steps: {current_step}, "
                     f"total time elapsed: {elapsed_seconds:.2f} seconds")
+
+    def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int):
+        os.makedirs(self.train_config.output_dir, exist_ok=True)
+        now = datetime.now()
+        ckpt_file = os.path.join(self.train_config.output_dir, self.train_config.lora_name + f"_{epoch_no}_{steps}_{now.strftime('%Y%m%d%H%M%S')}.safetensors")
+        metadata["total_steps"] = str(steps)
+        metadata["total_epoch"] = str(epoch_no)
+        network.save_weights(ckpt_file, torch.bfloat16, metadata)
     
     def _preprocess_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         inputs = self._to_device(inputs)
