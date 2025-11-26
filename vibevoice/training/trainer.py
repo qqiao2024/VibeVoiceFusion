@@ -67,7 +67,7 @@ class TrainConfig:
             model_path=config_dict.get("model_path"),
             number_of_layers=config_dict.get("number_of_layers", 0),
             dtype=config_dict.get("dtype", "bfloat16"),
-            model_config_path=config_dict.get("model_config_path"),
+            model_config_path=config_dict.get("model_config_path", ""),
             optimizer_type=config_dict.get("optimizer_type", "AdamW8bit"),
             optimizer_args=config_dict.get("optimizer_args"),
             seeds=config_dict.get("seeds", 42),
@@ -103,7 +103,7 @@ class TrainConfig:
             "model_path": self.model_path,
             "number_of_layers": str(self.number_of_layers),
             "dtype": self.dtype,
-            "model_config_path": self.model_config_path,
+            "model_config_path": self.model_config_path or "",
             "optimizer":  self.optimizer_type + (f"({self.optimizer_args})" if len(self.optimizer_args) > 0 else ""),
             "seeds": str(self.seeds),
             "dataset_repeats": str(self.dataset_repeats),
@@ -191,13 +191,14 @@ class VibeVoiceTrainer:
         end_time = datetime.now()
         elapsed_time = end_time - time
         elapsed_seconds = elapsed_time.total_seconds()
-        metadata["last_loss"] = real_loss.item()
-        metadata["last_ce_loss"] = output.loss.item()
-        metadata["last_diffusion_loss"] = output.diffusion_loss.item()  
+        metadata["last_loss"] = f"{real_loss.item():.4f}"
+        metadata["last_ce_loss"] = f"{output.loss.item():.4f}"
+        metadata["last_diffusion_loss"] = f"{output.diffusion_loss.item():.4f}"
 
         logger.info(f"Training completed. Final loss: {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, "
                     f"diffusion_loss: {output.diffusion_loss.item():.4f}, total training steps: {current_step}, "
                     f"total time elapsed: {elapsed_seconds:.2f} seconds")
+        self.save_model(metadata, network, current_step, epoch + 1)
 
     def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int):
         os.makedirs(self.train_config.output_dir, exist_ok=True)

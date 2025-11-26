@@ -217,6 +217,7 @@ models
 *.txt
 *.pt
 *.swp
+*.safetensors
 outputs/
 
 # Backend
@@ -232,3 +233,4 @@ backend/**/__pycache__/
 workspace/
 outputs_offloading/
 demo/datasets/
+

@@ -338,7 +338,7 @@ class LoRANetwork(nn.Module):
     def get_trainable_params(self):
         return self.parameters()
 
-    def save_weights(self, file, dtype, metadata):
+    def save_weights(self, file: str, dtype: torch.dtype, metadata: Dict[str, str]):
         if metadata is not None and len(metadata) == 0:
             metadata = None
 
