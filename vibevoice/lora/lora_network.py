@@ -133,7 +133,7 @@ class LoRANetwork(nn.Module):
             for name, module in root_module.named_modules():
                 if module.__class__.__name__ == "Linear":
                     original_name = name
-                    lora_name = f"{pfx}.{original_name}".replace(".", "_")
+                    lora_name = f"{pfx}.{original_name}".replace(".", "-")
 
                     # exclude/include filter
                     matched = False

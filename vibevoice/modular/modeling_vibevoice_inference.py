@@ -958,7 +958,7 @@ class VibeVoiceForConditionalInference(nn.Module):
 
 
     @classmethod
-    def from_pretrain(cls, model_path: str, config: VibeVoiceConfig, device="cuda", offload_config=None, lora_model: str = None):
+    def from_pretrain(cls, model_path: str, config: VibeVoiceConfig, device="cuda", offload_config=None, lora_model_path: str = None):
         """
         Load model from pretrained weights.
 
@@ -990,8 +990,8 @@ class VibeVoiceForConditionalInference(nn.Module):
         model.load_state_dict(state_dict, strict=False, assign=True)
         print("Model loaded")
 
-        if lora_model is not None and lora_model != "":
-            model = merge_lora_weights(model, lora_model)
+        if lora_model_path is not None and lora_model_path != "":
+            model = merge_lora_weights(model, lora_model_path)
 
         # Setup layer offloading if enabled
         if offload_config is not None and offload_config.enabled:

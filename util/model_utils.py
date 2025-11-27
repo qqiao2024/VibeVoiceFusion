@@ -93,30 +93,30 @@ def merge_lora_weights(model: nn.Module, lora_path: str, multiplier: float = 1.0
     
     for key in lora_sd.keys():
         # Skip non-LoRA keys
-        if not key.startswith("vibevoice_lora_"):
+        if not key.startswith("vibevoice_lora-"):
             continue
         
         # Remove prefix
-        key_without_prefix = key[len("vibevoice_lora_"):]
+        key_without_prefix = key[len("vibevoice_lora-"):]
         
         # Determine the type of LoRA component
         if key_without_prefix.endswith(".alpha"):
             # Alpha value
-            original_key = key_without_prefix[:-len(".alpha")].replace("_", ".")
+            original_key = key_without_prefix[:-len(".alpha")].replace("-", ".") + ".weight"
             if original_key not in lora_structure:
                 lora_structure[original_key] = {}
             lora_structure[original_key]["alpha"] = lora_sd[key]
             
         elif key_without_prefix.endswith(".lora_down.weight"):
             # LoRA down weight
-            original_key = key_without_prefix[:-len(".lora_down.weight")].replace("_", ".")
+            original_key = key_without_prefix[:-len(".lora_down.weight")].replace("-", ".") + ".weight"
             if original_key not in lora_structure:
                 lora_structure[original_key] = {}
             lora_structure[original_key]["lora_down.weight"] = lora_sd[key]
             
         elif key_without_prefix.endswith(".lora_up.weight"):
             # LoRA up weight
-            original_key = key_without_prefix[:-len(".lora_up.weight")].replace("_", ".")
+            original_key = key_without_prefix[:-len(".lora_up.weight")].replace("-", ".") + ".weight"
             if original_key not in lora_structure:
                 lora_structure[original_key] = {}
             lora_structure[original_key]["lora_up.weight"] = lora_sd[key]
