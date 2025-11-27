@@ -21,6 +21,7 @@ from vibevoice.modular.streamer import AudioStreamer, AsyncAudioStreamer
 from util.rand_init import get_generator
 from util.logger import get_logger
 from util.float8_scale import AutoCast
+from util.model_utils import merge_lora_weights
 from accelerate import init_empty_weights
 
 logger = get_logger(__name__)
@@ -957,7 +958,7 @@ class VibeVoiceForConditionalInference(nn.Module):
 
 
     @classmethod
-    def from_pretrain(cls, model_path: str, config: VibeVoiceConfig, device="cuda", offload_config=None):
+    def from_pretrain(cls, model_path: str, config: VibeVoiceConfig, device="cuda", offload_config=None, lora_model: str = None):
         """
         Load model from pretrained weights.
 
@@ -988,6 +989,9 @@ class VibeVoiceForConditionalInference(nn.Module):
 
         model.load_state_dict(state_dict, strict=False, assign=True)
         print("Model loaded")
+
+        if lora_model is not None and lora_model != "":
+            model = merge_lora_weights(model, lora_model)
 
         # Setup layer offloading if enabled
         if offload_config is not None and offload_config.enabled:
