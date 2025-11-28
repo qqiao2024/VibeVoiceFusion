@@ -2,11 +2,11 @@
 from enum import Enum
 from typing import Dict, List, Optional
 
-from transformers.utils import logging
+from util.logger import get_logger
 from dataclasses import dataclass
 
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 class InferencePhase:
     PENDING: str = 'pending'

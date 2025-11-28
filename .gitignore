@@ -217,6 +217,7 @@ models
 *.txt
 *.pt
 *.swp
+*.safetensors
 outputs/
 
 # Backend
@@ -231,3 +232,6 @@ backend/**/__pycache__/
 # Workspace
 workspace/
 outputs_offloading/
+demo/datasets/
+tensorboard_logs/
+nohup.out

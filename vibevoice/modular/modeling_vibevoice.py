@@ -6,8 +6,6 @@ import torch.nn.functional as F
 import torch.distributed as dist
 
 from transformers.modeling_outputs import BaseModelOutputWithPast, ModelOutput
-from transformers.utils import logging
-
 
 from vibevoice.modular.modular_vibevoice_tokenizer import VibeVoiceAcousticTokenizerModel, VibeVoiceSemanticTokenizerModel
 from vibevoice.modular.modular_vibevoice_diffusion_head import VibeVoiceDiffusionHead
@@ -16,13 +14,13 @@ from vibevoice.schedule.dpm_solver import DPMSolverMultistepScheduler
 from config.configuration_vibevoice import VibeVoiceConfig
 from .modular_vibevoice_qwen import QwenModel, QwenConfig
 from util.float8_scale import AutoCast
+from util.logger import get_logger
 
 
-logger = logging.get_logger(__name__)
-
+logger = get_logger(__name__)
 
 @dataclass
-class VibeVoiceCausalLMOutputWithPast(ModelOutput):
+class VibeVoiceCausalLMOutputWithPast:
     loss: Optional[torch.FloatTensor] = None
     diffusion_loss: Optional[torch.FloatTensor] = None
     speech_token_num: Optional[int] = None
@@ -200,8 +198,6 @@ class VibeVoiceModel(VibeVoicePreTrainedModel):
                 cache_position: Optional[torch.LongTensor] = None,
                 **kwargs) -> Union[Tuple, BaseModelOutputWithPast]:
 
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
         # Forward through language model
         outputs = self.language_model(
             input_ids=input_ids,
@@ -238,7 +234,6 @@ class VibeVoiceForConditionalGeneration(VibeVoicePreTrainedModel):
         self.vocab_size = config.decoder_config.vocab_size
         self.lm_head = AutoCast.Linear(config.decoder_config.hidden_size, self.vocab_size, bias=False)
 
-        self.post_init()
 
     def get_input_embeddings(self):
         return self.model.get_input_embeddings()
@@ -487,6 +482,7 @@ class VibeVoiceForConditionalGeneration(VibeVoicePreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
 
 __all__ = [
     "VibeVoiceModel",

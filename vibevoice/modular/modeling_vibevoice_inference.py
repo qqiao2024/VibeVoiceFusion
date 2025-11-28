@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import inspect
 
 from dataclasses import dataclass
@@ -12,17 +13,18 @@ from transformers.modeling_outputs import BaseModelOutputWithPast, ModelOutput
 from transformers.cache_utils import Cache, DynamicCache
 from transformers import modeling_utils
 from transformers.modeling_utils import PreTrainedModel
-from transformers.utils import logging
 
 from vibevoice.modular.modular_vibevoice_tokenizer import VibeVoiceTokenizerStreamingCache, VibeVoiceTokenizerEncoderOutput
 from config.configuration_vibevoice import InferencePhase, VibeVoiceConfig
 from vibevoice.modular.modeling_vibevoice import VibeVoiceModel
 from vibevoice.modular.streamer import AudioStreamer, AsyncAudioStreamer
 from util.rand_init import get_generator
+from util.logger import get_logger
 from util.float8_scale import AutoCast
+from util.model_utils import merge_lora_weights
 from accelerate import init_empty_weights
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 if not hasattr(modeling_utils, "ALL_PARALLEL_STYLES") or modeling_utils.ALL_PARALLEL_STYLES is None:
     modeling_utils.ALL_PARALLEL_STYLES = ["tp", "none", "colwise", "rowwise"]
@@ -30,6 +32,13 @@ if not hasattr(modeling_utils, "ALL_PARALLEL_STYLES") or modeling_utils.ALL_PARA
 @dataclass
 class VibeVoiceCausalLMOutputWithPast(BaseModelOutputWithPast):
     logits: Optional[torch.FloatTensor] = None
+    loss: Optional[torch.FloatTensor] = None
+    diffusion_loss: Optional[torch.FloatTensor] = None
+    speech_token_num: Optional[int] = None
+    logits: torch.FloatTensor = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor, ...]] = None
+    attentions: Optional[Tuple[torch.FloatTensor, ...]] = None
 
 @dataclass
 class VibeVoiceGenerationOutput(ModelOutput):
@@ -65,7 +74,7 @@ class VibeVoiceForConditionalInference(nn.Module):
     main_input_name: str = "input_ids"
     config_class = VibeVoiceConfig
 
-    def __init__(self, config):
+    def __init__(self, config: VibeVoiceConfig):
         # Initialize the base model
         super().__init__()
         self.config = config
@@ -270,7 +279,7 @@ class VibeVoiceForConditionalInference(nn.Module):
             last_hidden_state=hidden_states,
             attentions=outputs.attentions,
         )
-
+    
     def _build_generate_config_model_kwargs(self, generation_config, inputs, tokenizer, return_processors=False, **kwargs):
         if generation_config is None:
             generation_config = GenerationConfig(
@@ -949,7 +958,7 @@ class VibeVoiceForConditionalInference(nn.Module):
 
 
     @classmethod
-    def from_pretrain(cls, model_path: str, config: VibeVoiceConfig, device="cuda", offload_config=None):
+    def from_pretrain(cls, model_path: str, config: VibeVoiceConfig, device="cuda", offload_config=None, lora_model_path: str = None):
         """
         Load model from pretrained weights.
 
@@ -980,6 +989,9 @@ class VibeVoiceForConditionalInference(nn.Module):
 
         model.load_state_dict(state_dict, strict=False, assign=True)
         print("Model loaded")
+
+        if lora_model_path is not None and lora_model_path != "":
+            model = merge_lora_weights(model, lora_model_path)
 
         # Setup layer offloading if enabled
         if offload_config is not None and offload_config.enabled:
@@ -1158,8 +1170,6 @@ class VibeVoiceForConditionalInference(nn.Module):
 
         model_kwargs[cache_name] = DynamicCache()
 
-
-
     def _update_model_kwargs_for_generation(
         self,
         outputs: ModelOutput,
@@ -1224,6 +1234,204 @@ class VibeVoiceForConditionalInference(nn.Module):
         elif input_ids.shape[1] != cache_position.shape[0]:  # Default case (the "else", a no op, is Exception 2)
             input_ids = input_ids[:, cache_position]
         return inputs_embeds, input_ids
+
+    def forward_speech_features(self,
+                                speech_tensors=None,
+                                speech_masks=None,
+                                speech_type="audio",
+                                return_unmask=False):
+        if speech_tensors is None:
+            # Use config to get vae_dim instead of non-existent self.args
+            vae_dim = self.config.acoustic_tokenizer_config.vae_dim
+            audio_features = torch.zeros(1, 1, vae_dim).to(self.get_input_embeddings().weight)
+            connect_features = self.model.acoustic_connector(audio_features)
+            return audio_features, connect_features
+
+        with torch.no_grad():
+            if speech_type == "audio":
+                with torch.no_grad():
+                    frames = self.model.acoustic_tokenizer.encode(speech_tensors.unsqueeze(1))[0][0]
+                audio_tokens = frames.sample(self.model.acoustic_tokenizer.std_dist_type)[0]
+
+            elif speech_type == "vae":
+                # Use config to get vae_dim instead of non-existent self.args
+                vae_dim = self.config.acoustic_tokenizer_config.vae_dim
+                speech_mode = speech_tensors.reshape(speech_tensors.size(0), -1, vae_dim)
+
+                # gaussian sample from the speech_mode
+                batch_size = speech_mode.size(0)
+                value = self.model.acoustic_tokenizer.fix_std / 0.8
+                std = torch.randn(batch_size, dtype=speech_mode.dtype, device=speech_mode.device) * value
+                std = std.view(-1, *[1] * (speech_mode.dim() - 1))
+                audio_tokens = speech_mode + std * torch.randn(speech_mode.shape).to(speech_mode)
+            else:
+                raise NotImplementedError(f"Speech type {speech_type} not implemented")
+
+            if torch.isnan(self.model.speech_scaling_factor) or torch.isnan(self.model.speech_bias_factor):
+                scaling_factor = 1. / audio_tokens[speech_masks].flatten().std()
+                bias_factor = -audio_tokens[speech_masks].flatten().mean()
+                # Single process case
+                self.model.speech_scaling_factor.copy_(scaling_factor)
+                self.model.speech_bias_factor.copy_(bias_factor)
+                print(f"Speech scaling factor (single process): {self.model.speech_scaling_factor}, bias factor: {self.model.speech_bias_factor}", flush=True)
+
+            audio_features = (audio_tokens + self.model.speech_bias_factor) * self.model.speech_scaling_factor
+
+        connect_features = self.model.acoustic_connector(audio_features)
+        if return_unmask:
+            return audio_features, connect_features
+        return audio_features[speech_masks], connect_features[speech_masks]
+
+    # code for training forward
+    def call_for_train(self,
+                       input_ids: torch.LongTensor = None,
+                       attention_mask: Optional[torch.Tensor] = None,
+                       position_ids: Optional[torch.LongTensor] = None,
+                       past_key_values: Optional[List[torch.FloatTensor]] = None,
+                       inputs_embeds: Optional[torch.FloatTensor] = None,
+                       labels: Optional[torch.LongTensor] = None,
+                       use_cache: Optional[bool] = False,
+                       output_attentions: Optional[bool] = None,
+                       output_hidden_states: Optional[bool] = None,
+                       return_dict: Optional[bool] = None,
+                       cache_position: Optional[torch.LongTensor] = None,  # New arguments for speech processing and loss calculation
+                       speech_tensors: Optional[torch.FloatTensor] = None,
+                       speech_masks: Optional[torch.BoolTensor] = None,
+                       speeches_loss_input: Optional[torch.FloatTensor] = None,
+                       speech_semantic_tensors: Optional[torch.FloatTensor] = None,
+                       acoustic_input_mask: Optional[torch.BoolTensor] = None,
+                       acoustic_loss_mask: Optional[torch.BoolTensor] = None,
+                       ddpm_batch_mul: int = 1,
+                       **kwargs: Optional[Dict[str, Union[torch.Tensor, str]]]) -> VibeVoiceCausalLMOutputWithPast:
+
+        x = self.get_input_embeddings()(input_ids)
+        semantic_speech_all_connect_features = self.model.semantic_connector(speech_semantic_tensors)
+        if speeches_loss_input is not None:
+            # only part audio need diffuse
+            speech_all_features, speech_all_connect_features = self.forward_speech_features(
+                speech_tensors=speech_tensors.type_as(x) if speech_tensors is not None else None,
+                speech_masks=speech_masks,
+                speech_type=kwargs.get("speech_type", "audio"),
+                return_unmask=True)
+            if speech_tensors is not None:
+                if semantic_speech_all_connect_features is not None:
+                    x[acoustic_input_mask] = speech_all_connect_features[speech_masks] + semantic_speech_all_connect_features[speech_masks]
+                else:
+                    x[acoustic_input_mask] = speech_all_connect_features[speech_masks]
+                speech_features = speech_all_features[speeches_loss_input & speech_masks]  # only part audio need diffuse
+                speech_connect_features = speech_all_connect_features[speeches_loss_input & speech_masks]
+                # Forward-time consistency check: selected latent count should match number of acoustic placeholders
+                try:
+                    if acoustic_input_mask is not None:
+                        assert speech_connect_features.shape[0] == int(acoustic_input_mask.sum().item()), (
+                            f"Mismatch between selected speech connectors ({speech_connect_features.shape[0]}) and acoustic_input_mask sum ({int(acoustic_input_mask.sum().item())})"
+                        )
+                except Exception:
+                    pass
+        else:
+            speech_features, speech_connect_features = self.forward_speech_features(
+                speech_tensors=speech_tensors.type_as(x) if speech_tensors is not None else None,
+                speech_masks=speech_masks,
+                speech_type=kwargs.get("speech_type", "audio"))
+
+            if speech_tensors is not None:
+                x[acoustic_input_mask] = speech_connect_features
+
+        outputs = self.model(input_ids=None,
+                             attention_mask=attention_mask,
+                             position_ids=position_ids,
+                             past_key_values=past_key_values,
+                             inputs_embeds=x,
+                             use_cache=use_cache,
+                             output_attentions=output_attentions,
+                             output_hidden_states=False,
+                             return_dict=return_dict,
+                             cache_position=cache_position)
+
+        hidden_states = outputs.last_hidden_state
+        logits = self.lm_head(hidden_states)
+
+        shift_logits = logits[:, :-1, :].contiguous()
+        labels = input_ids
+        ce_labels = self.mask_for_ce(labels, attention_mask, acoustic_input_mask)
+        loss_fct = nn.CrossEntropyLoss(ignore_index=-100)
+        loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), ce_labels.view(-1))
+
+        diffusion_loss = None
+        cond_mask = torch.zeros_like(acoustic_loss_mask, dtype=torch.bool)
+        cond_mask[:, :-1] = acoustic_loss_mask[:, 1:]
+        cond_mask[:, 0] = False
+        condition_features = hidden_states[cond_mask]
+
+        speech_len, latent_size = speech_features.shape
+        # Sanity check: ensure 1:1 alignment between selected conditions and latents
+        try:
+            assert condition_features.shape[0] == speech_len, (
+                f"Mismatch: condition_features={condition_features.shape[0]} vs speech_features={speech_len}"
+            )
+        except Exception:
+            pass
+        condition_features = hidden_states[cond_mask]
+
+        noise = torch.randn(
+            (speech_len * ddpm_batch_mul, latent_size),
+            device=hidden_states.device,
+            dtype=hidden_states.dtype
+        )
+
+        timesteps = torch.multinomial(
+            torch.ones(self.config.diffusion_head_config.ddpm_num_steps),
+            speech_len * ddpm_batch_mul,
+            replacement=True,
+        ).to(hidden_states.device)
+
+        speech_features_repeated = speech_features.repeat_interleave(ddpm_batch_mul, dim=0)
+        condition_features_repeated = condition_features.repeat_interleave(ddpm_batch_mul, dim=0)
+
+        noisy_speech_features = self.model.noise_scheduler.add_noise(
+            speech_features_repeated, noise, timesteps
+        )
+
+        model_output = self.model.prediction_head(
+            noisy_speech_features,
+            timesteps.type_as(x),
+            condition_features_repeated
+        )
+
+        prediction_type = self.config.diffusion_head_config.prediction_type
+        if prediction_type == "epsilon":
+            target_for_loss = noise
+        elif prediction_type == "v_prediction":
+            target_for_loss = self.model.noise_scheduler.get_velocity(
+                speech_features_repeated, noise, timesteps
+            )
+        else:
+            raise NotImplementedError(f"Prediction type {prediction_type} not implemented")
+
+        diffusion_loss = F.mse_loss(model_output.float(), target_for_loss.float(), reduction='mean')
+        if latent_size > 0 and ddpm_batch_mul > 0:
+            diffusion_loss = diffusion_loss / latent_size / ddpm_batch_mul
+        else:
+            diffusion_loss = torch.tensor(0.0, device=diffusion_loss.device)
+
+        return VibeVoiceCausalLMOutputWithPast(
+            loss=loss,
+            diffusion_loss=diffusion_loss,
+            speech_token_num=speech_len if speech_tensors is not None else 0,
+            logits=logits,
+            past_key_values=outputs.past_key_values,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions
+        )
+
+    def mask_for_ce(self, labels: torch.Tensor, attention_mask: torch.Tensor, acoustic_input_mask: torch.Tensor, pad_id: int = -100) -> torch.Tensor:
+        shifted = labels[:, 1:].contiguous()
+        base_mask = attention_mask[:, 1:].contiguous().eq(1) if (attention_mask is not None and attention_mask.numel() > 0) else torch.ones_like(shifted, dtype=torch.bool)
+        label_is_acoustic = acoustic_input_mask[:, 1:].contiguous()
+        final_mask = base_mask & (~label_is_acoustic)
+        out = shifted.clone()
+        out[~final_mask] = pad_id
+        return out
 
 __all__ = [
     "VibeVoiceForConditionalInference",

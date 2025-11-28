@@ -13,9 +13,9 @@ from config.configuration_vibevoice import (
     VibeVoiceConfig
 )
 from vibevoice.modular.modeling_vibevoice import VibeVoiceForConditionalGeneration
-from transformers.utils import logging
+from util.logger import get_logger
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 def convert_vibevoice_nnscaler_checkpoint_to_hf(
     checkpoint_path: str,
@@ -29,7 +29,7 @@ def convert_vibevoice_nnscaler_checkpoint_to_hf(
     
     # Load regular checkpoint
     logger.info(f"Loading regular checkpoint from {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path, map_location="cpu") # ['model', 'optimizer', 'lr_scheduler', 'train_status', 'train_args', 'rng_states', 'nnscaler', 'dataloader']
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")  # ['model', 'optimizer', 'lr_scheduler', 'train_status', 'train_args', 'rng_states', 'nnscaler', 'dataloader']
     
     # config = checkpoint['train_args']
     init_config_name = checkpoint['train_args']['vars']['model_args']['config_path']['relative_path']

@@ -2,16 +2,15 @@ import torch
 import torch.nn as nn
 from typing import Optional, Tuple, Union
 
-from transformers.utils import logging
 from transformers.cache_utils import Cache, DynamicCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from config.configuration_vibevoice import QwenConfig
 from functools import wraps
 
-from util.vibevoice_norm import QwenRMSNorm
 from util.float8_scale import AutoCast
+from util.logger import get_logger
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 def dynamic_rope_update(rope_forward):

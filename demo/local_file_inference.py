@@ -7,12 +7,11 @@ import torch
 
 from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalInference
 from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
-from transformers.utils import logging
+from util.logger import get_logger
 from config.configuration_vibevoice import VibeVoiceConfig, DEFAULT_CONFIG
 from util.rand_init import get_generator
 
-logging.set_verbosity_info()
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 class VoiceMapper:
     """Maps speaker names to voice file paths"""
@@ -192,6 +191,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--lora_model_path",
+        type=str,
+        default=None,
+        help="Path to the LoRA model file (safetensors format) to merge into the base model",
+    )
+
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -203,7 +209,8 @@ def parse_args():
 def load_model(model_file: str = None,
                config: str = None,
                dtype: torch.dtype = torch.bfloat16,
-               attn_implementation: str = "sdpa"):
+               attn_implementation: str = "sdpa",
+               lora_model_path: str = None):
 
     config_dict = {}
     if config:
@@ -220,7 +227,7 @@ def load_model(model_file: str = None,
                                        device_map="cuda",
                                        attn_implementation=attn_implementation)
     # Load model with device-specific logic
-    model = VibeVoiceForConditionalInference.from_pretrain(model_file, config)
+    model = VibeVoiceForConditionalInference.from_pretrain(model_file, config, lora_model_path=lora_model_path)
     return model
 
 def main():
@@ -322,7 +329,8 @@ def main():
 
     print(f"Using device: {args.device}, torch_dtype: {load_dtype}, attn_implementation: {attn_implementation}")
     model = load_model(model_file=args.model_file, config=args.config,
-                       dtype=load_dtype, attn_implementation=attn_implementation)
+                       dtype=load_dtype, attn_implementation=attn_implementation,
+                       lora_model_path=args.lora_model_path)
     model.eval()
     model.set_ddpm_inference_steps(num_steps=10)
 

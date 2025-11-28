@@ -27,10 +27,9 @@ from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForCondition
 from vibevoice.modular.custom_offloading_utils import OffloadConfig
 from vibevoice.modular.adaptive_offload import AdaptiveOffloadManager
 from config.configuration_vibevoice import DEFAULT_CONFIG, VibeVoiceConfig
-from transformers.utils import logging
+from util.logger import get_logger
 
-logging.set_verbosity_info()
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 def get_memory_usage():

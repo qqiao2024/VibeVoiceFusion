@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 
 from transformers.activations import ACT2FN
-from transformers.utils import logging
 from util.float8_scale import AutoCast
+from util.logger import get_logger
 
-logger = logging.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class RMSNorm(nn.Module):
