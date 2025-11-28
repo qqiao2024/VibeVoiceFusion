@@ -1,3 +1,4 @@
+import os
 from torch.utils.tensorboard import SummaryWriter
 
 from vibevoice.training.trainer_visitor import TrainerVisitor
@@ -13,12 +14,15 @@ class SummaryVisitor(TrainerVisitor):
     - Timing information
     """
 
-    def __init__(self, log_prefix: str = None):
+    def __init__(self, log_prefix: str = None, step_loss_interval: int = 100):
         if log_prefix is None:
             raise ValueError("log_prefix must be provided for SummaryVisitor.")
 
-        self.writer: SummaryWriter = SummaryWriter(log_prefix)
+        os.makedirs(log_prefix, exist_ok=True)
+        # Add comment parameter to help TensorBoard identify the run properly
+        self.writer: SummaryWriter = SummaryWriter(log_dir=log_prefix, comment="training")
         self.start_timestamp = None
+        self.step_loss_interval = step_loss_interval
     
     def visit_training_begin(self, timestamp: float, batch_size: int, total_epochs: int, lr_rate: float, accumlate_grad_steps: int, data_repeat: int):
         """Log training hyperparameters at the beginning of training."""
@@ -67,6 +71,9 @@ class SummaryVisitor(TrainerVisitor):
     
     def visit_step_end(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int, loss: float, diffusion_loss: float, ce_loss: float, step_elapsed: float):
         """Log step-level training metrics."""
+        if self.step_loss_interval > 0 and global_step % self.step_loss_interval != 0:
+            return
+
         # Log losses
         self.writer.add_scalar("train/loss", loss, global_step)
         self.writer.add_scalar("train/diffusion_loss", diffusion_loss, global_step)

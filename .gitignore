@@ -233,4 +233,5 @@ backend/**/__pycache__/
 workspace/
 outputs_offloading/
 demo/datasets/
-
+tensorboard_logs/
+nohup.out
