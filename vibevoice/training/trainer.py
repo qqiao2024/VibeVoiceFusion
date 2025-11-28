@@ -51,6 +51,7 @@ class TrainConfig:
     device : str = "cuda"
     gradient_accumulation_steps: int = 16
     dataload_workers: int = 2
+    save_model_per_num_epoch: int = 10
 
     @classmethod
     def from_dict(cls, config_dict: dict) -> "TrainConfig":
@@ -80,6 +81,7 @@ class TrainConfig:
             device=config_dict.get("device", "cuda"),
             gradient_accumulation_steps=config_dict.get("gradient_accumulation_steps", 16),
             dataload_workers=config_dict.get("dataload_workers", 2),
+            save_model_per_num_epoch=config_dict.get("save_model_per_num_epoch", config_dict.get("number_epoch_save_model", 10)),
         )
     
     @classmethod
@@ -114,6 +116,7 @@ class TrainConfig:
             "ce_loss_weight": str(self.ce_loss_weight),
             "gradient_accumulation_steps": str(self.gradient_accumulation_steps),
             "dataload_workers": str(self.dataload_workers),
+            "save_model_per_num_epoch": str(self.save_model_per_num_epoch),
         }   
 
 
@@ -271,6 +274,16 @@ class VibeVoiceTrainer:
                 ce_loss=epoch_avg_ce_loss,
                 total_run_steps=global_step
             )
+            
+            # Save checkpoint per number of epochs
+            if self.train_config.save_model_per_num_epoch > 0 and (epoch + 1) % self.train_config.save_model_per_num_epoch == 0:
+                checkpoint_metadata = metadata.copy()
+                checkpoint_metadata["checkpoint_epoch"] = str(epoch + 1)
+                checkpoint_metadata["checkpoint_loss"] = f"{real_loss.item():.4f}"
+                checkpoint_metadata["checkpoint_ce_loss"] = f"{output.loss.item():.4f}"
+                checkpoint_metadata["checkpoint_diffusion_loss"] = f"{output.diffusion_loss.item():.4f}"
+                self.save_model(checkpoint_metadata, network, global_step, epoch + 1)
+                logger.info(f"Checkpoint saved at epoch {epoch + 1}")
 
         end_time = datetime.now()
         elapsed_time = end_time - start_time
@@ -299,7 +312,7 @@ class VibeVoiceTrainer:
     def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int):
         os.makedirs(self.train_config.output_dir, exist_ok=True)
         now = datetime.now()
-        ckpt_file = os.path.join(self.train_config.output_dir, self.train_config.lora_name + f"_{epoch_no}_{steps}_{now.strftime('%Y%m%d%H%M%S')}.safetensors")
+        ckpt_file = os.path.join(self.train_config.output_dir, self.train_config.lora_name + f"_{now.strftime('%m%d%H%M')}_{epoch_no}_{steps}.safetensors")
         metadata["total_steps"] = str(steps)
         metadata["total_epoch"] = str(epoch_no)
         network.save_weights(ckpt_file, torch.bfloat16, metadata)
