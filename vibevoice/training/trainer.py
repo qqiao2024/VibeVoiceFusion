@@ -20,6 +20,7 @@ from vibevoice.modular.modular_vibevoice_tokenizer import VibeVoiceTokenizerEnco
 from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
 
 from vibevoice.training.dataset import VibeVoiceCollator, VibeVoiceDataset
+from vibevoice.training.trainer_visitor import TrainerVisitor, VisitorManager
 
 logger = get_logger(__name__)
 
@@ -118,7 +119,7 @@ class TrainConfig:
 
 class VibeVoiceTrainer:
 
-    def __init__(self, train_config: TrainConfig):
+    def __init__(self, train_config: TrainConfig, visitor: Optional[TrainerVisitor] = None):
         if not os.path.exists(train_config.model_path):
             raise FileNotFoundError(f"Model file {train_config.model_path} does not exist.")
 
@@ -134,6 +135,7 @@ class VibeVoiceTrainer:
             self.offload_config = None
         self.dtype = torch.bfloat16 if train_config.dtype == "bfloat16" else torch.float8_e4m3fn
         self.device = torch.device(train_config.device)
+        self.visitor = visitor if visitor is not None else VisitorManager()
 
     def train(self):
 
@@ -166,39 +168,133 @@ class VibeVoiceTrainer:
         optimizer.zero_grad()
         gradient_accumulation_steps = self.train_config.gradient_accumulation_steps
         current_step = 0
-        time = datetime.now()
+        global_step = 0
+        start_time = datetime.now()
         logger.info(f"Optimizer: {optimizer_name}({optimizer_args}) | Learning Rate: {self.train_config.learning_rate}")
 
         total_steps = self.train_config.epochs * len(train_dataloader) // (self.train_config.batch_size) * self.train_config.dataset_repeats
 
         logger.info(f"Starting training for {self.train_config.epochs} epochs | total_steps is approx. {total_steps} | batch_size: {self.train_config.batch_size} | gradient_accumulation_steps: {gradient_accumulation_steps}")
         optimizer_train_fn()
+        
+        # Notify training begin
+        self.visitor.visit_training_begin(
+            timestamp=start_time.timestamp(),
+            batch_size=self.train_config.batch_size,
+            total_epochs=self.train_config.epochs,
+            lr_rate=self.train_config.learning_rate,
+            accumlate_grad_steps=gradient_accumulation_steps,
+            data_repeat=self.train_config.dataset_repeats
+        )
 
         for epoch in range(self.train_config.epochs):
             logger.info(f"\nepoch {epoch + 1}/{self.train_config.epochs}")
+            epoch_start_time = datetime.now()
+            
+            # Notify epoch begin
+            self.visitor.visit_epoch_begin(
+                timestamp=epoch_start_time.timestamp(),
+                epoch=epoch + 1,
+                lr=self.train_config.learning_rate
+            )
+            
+            epoch_loss_sum = 0.0
+            epoch_ce_loss_sum = 0.0
+            epoch_diffusion_loss_sum = 0.0
+            epoch_steps = 0
+            
             for _ in range(self.train_config.dataset_repeats):
                 for step, inputs in enumerate(train_dataloader):
+                    step_start_time = datetime.now()
+                    
+                    # Notify step begin
+                    self.visitor.visit_step_begin(
+                        timestemp=step_start_time.timestamp(),
+                        step=step + 1,
+                        epoch=epoch + 1,
+                        step_in_epoch=step + 1,
+                        lr=self.train_config.learning_rate,
+                        global_step=global_step
+                    )
+                    
                     inputs = self._preprocess_inputs(inputs)
                     output = model.call_for_train(**inputs)
                     real_loss = self.train_config.ce_loss_weight * output.loss + self.train_config.diffusion_loss_weight * output.diffusion_loss
                     real_loss.backward()
                     current_step += 1
+                    global_step += 1
+                    
+                    # Accumulate losses for epoch average
+                    epoch_loss_sum += real_loss.item()
+                    epoch_ce_loss_sum += output.loss.item()
+                    epoch_diffusion_loss_sum += output.diffusion_loss.item()
+                    epoch_steps += 1
+                    
                     if current_step % gradient_accumulation_steps == 0:
                         optimizer.step()
                         optimizer.zero_grad()
+                    
+                    step_end_time = datetime.now()
+                    step_elapsed = (step_end_time - step_start_time).total_seconds()
+                    
+                    # Notify step end
+                    self.visitor.visit_step_end(
+                        timestamp=step_end_time.timestamp(),
+                        step=step + 1,
+                        epoch=epoch + 1,
+                        step_in_epoch=step + 1,
+                        lr=self.train_config.learning_rate,
+                        global_step=global_step,
+                        loss=real_loss.item(),
+                        diffusion_loss=output.diffusion_loss.item(),
+                        ce_loss=output.loss.item(),
+                        step_elapsed=step_elapsed
+                    )
+            
+            # Calculate epoch averages
+            epoch_avg_loss = epoch_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
+            epoch_avg_ce_loss = epoch_ce_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
+            epoch_avg_diffusion_loss = epoch_diffusion_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
+            
+            epoch_end_time = datetime.now()
+            epoch_elapsed = (epoch_end_time - epoch_start_time).total_seconds()
+            
             logger.info(f"Epoch {epoch + 1} completed, and current loss is {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, diffusion_loss: {output.diffusion_loss.item():.4f}")
+            
+            # Notify epoch end
+            self.visitor.visit_epoch_end(
+                timestamp=epoch_end_time.timestamp(),
+                epoch=epoch + 1,
+                epoch_elapsed=epoch_elapsed,
+                loss=epoch_avg_loss,
+                diffusion_loss=epoch_avg_diffusion_loss,
+                ce_loss=epoch_avg_ce_loss,
+                total_run_steps=global_step
+            )
 
         end_time = datetime.now()
-        elapsed_time = end_time - time
+        elapsed_time = end_time - start_time
         elapsed_seconds = elapsed_time.total_seconds()
         metadata["last_loss"] = f"{real_loss.item():.4f}"
         metadata["last_ce_loss"] = f"{output.loss.item():.4f}"
         metadata["last_diffusion_loss"] = f"{output.diffusion_loss.item():.4f}"
 
         logger.info(f"Training completed. Final loss: {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, "
-                    f"diffusion_loss: {output.diffusion_loss.item():.4f}, total training steps: {current_step}, "
+                    f"diffusion_loss: {output.diffusion_loss.item():.4f}, total training steps: {global_step}, "
                     f"total time elapsed: {elapsed_seconds:.2f} seconds")
-        self.save_model(metadata, network, current_step, epoch + 1)
+        
+        # Notify training end
+        self.visitor.visit_training_end(
+            timestamp=end_time.timestamp(),
+            loss=real_loss.item(),
+            diffusion_loss=output.diffusion_loss.item(),
+            ce_loss=output.loss.item(),
+            total_elapsed=elapsed_seconds,
+            total_run_steps=global_step,
+            total_run_epochs=self.train_config.epochs
+        )
+        
+        self.save_model(metadata, network, global_step, epoch + 1)
 
     def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int):
         os.makedirs(self.train_config.output_dir, exist_ok=True)
