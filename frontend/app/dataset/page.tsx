@@ -4,25 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProject } from "@/lib/ProjectContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import { DatasetProvider, useDataset } from "@/lib/DatasetContext";
 import DatasetCard from "@/components/DatasetCard";
 import CreateDatasetModal from "@/components/CreateDatasetModal";
+import toast from "react-hot-toast";
 
-interface Dataset {
-  id: string;
-  name: string;
-  description: string;
-  item_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export default function DatasetPage() {
+function DatasetPageContent() {
   const router = useRouter();
   const { currentProject, loading } = useProject();
   const { t } = useLanguage();
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const { datasets, loading: loadingDatasets, createDataset, deleteDataset } = useDataset();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [loadingDatasets, setLoadingDatasets] = useState(true);
 
   // Redirect to home page if no project is selected (after loading completes)
   useEffect(() => {
@@ -31,95 +23,29 @@ export default function DatasetPage() {
     }
   }, [loading, currentProject, router]);
 
-  // Fetch datasets when project is available
-  useEffect(() => {
-    if (currentProject) {
-      fetchDatasets();
-    }
-  }, [currentProject]);
-
-  const fetchDatasets = async () => {
-    if (!currentProject) return;
-
-    setLoadingDatasets(true);
-    try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/v1/projects/${currentProject.id}/datasets`);
-      // const data = await response.json();
-      // setDatasets(data);
-
-      // Mock data for now
-      setDatasets([
-        {
-          id: "1",
-          name: "Training Dataset 1",
-          description: "Voice samples for speaker adaptation",
-          item_count: 150,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        {
-          id: "2",
-          name: "Validation Dataset",
-          description: "Test samples for model evaluation",
-          item_count: 50,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ]);
-    } catch (error) {
-      console.error("Error fetching datasets:", error);
-    } finally {
-      setLoadingDatasets(false);
-    }
-  };
-
   const handleCreateDataset = async (name: string, description: string) => {
-    if (!currentProject) return;
-
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/v1/projects/${currentProject.id}/datasets`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ name, description })
-      // });
-      // const newDataset = await response.json();
-
-      // Mock for now
-      const newDataset: Dataset = {
-        id: String(Date.now()),
-        name,
-        description,
-        item_count: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      setDatasets([...datasets, newDataset]);
+      await createDataset(name, description);
       setShowCreateModal(false);
+      toast.success(t('dataset.createSuccess'));
     } catch (error) {
       console.error("Error creating dataset:", error);
+      toast.error(error instanceof Error ? error.message : t('dataset.createError'));
     }
   };
 
   const handleDeleteDataset = async (id: string) => {
-    if (!currentProject) return;
-
     try {
-      // TODO: Replace with actual API call
-      // await fetch(`/api/v1/projects/${currentProject.id}/datasets/${id}`, {
-      //   method: 'DELETE'
-      // });
-
-      setDatasets(datasets.filter(d => d.id !== id));
+      await deleteDataset(id);
+      toast.success(t('dataset.deleteSuccess'));
     } catch (error) {
       console.error("Error deleting dataset:", error);
+      toast.error(error instanceof Error ? error.message : t('dataset.deleteError'));
     }
   };
 
   const handleViewDetails = (id: string) => {
-    router.push(`/dataset/${id}`);
+    router.push(`/dataset/detail?id=${id}`);
   };
 
   // Show content when project is available
@@ -140,7 +66,7 @@ export default function DatasetPage() {
               )}
             </div>
             <p className="text-sm text-gray-500">
-              {t('dataset.title')}
+              {t('dataset.description')}
             </p>
           </header>
 
@@ -150,7 +76,7 @@ export default function DatasetPage() {
             <div className="border-b border-gray-200 bg-white px-6 py-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-600">
-                  {t('dataset.title')}
+                  {t('dataset.manageDatasets')}
                 </p>
                 <button
                   onClick={() => setShowCreateModal(true)}
@@ -168,7 +94,7 @@ export default function DatasetPage() {
             <div className="p-6">
             {loadingDatasets ? (
               <div className="flex items-center justify-center h-64">
-                <div className="text-gray-500">{t('common.loading')}</div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
               </div>
             ) : datasets.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64">
@@ -207,6 +133,31 @@ export default function DatasetPage() {
           )}
         </>
       ) : null}
+    </div>
+  );
+}
+
+export default function DatasetPage() {
+  const { currentProject, loading } = useProject();
+
+  // Show content when project is available
+  const showContent = !loading && currentProject;
+
+  return showContent ? (
+    <DatasetProvider projectId={currentProject!.id}>
+      <DatasetPageContent />
+    </DatasetProvider>
+  ) : (
+    <div className="h-full flex flex-col">
+      <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <h1 className="text-2xl font-bold text-gray-900">Dataset Management</h1>
+      </header>
+      <div className="flex-1 flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">{loading ? 'Loading...' : 'Select a project'}</p>
+        </div>
+      </div>
     </div>
   );
 }

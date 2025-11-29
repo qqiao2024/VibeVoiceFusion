@@ -28,7 +28,8 @@
     "playSelection": "Play Selection",
     "saveTrimmedAudio": "Save Trimmed Audio",
     "changeVoice": "Change Voice",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "remove": "Remove"
   },
   "app": {
     "title": "VibeVoiceFusion",
@@ -341,10 +342,13 @@
   },
   "dataset": {
     "title": "Dataset Management",
+    "description": "Manage your training datasets for fine-tuning",
+    "manageDatasets": "Manage training datasets",
     "createDataset": "Create Dataset",
     "noDatasets": "No datasets yet. Create your first dataset to get started.",
     "datasetName": "Dataset Name",
-    "description": "Description",
+    "createError": "Failed to create dataset",
+    "deleteError": "Failed to delete dataset",
     "totalItems": "Total Items",
     "items": "{count} items",
     "oneItem": "1 item",
@@ -375,6 +379,26 @@
     "itemId": "Item ID",
     "itemContent": "Content",
     "createdAt": "Created At",
-    "updatedAt": "Updated At"
+    "updatedAt": "Updated At",
+    "text": "Text",
+    "textPlaceholder": "Enter the text content for this dataset item",
+    "audioFile": "Audio File",
+    "uploadAudio": "Upload Audio",
+    "supportedAudioFormats": "Supported formats: WAV, MP3, OGG, FLAC",
+    "voicePrompts": "Voice Prompts",
+    "addVoicePrompt": "Add Voice Prompt",
+    "multipleFilesAllowed": "You can select multiple files",
+    "textRequired": "Text content is required",
+    "audioRequired": "Audio file is required",
+    "voicePromptsRequired": "At least one voice prompt is required",
+    "createItem": "Create Item",
+    "deleteItemConfirm": "Are you sure you want to delete this item?",
+    "itemCreated": "Item created successfully",
+    "itemUpdated": "Item updated successfully",
+    "itemDeleted": "Item deleted successfully",
+    "createItemError": "Failed to create item",
+    "updateItemError": "Failed to update item",
+    "deleteItemError": "Failed to delete item",
+    "loadError": "Failed to load dataset"
   }
 }

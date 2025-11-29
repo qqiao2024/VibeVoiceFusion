@@ -28,7 +28,8 @@
     "playSelection": "播放选中部分",
     "saveTrimmedAudio": "保存剪辑音频",
     "changeVoice": "更换声音",
-    "saving": "保存中..."
+    "saving": "保存中...",
+    "remove": "移除"
   },
   "app": {
     "title": "VibeVoiceFusion",
@@ -341,10 +342,13 @@
   },
   "dataset": {
     "title": "数据集管理",
+    "description": "管理您的训练数据集以进行微调",
+    "manageDatasets": "管理训练数据集",
     "createDataset": "创建数据集",
     "noDatasets": "还没有数据集。创建您的第一个数据集以开始使用。",
     "datasetName": "数据集名称",
-    "description": "描述",
+    "createError": "创建数据集失败",
+    "deleteError": "删除数据集失败",
     "totalItems": "数据总数",
     "items": "{count} 条数据",
     "oneItem": "1 条数据",
@@ -375,6 +379,26 @@
     "itemId": "数据项 ID",
     "itemContent": "内容",
     "createdAt": "创建时间",
-    "updatedAt": "更新时间"
+    "updatedAt": "更新时间",
+    "text": "文本",
+    "textPlaceholder": "输入数据项的文本内容",
+    "audioFile": "音频文件",
+    "uploadAudio": "上传音频",
+    "supportedAudioFormats": "支持的格式：WAV、MP3、OGG、FLAC",
+    "voicePrompts": "语音提示",
+    "addVoicePrompt": "添加语音提示",
+    "multipleFilesAllowed": "可以选择多个文件",
+    "textRequired": "文本内容为必填项",
+    "audioRequired": "音频文件为必填项",
+    "voicePromptsRequired": "至少需要一个语音提示",
+    "createItem": "创建数据项",
+    "deleteItemConfirm": "确定要删除这条数据吗？",
+    "itemCreated": "数据项创建成功",
+    "itemUpdated": "数据项更新成功",
+    "itemDeleted": "数据项删除成功",
+    "createItemError": "创建数据项失败",
+    "updateItemError": "更新数据项失败",
+    "deleteItemError": "删除数据项失败",
+    "loadError": "加载数据集失败"
   }
 }
