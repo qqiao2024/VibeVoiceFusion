@@ -12,6 +12,12 @@
     "speaker_not_found": "说话人未找到",
     "session_not_found": "会话未找到",
     "generation_not_found": "生成记录未找到",
+    "dataset_not_found": "数据集未找到",
+    "item_not_found": "数据项未找到",
+    "dataset_name_required": "数据集名称为必填项",
+    "text_required": "文本为必填项",
+    "audio_file_required": "音频文件为必填项",
+    "voice_prompts_required": "至少需要一个语音提示文件",
     "invalid_project_name": "无效的项目名称",
     "project_name_required": "项目名称为必填项",
     "project_name_too_long": "项目名称最多 100 个字符",
@@ -38,7 +44,13 @@
     "session_deleted": "会话删除成功",
     "generation_started": "生成任务启动成功",
     "generation_deleted": "生成记录删除成功",
-    "generations_deleted": "生成记录批量删除成功"
+    "generations_deleted": "生成记录批量删除成功",
+    "dataset_created": "数据集创建成功",
+    "dataset_updated": "数据集更新成功",
+    "dataset_deleted": "数据集删除成功",
+    "item_created": "数据项创建成功",
+    "item_updated": "数据项更新成功",
+    "item_deleted": "数据项删除成功"
   },
   "status": {
     "healthy": "服务正常",

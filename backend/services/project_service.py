@@ -135,6 +135,7 @@ class ProjectService:
             (project_dir / 'voices').mkdir(exist_ok=True)
             (project_dir / 'scripts').mkdir(exist_ok=True)
             (project_dir / 'outputs').mkdir(exist_ok=True)
+            (project_dir / 'datasets').mkdir(exist_ok=True)
 
         except Exception as e:
             raise RuntimeError(f"Failed to create project directory: {str(e)}")

@@ -12,6 +12,12 @@
     "speaker_not_found": "Speaker not found",
     "session_not_found": "Session not found",
     "generation_not_found": "Generation not found",
+    "dataset_not_found": "Dataset not found",
+    "item_not_found": "Item not found",
+    "dataset_name_required": "Dataset name is required",
+    "text_required": "Text is required",
+    "audio_file_required": "Audio file is required",
+    "voice_prompts_required": "At least one voice prompt file is required",
     "invalid_project_name": "Invalid project name",
     "project_name_required": "Project name is required",
     "project_name_too_long": "Project name must be at most 100 characters",
@@ -38,7 +44,13 @@
     "session_deleted": "Session deleted successfully",
     "generation_started": "Generation started successfully",
     "generation_deleted": "Generation deleted successfully",
-    "generations_deleted": "Generations deleted successfully"
+    "generations_deleted": "Generations deleted successfully",
+    "dataset_created": "Dataset created successfully",
+    "dataset_updated": "Dataset updated successfully",
+    "dataset_deleted": "Dataset deleted successfully",
+    "item_created": "Item created successfully",
+    "item_updated": "Item updated successfully",
+    "item_deleted": "Item deleted successfully"
   },
   "status": {
     "healthy": "Service is healthy",
