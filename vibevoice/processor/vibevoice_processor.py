@@ -446,7 +446,7 @@ class VibeVoiceProcessor:
                               [vae_token_id] * vae_tok_len + 
                               [self.tokenizer.speech_end_id] + 
                               self.tokenizer.encode('\n', add_special_tokens=False))
-            
+
             vae_input_mask = ([False] * len(prefix_tokens) + 
                               [False] + 
                               [True] * vae_tok_len + 
