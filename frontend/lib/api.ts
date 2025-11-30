@@ -433,6 +433,38 @@ class ApiClient {
     return `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/export`;
   }
 
+  async importToExistingDataset(
+    projectId: string,
+    datasetId: string,
+    datasetFile: File
+  ): Promise<Dataset> {
+    const formData = new FormData();
+    formData.append('dataset_file', datasetFile);
+
+    const url = `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/import`;
+    const locale = typeof window !== 'undefined'
+      ? localStorage.getItem('vibevoice-locale') || 'en'
+      : 'en';
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'X-Language': locale,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: response.statusText
+      }));
+      throw new Error(error.message || error.error || response.statusText);
+    }
+
+    return await response.json();
+  }
+
   async importDataset(
     projectId: string,
     data: {

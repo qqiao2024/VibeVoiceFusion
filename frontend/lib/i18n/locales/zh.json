@@ -399,6 +399,14 @@
     "createItemError": "创建数据项失败",
     "updateItemError": "更新数据项失败",
     "deleteItemError": "删除数据项失败",
-    "loadError": "加载数据集失败"
+    "loadError": "加载数据集失败",
+    "exporting": "导出中...",
+    "exportError": "导出数据集失败",
+    "importing": "导入中...",
+    "importError": "导入数据集失败",
+    "importToDataset": "导入数据到：{name}",
+    "importWarning": "警告：此操作将替换该数据集中的所有现有项目。",
+    "invalidFileFormat": "无效的文件格式。请选择ZIP文件。",
+    "supportedFormatsZip": "支持的格式：ZIP"
   }
 }

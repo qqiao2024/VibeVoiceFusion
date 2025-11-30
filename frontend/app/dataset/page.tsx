@@ -13,7 +13,7 @@ function DatasetPageContent() {
   const router = useRouter();
   const { currentProject, loading } = useProject();
   const { t } = useLanguage();
-  const { datasets, loading: loadingDatasets, createDataset, deleteDataset } = useDataset();
+  const { datasets, loading: loadingDatasets, createDataset, deleteDataset, exportDataset, importToExistingDataset } = useDataset();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Redirect to home page if no project is selected (after loading completes)
@@ -41,6 +41,26 @@ function DatasetPageContent() {
     } catch (error) {
       console.error("Error deleting dataset:", error);
       toast.error(error instanceof Error ? error.message : t('dataset.deleteError'));
+    }
+  };
+
+  const handleImportDataset = async (id: string, file: File) => {
+    try {
+      await importToExistingDataset(id, file);
+      toast.success(t('dataset.importSuccess'));
+    } catch (error) {
+      console.error("Error importing dataset:", error);
+      toast.error(error instanceof Error ? error.message : t('dataset.importError'));
+    }
+  };
+
+  const handleExportDataset = async (id: string, name: string) => {
+    try {
+      await exportDataset(id, name);
+      toast.success(t('dataset.exportSuccess'));
+    } catch (error) {
+      console.error("Error exporting dataset:", error);
+      toast.error(error instanceof Error ? error.message : t('dataset.exportError'));
     }
   };
 
@@ -116,6 +136,8 @@ function DatasetPageContent() {
                     key={dataset.id}
                     dataset={dataset}
                     onDelete={handleDeleteDataset}
+                    onImport={handleImportDataset}
+                    onExport={handleExportDataset}
                     onViewDetails={handleViewDetails}
                   />
                 ))}

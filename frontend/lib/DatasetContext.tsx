@@ -13,6 +13,7 @@ interface DatasetContextType {
   deleteDataset: (datasetId: string) => Promise<void>;
   exportDataset: (datasetId: string, datasetName: string) => Promise<void>;
   importDataset: (file: File, name?: string) => Promise<Dataset>;
+  importToExistingDataset: (datasetId: string, file: File) => Promise<void>;
 }
 
 const DatasetContext = createContext<DatasetContextType | undefined>(undefined);
@@ -124,6 +125,19 @@ export function DatasetProvider({ children, projectId }: { children: React.React
     }
   };
 
+  const importToExistingDataset = async (datasetId: string, file: File): Promise<void> => {
+    setError(null);
+
+    try {
+      const updatedDataset = await api.importToExistingDataset(projectId, datasetId, file);
+      setDatasets(datasets.map(d => d.id === datasetId ? updatedDataset : d));
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to import dataset";
+      setError(errorMessage);
+      throw err;
+    }
+  };
+
   const value: DatasetContextType = {
     datasets,
     loading,
@@ -134,6 +148,7 @@ export function DatasetProvider({ children, projectId }: { children: React.React
     deleteDataset,
     exportDataset,
     importDataset,
+    importToExistingDataset,
   };
 
   return <DatasetContext.Provider value={value}>{children}</DatasetContext.Provider>;

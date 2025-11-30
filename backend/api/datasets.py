@@ -258,6 +258,10 @@ def export_dataset(project_id, dataset_id):
     Returns:
         Zip file containing dataset
     """
+    import tempfile
+    import atexit
+    import shutil as shutil_module
+
     try:
         service = get_dataset_service(project_id)
         if not service:
@@ -275,19 +279,88 @@ def export_dataset(project_id, dataset_id):
             }), 404
 
         # Create temporary export file
-        import tempfile
         temp_dir = Path(tempfile.mkdtemp())
         export_path = temp_dir / f"{dataset_id}.zip"
 
+        # Register cleanup function to remove temp directory after response is sent
+        def cleanup():
+            try:
+                if temp_dir.exists():
+                    shutil_module.rmtree(temp_dir)
+            except Exception:
+                pass
+
+        atexit.register(cleanup)
+
         service.export_dataset(dataset_id, export_path)
 
-        # Send file and cleanup
-        return send_file(
+        # Send file with cleanup callback
+        response = send_file(
             export_path,
             as_attachment=True,
             download_name=f"{dataset.name}.zip",
             mimetype='application/zip'
         )
+
+        # Add cleanup callback for after response is sent
+        @response.call_on_close
+        def on_close():
+            cleanup()
+
+        return response
+
+    except ValueError as e:
+        return jsonify({
+            'error': t('errors.validation_error'),
+            'message': str(e)
+        }), 400
+    except Exception as e:
+        return jsonify({
+            'error': t('errors.internal_error'),
+            'message': str(e)
+        }), 500
+
+
+@api_bp.route('/projects/<project_id>/datasets/<dataset_id>/import', methods=['PUT'])
+def import_to_existing_dataset(project_id, dataset_id):
+    """
+    Import data into an existing dataset (replaces all items)
+
+    Args:
+        project_id: Project identifier
+        dataset_id: Dataset identifier
+
+    Form data:
+        dataset_file: Zip file containing dataset items (required)
+
+    Returns:
+        JSON response with updated dataset data
+    """
+    try:
+        service = get_dataset_service(project_id)
+        if not service:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.project_not_found')
+            }), 404
+
+        dataset = service.get_dataset(dataset_id)
+        if not dataset:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.dataset_not_found')
+            }), 404
+
+        dataset_file = request.files.get('dataset_file')
+        if not dataset_file:
+            return jsonify({
+                'error': t('errors.bad_request'),
+                'message': t('errors.file_upload_error')
+            }), 400
+
+        updated_dataset = service.import_to_existing_dataset(dataset_id, dataset_file)
+
+        return jsonify(updated_dataset.to_dict()), 200
 
     except ValueError as e:
         return jsonify({

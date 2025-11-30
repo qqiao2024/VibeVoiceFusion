@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import ImportDatasetModal from "@/components/ImportDatasetModal";
 
 interface Dataset {
   id: string;
@@ -15,13 +16,17 @@ interface Dataset {
 interface DatasetCardProps {
   dataset: Dataset;
   onDelete: (id: string) => void;
+  onImport: (id: string, file: File) => Promise<void>;
+  onExport: (id: string, name: string) => void;
   onViewDetails: (id: string) => void;
 }
 
-export default function DatasetCard({ dataset, onDelete, onViewDetails }: DatasetCardProps) {
+export default function DatasetCard({ dataset, onDelete, onImport, onExport, onViewDetails }: DatasetCardProps) {
   const { t } = useLanguage();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleDelete = () => {
     onDelete(dataset.id);
@@ -29,15 +34,25 @@ export default function DatasetCard({ dataset, onDelete, onViewDetails }: Datase
   };
 
   const handleImport = () => {
-    // TODO: Implement import functionality
-    console.log("Import data for dataset:", dataset.id);
     setShowActionMenu(false);
+    setShowImportModal(true);
   };
 
-  const handleExport = () => {
-    // TODO: Implement export functionality
-    console.log("Export data for dataset:", dataset.id);
+  const handleImportFile = async (file: File) => {
+    await onImport(dataset.id, file);
+  };
+
+  const handleExport = async () => {
     setShowActionMenu(false);
+    setIsExporting(true);
+
+    try {
+      await onExport(dataset.id, dataset.name);
+    } catch (error) {
+      console.error("Export failed:", error);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -87,12 +102,24 @@ export default function DatasetCard({ dataset, onDelete, onViewDetails }: Datase
                     </button>
                     <button
                       onClick={handleExport}
-                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                      disabled={isExporting}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      <span>{t('dataset.export')}</span>
+                      {isExporting ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          <span>{t('dataset.exporting')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          <span>{t('dataset.export')}</span>
+                        </>
+                      )}
                     </button>
                     <div className="border-t border-gray-200" />
                     <button
@@ -156,6 +183,15 @@ export default function DatasetCard({ dataset, onDelete, onViewDetails }: Datase
           </button>
         </div>
       </div>
+
+      {/* Import Dataset Modal */}
+      {showImportModal && (
+        <ImportDatasetModal
+          datasetName={dataset.name}
+          onClose={() => setShowImportModal(false)}
+          onImport={handleImportFile}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (

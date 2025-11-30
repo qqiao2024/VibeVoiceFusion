@@ -630,7 +630,12 @@ class DatasetService:
 
     def export_dataset(self, dataset_id: str, export_path: Path) -> None:
         """
-        Export dataset to a zip file
+        Export dataset to a zip file (flat structure without parent directory)
+
+        The ZIP will contain:
+        - datasets.jsonl
+        - audio/
+        - voice_prompts/
 
         Args:
             dataset_id: Dataset identifier
@@ -644,23 +649,33 @@ class DatasetService:
             raise ValueError("Dataset not found")
 
         try:
-            # Create zip archive of dataset directory
+            # Get dataset directory
+            dataset_dir = self._get_dataset_dir(dataset_id)
+
+            # Create zip archive with flat structure (no parent directory)
+            # By setting root_dir to the dataset directory and omitting base_dir,
+            # the contents are placed at the root of the ZIP
             shutil.make_archive(
                 str(export_path.with_suffix('')),  # Remove .zip suffix as make_archive adds it
                 'zip',
-                self.datasets_dir,
-                dataset_id
+                root_dir=str(dataset_dir),  # Archive from inside the dataset directory
+                base_dir='.'  # Include all contents without parent folder
             )
         except Exception as e:
             raise RuntimeError(f"Failed to export dataset: {str(e)}")
 
     def import_dataset(self, import_file: FileStorage, dataset_name: Optional[str] = None) -> Dataset:
         """
-        Import dataset from a zip file
+        Import dataset from a zip file with flat structure
+
+        Expected ZIP structure:
+        - datasets.jsonl
+        - audio/
+        - voice_prompts/
 
         Args:
             import_file: Zip file containing dataset
-            dataset_name: Optional name for imported dataset (uses original name if not provided)
+            dataset_name: Optional name for imported dataset (required for new dataset)
 
         Returns:
             Imported Dataset object
@@ -682,23 +697,18 @@ class DatasetService:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             zip_path = temp_path / 'dataset.zip'
+            extracted_dir = temp_path / 'extracted'
 
             try:
                 # Save uploaded file
                 import_file.save(str(zip_path))
 
-                # Extract zip file
+                # Extract zip file to a subdirectory
+                extracted_dir.mkdir()
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(temp_path)
+                    zip_ref.extractall(extracted_dir)
 
-                # Find the dataset directory (should be the only directory)
-                extracted_dirs = [d for d in temp_path.iterdir() if d.is_dir()]
-                if len(extracted_dirs) != 1:
-                    raise ValueError("Invalid dataset archive: must contain exactly one dataset directory")
-
-                extracted_dir = extracted_dirs[0]
-
-                # Validate structure
+                # Validate flat structure (files should be at root of ZIP)
                 items_file = extracted_dir / self.ITEMS_FILE
                 audio_dir = extracted_dir / self.AUDIO_DIR
                 voice_prompts_dir = extracted_dir / self.VOICE_PROMPTS_DIR
@@ -725,11 +735,11 @@ class DatasetService:
                         except (json.JSONDecodeError, ValueError) as e:
                             raise ValueError(f"Invalid item at line {line_num}: {str(e)}")
 
-                # Use provided name or extract from directory name
-                if dataset_name:
-                    name = dataset_name.strip()
-                else:
-                    name = extracted_dir.name.replace('-', ' ').title()
+                # Use provided name (required for creating new dataset)
+                if not dataset_name or not dataset_name.strip():
+                    raise ValueError("Dataset name is required for import")
+
+                name = dataset_name.strip()
 
                 # Generate unique dataset ID
                 dataset_id = self._generate_dataset_id(name)
@@ -754,4 +764,125 @@ class DatasetService:
                 dataset_dir = self._get_dataset_dir(dataset_id) if 'dataset_id' in locals() else None
                 if dataset_dir and dataset_dir.exists():
                     self.file_handler.delete_directory(dataset_dir)
+                raise RuntimeError(f"Failed to import dataset: {str(e)}")
+
+    def import_to_existing_dataset(self, dataset_id: str, import_file: FileStorage) -> Dataset:
+        """
+        Import data into an existing dataset (replaces all items)
+
+        Expected ZIP structure:
+        - datasets.jsonl
+        - audio/
+        - voice_prompts/
+
+        Args:
+            dataset_id: Existing dataset identifier
+            import_file: Zip file containing dataset items
+
+        Returns:
+            Updated Dataset object
+
+        Raises:
+            ValueError: If validation fails or dataset not found
+            RuntimeError: If import fails
+        """
+        import tempfile
+        import zipfile
+
+        # Validate dataset exists
+        dataset = self.get_dataset(dataset_id)
+        if not dataset:
+            raise ValueError("Dataset not found")
+
+        if not import_file or not import_file.filename:
+            raise ValueError("Import file is required")
+
+        if not import_file.filename.lower().endswith('.zip'):
+            raise ValueError("Import file must be a ZIP archive")
+
+        # Create temporary directory for extraction
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            zip_path = temp_path / 'dataset.zip'
+            extracted_dir = temp_path / 'extracted'
+
+            try:
+                # Save uploaded file
+                import_file.save(str(zip_path))
+
+                # Extract zip file to a subdirectory
+                extracted_dir.mkdir()
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(extracted_dir)
+
+                # Validate flat structure
+                items_file = extracted_dir / self.ITEMS_FILE
+                audio_dir = extracted_dir / self.AUDIO_DIR
+                voice_prompts_dir = extracted_dir / self.VOICE_PROMPTS_DIR
+
+                if not items_file.exists():
+                    raise ValueError(f"Invalid dataset archive: missing {self.ITEMS_FILE}")
+                if not audio_dir.exists() or not audio_dir.is_dir():
+                    raise ValueError(f"Invalid dataset archive: missing {self.AUDIO_DIR} directory")
+                if not voice_prompts_dir.exists() or not voice_prompts_dir.is_dir():
+                    raise ValueError(f"Invalid dataset archive: missing {self.VOICE_PROMPTS_DIR} directory")
+
+                # Load and validate items from imported file
+                temp_items = []
+                with open(items_file, 'r', encoding='utf-8') as f:
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            item_data = json.loads(line)
+                            item = DatasetItem.from_dict(item_data)
+                            item.validate()
+                            temp_items.append(item)
+                        except (json.JSONDecodeError, ValueError) as e:
+                            raise ValueError(f"Invalid item at line {line_num}: {str(e)}")
+
+                # Get existing dataset directory
+                dataset_dir = self._get_dataset_dir(dataset_id)
+
+                # Backup existing data (in case of failure)
+                backup_dir = temp_path / 'backup'
+                shutil.copytree(dataset_dir, backup_dir)
+
+                try:
+                    # Delete old audio and voice_prompts directories
+                    old_audio_dir = self._get_audio_dir(dataset_id)
+                    old_voice_prompts_dir = self._get_voice_prompts_dir(dataset_id)
+
+                    if old_audio_dir.exists():
+                        shutil.rmtree(old_audio_dir)
+                    if old_voice_prompts_dir.exists():
+                        shutil.rmtree(old_voice_prompts_dir)
+
+                    # Copy new audio and voice_prompts directories
+                    shutil.copytree(audio_dir, old_audio_dir)
+                    shutil.copytree(voice_prompts_dir, old_voice_prompts_dir)
+
+                    # Replace items file
+                    new_items_file = self._get_items_file_path(dataset_id)
+                    shutil.copy2(items_file, new_items_file)
+
+                    # Update dataset metadata
+                    dataset.update(item_count=len(temp_items))
+                    metadata = self._load_metadata()
+                    metadata[dataset_id] = dataset.to_dict()
+                    self._save_metadata(metadata)
+
+                    return dataset
+
+                except Exception as e:
+                    # Restore from backup on failure
+                    if dataset_dir.exists():
+                        shutil.rmtree(dataset_dir)
+                    shutil.copytree(backup_dir, dataset_dir)
+                    raise RuntimeError(f"Failed to import data, restored backup: {str(e)}")
+
+            except Exception as e:
+                if isinstance(e, (ValueError, RuntimeError)):
+                    raise
                 raise RuntimeError(f"Failed to import dataset: {str(e)}")

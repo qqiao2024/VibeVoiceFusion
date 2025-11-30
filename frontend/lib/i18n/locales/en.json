@@ -399,6 +399,14 @@
     "createItemError": "Failed to create item",
     "updateItemError": "Failed to update item",
     "deleteItemError": "Failed to delete item",
-    "loadError": "Failed to load dataset"
+    "loadError": "Failed to load dataset",
+    "exporting": "Exporting...",
+    "exportError": "Failed to export dataset",
+    "importing": "Importing...",
+    "importError": "Failed to import dataset",
+    "importToDataset": "Import data to: {name}",
+    "importWarning": "Warning: This will replace all existing items in this dataset.",
+    "invalidFileFormat": "Invalid file format. Please select a ZIP file.",
+    "supportedFormatsZip": "Supported format: ZIP"
   }
 }
