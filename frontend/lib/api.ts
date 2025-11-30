@@ -474,11 +474,30 @@ class ApiClient {
 
   async listDatasetItems(
     projectId: string,
-    datasetId: string
-  ): Promise<{ items: DatasetItem[]; count: number }> {
-    return this.fetch(
-      `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/items`
-    );
+    datasetId: string,
+    options?: {
+      offset?: number;
+      limit?: number;
+    }
+  ): Promise<{
+    items: DatasetItem[];
+    count: number;
+    total: number;
+    offset: number;
+    limit: number | null;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.offset !== undefined) {
+      params.append('offset', options.offset.toString());
+    }
+    if (options?.limit !== undefined) {
+      params.append('limit', options.limit.toString());
+    }
+
+    const queryString = params.toString();
+    const endpoint = `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/items${queryString ? `?${queryString}` : ''}`;
+
+    return this.fetch(endpoint);
   }
 
   async createDatasetItem(

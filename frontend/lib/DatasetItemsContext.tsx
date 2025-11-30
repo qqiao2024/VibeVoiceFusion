@@ -1,12 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { api, DatasetItem } from "@/lib/api";
 
 interface DatasetItemsContextType {
   items: DatasetItem[];
+  totalCount: number;
   loading: boolean;
   error: string | null;
+  loadItems: (offset: number, limit: number) => Promise<void>;
   refreshItems: () => Promise<void>;
   createItem: (text: string, audioFile: File, voicePromptFiles: File[]) => Promise<DatasetItem>;
   updateItem: (index: number, text?: string, audioFile?: File, voicePromptFiles?: File[]) => Promise<DatasetItem>;
@@ -25,19 +27,46 @@ export function DatasetItemsProvider({
   datasetId: string;
 }) {
   const [items, setItems] = useState<DatasetItem[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load items from backend
-  const refreshItems = useCallback(async () => {
+  // Track loaded ranges to avoid duplicate fetches
+  const loadedRangesRef = useRef<Map<string, DatasetItem[]>>(new Map());
+
+  // Load items with pagination
+  const loadItems = useCallback(async (offset: number, limit: number) => {
     if (!projectId || !datasetId) return;
+
+    const rangeKey = `${offset}-${limit}`;
+
+    // Check if this range is already loaded
+    if (loadedRangesRef.current.has(rangeKey)) {
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await api.listDatasetItems(projectId, datasetId);
-      setItems(response.items);
+      const response = await api.listDatasetItems(projectId, datasetId, {
+        offset,
+        limit,
+      });
+
+      // Cache the loaded range
+      loadedRangesRef.current.set(rangeKey, response.items);
+
+      // Update items - merge with existing items
+      setItems((prevItems) => {
+        const newItems = [...prevItems];
+        response.items.forEach((item, idx) => {
+          newItems[offset + idx] = item;
+        });
+        return newItems;
+      });
+
+      setTotalCount(response.total);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to load items";
       setError(errorMessage);
@@ -47,7 +76,31 @@ export function DatasetItemsProvider({
     }
   }, [projectId, datasetId]);
 
-  // Load items on mount and when projectId/datasetId changes
+  // Refresh all items (clear cache and reload)
+  const refreshItems = useCallback(async () => {
+    if (!projectId || !datasetId) return;
+
+    // Clear cache
+    loadedRangesRef.current.clear();
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Load all items to get accurate count
+      const response = await api.listDatasetItems(projectId, datasetId);
+      setItems(response.items);
+      setTotalCount(response.total);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to load items";
+      setError(errorMessage);
+      console.error("Error loading items:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, datasetId]);
+
+  // Load initial items on mount
   useEffect(() => {
     refreshItems();
   }, [refreshItems]);
@@ -65,7 +118,11 @@ export function DatasetItemsProvider({
         audio_file: audioFile,
         voice_prompt_files: voicePromptFiles,
       });
-      setItems([...items, item]);
+
+      // Clear cache and refresh to get updated list with correct indices
+      loadedRangesRef.current.clear();
+      await refreshItems();
+
       return item;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to create item";
@@ -88,7 +145,17 @@ export function DatasetItemsProvider({
         audio_file: audioFile,
         voice_prompt_files: voicePromptFiles,
       });
-      setItems(items.map((item, i) => (i === index ? updatedItem : item)));
+
+      // Update item in place
+      setItems((prevItems) => {
+        const newItems = [...prevItems];
+        newItems[index] = updatedItem;
+        return newItems;
+      });
+
+      // Clear cache for affected ranges
+      loadedRangesRef.current.clear();
+
       return updatedItem;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to update item";
@@ -102,7 +169,10 @@ export function DatasetItemsProvider({
 
     try {
       await api.deleteDatasetItem(projectId, datasetId, index);
-      setItems(items.filter((_, i) => i !== index));
+
+      // Clear cache and refresh to get updated list with correct indices
+      loadedRangesRef.current.clear();
+      await refreshItems();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to delete item";
       setError(errorMessage);
@@ -112,8 +182,10 @@ export function DatasetItemsProvider({
 
   const value: DatasetItemsContextType = {
     items,
+    totalCount,
     loading,
     error,
+    loadItems,
     refreshItems,
     createItem,
     updateItem,

@@ -326,23 +326,43 @@ class DatasetService:
 
         return True
 
-    def list_items(self, dataset_id: str) -> List[DatasetItem]:
+    def list_items(self, dataset_id: str, offset: int = 0, limit: Optional[int] = None) -> tuple[List[DatasetItem], int]:
         """
-        List all items in a dataset
+        List items in a dataset with pagination support
 
         Args:
             dataset_id: Dataset identifier
+            offset: Starting index (0-based, default: 0)
+            limit: Maximum number of items to return (default: None for all items)
 
         Returns:
-            List of DatasetItem objects
+            Tuple of (list of DatasetItem objects, total count)
 
         Raises:
-            ValueError: If dataset not found
+            ValueError: If dataset not found or invalid pagination parameters
         """
         if not self.get_dataset(dataset_id):
             raise ValueError("Dataset not found")
 
-        return self._load_items(dataset_id)
+        if offset < 0:
+            raise ValueError("Offset must be non-negative")
+
+        if limit is not None and limit <= 0:
+            raise ValueError("Limit must be positive")
+
+        # Load all items
+        all_items = self._load_items(dataset_id)
+        total_count = len(all_items)
+
+        # Apply pagination
+        if limit is None:
+            # Return all items from offset
+            items = all_items[offset:]
+        else:
+            # Return items in the specified range
+            items = all_items[offset:offset + limit]
+
+        return items, total_count
 
     def add_item(self, dataset_id: str, text: str, audio_file: FileStorage,
                  voice_prompt_files: List[FileStorage]) -> DatasetItem:

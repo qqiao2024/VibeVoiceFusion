@@ -355,14 +355,18 @@ def import_dataset(project_id):
 @api_bp.route('/projects/<project_id>/datasets/<dataset_id>/items', methods=['GET'])
 def list_dataset_items(project_id, dataset_id):
     """
-    List all items in a dataset
+    List items in a dataset with pagination support
 
     Args:
         project_id: Project identifier
         dataset_id: Dataset identifier
 
+    Query parameters:
+        offset: Starting index (default: 0)
+        limit: Maximum number of items to return (default: all)
+
     Returns:
-        JSON response with list of dataset items
+        JSON response with paginated list of dataset items
     """
     try:
         service = get_dataset_service(project_id)
@@ -378,13 +382,25 @@ def list_dataset_items(project_id, dataset_id):
                 'message': t('errors.dataset_not_found')
             }), 404
 
-        items = service.list_items(dataset_id)
+        # Get pagination parameters from query string
+        offset = request.args.get('offset', 0, type=int)
+        limit = request.args.get('limit', type=int)  # None if not provided
+
+        items, total_count = service.list_items(dataset_id, offset, limit)
 
         return jsonify({
             'items': [item.to_dict() for item in items],
-            'count': len(items)
+            'count': len(items),
+            'total': total_count,
+            'offset': offset,
+            'limit': limit
         }), 200
 
+    except ValueError as e:
+        return jsonify({
+            'error': t('errors.validation_error'),
+            'message': str(e)
+        }), 400
     except Exception as e:
         return jsonify({
             'error': t('errors.internal_error'),
@@ -564,6 +580,110 @@ def delete_dataset_item(project_id, dataset_id, item_index):
             'message': t('success.item_deleted'),
             'item_index': item_index
         }), 200
+
+    except Exception as e:
+        return jsonify({
+            'error': t('errors.internal_error'),
+            'message': str(e)
+        }), 500
+
+
+# Dataset file serving endpoints
+
+@api_bp.route('/projects/<project_id>/datasets/<dataset_id>/audio/<filename>', methods=['GET'])
+def get_dataset_audio(project_id, dataset_id, filename):
+    """
+    Serve audio file from dataset
+
+    Args:
+        project_id: Project identifier
+        dataset_id: Dataset identifier
+        filename: Audio filename
+
+    Returns:
+        Audio file
+    """
+    try:
+        service = get_dataset_service(project_id)
+        if not service:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.project_not_found')
+            }), 404
+
+        if not service.get_dataset(dataset_id):
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.dataset_not_found')
+            }), 404
+
+        # Get audio file path
+        audio_dir = service._get_audio_dir(dataset_id)
+        audio_path = audio_dir / filename
+
+        if not audio_path.exists():
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': 'Audio file not found'
+            }), 404
+
+        return send_file(
+            audio_path,
+            mimetype='audio/wav',
+            as_attachment=False,
+            download_name=filename
+        )
+
+    except Exception as e:
+        return jsonify({
+            'error': t('errors.internal_error'),
+            'message': str(e)
+        }), 500
+
+
+@api_bp.route('/projects/<project_id>/datasets/<dataset_id>/voice-prompts/<filename>', methods=['GET'])
+def get_dataset_voice_prompt(project_id, dataset_id, filename):
+    """
+    Serve voice prompt file from dataset
+
+    Args:
+        project_id: Project identifier
+        dataset_id: Dataset identifier
+        filename: Voice prompt filename
+
+    Returns:
+        Voice prompt audio file
+    """
+    try:
+        service = get_dataset_service(project_id)
+        if not service:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.project_not_found')
+            }), 404
+
+        if not service.get_dataset(dataset_id):
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.dataset_not_found')
+            }), 404
+
+        # Get voice prompt file path
+        voice_prompts_dir = service._get_voice_prompts_dir(dataset_id)
+        voice_prompt_path = voice_prompts_dir / filename
+
+        if not voice_prompt_path.exists():
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': 'Voice prompt file not found'
+            }), 404
+
+        return send_file(
+            voice_prompt_path,
+            mimetype='audio/wav',
+            as_attachment=False,
+            download_name=filename
+        )
 
     except Exception as e:
         return jsonify({
