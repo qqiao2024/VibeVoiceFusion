@@ -1,4 +1,4 @@
-from task import Task
+from backend.task_manager.task import Task
 from typing import Any, Dict, List
 from backend.inference.inference import InferenceBase
 from config.configuration_vibevoice import InferencePhase
