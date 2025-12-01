@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import type { TrainingJob, CreateTrainingRequest, TrainingStatus } from '@/types/training';
+import type { TrainingJob, CreateTrainingRequest } from '@/types/training';
+import { TrainingStatus } from '@/types/training';
 
 interface TrainingContextType {
   // State
@@ -69,8 +70,8 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
     try {
       // TODO: Replace with actual API call when backend is ready
       // const response = await api.getCurrentTrainingJob();
-      // Mock data for now
-      const newCurrentJob: TrainingJob | null = null;
+      // Mock data for now - using type assertion to preserve TrainingJob | null type
+      const newCurrentJob = null as TrainingJob | null;
 
       // Check if we had an active job that just completed (became null)
       const hadActiveJob = previousStatusRef.current !== null && activeJobIdRef.current !== null;
