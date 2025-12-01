@@ -5,13 +5,13 @@ import json
 import toml
 
 from typing import Any, Dict, Optional
+from abc import ABC, abstractmethod
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 from torch.utils.data import DataLoader
 
 from config.configuration_vibevoice import VibeVoiceConfig, DEFAULT_CONFIG
-from util.rand_init import get_generator
 from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalInference
 from vibevoice.modular.adaptive_offload import OffloadConfig
 from vibevoice.lora.lora_network import create_network, LoRANetwork
