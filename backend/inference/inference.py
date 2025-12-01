@@ -144,7 +144,7 @@ class InferenceBase(ABC):
         voice_names = []
         for i in range(max_speaker_id):
             voice_names.append(f"Speaker {i+1}")
-        
+
         voice_sample = self.speaker_service.get_speakers_filepath(voice_names)
 
         logger.info(f"Max speaker ID: {max_speaker_id}, unique speakers: {unique_speaker_names}, all voice samples: {voice_sample}")

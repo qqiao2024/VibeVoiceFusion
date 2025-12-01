@@ -11,7 +11,7 @@ from backend.services.voice_gerneration_service import VoiceGenerationService
 from backend.services.dialog_session_service import DialogSessionService
 from backend.services.speaker_service import SpeakerService
 from backend.services.project_service import ProjectService
-from backend.gen_voice.task import gm, Task
+from backend.task_manager.task import gm, Task
 from backend.i18n import t
 from util.logger import get_logger
 

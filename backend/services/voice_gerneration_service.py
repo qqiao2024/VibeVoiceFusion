@@ -6,7 +6,8 @@ from utils.file_handler import FileHandler
 from backend.services.speaker_service import SpeakerService
 from backend.services.dialog_session_service import DialogSessionService
 from backend.models.generation import Generation
-from backend.gen_voice.task import Task, gm
+from backend.task_manager.task import gm
+from backend.task_manager.inference_task import InferenceTask
 from backend.inference.inference import InferenceBase
 class VoiceGenerationService:
 
@@ -188,8 +189,8 @@ class VoiceGenerationService:
                                          offload_config=offloading_config,
                                          fake=self.fake_model)
 
-        task = Task.from_inference(inference=inference,
-                                   file_handler=self.file_handler,
-                                   meta_file_path=str(self.meta_file_path))
+        task = InferenceTask.from_inference(inference=inference,
+                                            file_handler=self.file_handler,
+                                            meta_file_path=str(self.meta_file_path))
 
         return generation if gm.add_task(task) else None

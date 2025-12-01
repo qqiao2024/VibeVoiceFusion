@@ -434,7 +434,7 @@ vibevoice/
 │   │   └── generation.py   # Voice generation
 │   ├── services/           # Business logic layer
 │   ├── models/             # Data models
-│   ├── gen_voice/          # Background task queue
+│   ├── task_manager/       # Background task queue
 │   ├── inference/          # Inference engine
 │   ├── i18n/              # Backend translations
 │   └── dist/              # Frontend static files (production)
