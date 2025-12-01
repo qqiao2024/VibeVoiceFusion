@@ -192,4 +192,4 @@ class VoiceGenerationService:
                                    file_handler=self.file_handler,
                                    meta_file_path=str(self.meta_file_path))
 
-        return generation if gm.add_inference_task(task) else None
+        return generation if gm.add_task(task) else None

@@ -1,5 +1,6 @@
 import threading
 
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 from time import sleep
@@ -12,9 +13,49 @@ from util.logger import get_logger
 
 logger = get_logger(__name__)
 
-class Task:
+class Task(ABC):
+
+    def __init__(self, task_id: str = None):
+        self.task_id = task_id
+
+    def id(self) -> str:
+        return self.task_id
+
+    @abstractmethod
+    def run(self):
+        pass
+
+    @abstractmethod
+    def task_failure(self, error_msg: str):
+        pass
+
+    @abstractmethod
+    def task_success(self, message: str):
+        pass
+
+    @abstractmethod
+    def task_appended(self, message: str):
+        pass
+
+    @abstractmethod
+    def unwrap(self) -> Any:
+        pass
+
+    def task_finalize(self):
+        try:
+            self._task_finalize()
+        except Exception as e:
+            logger.warning(f"Task finalized failed {self.task_id} finalize failed:", exc_info=e)
+        pass
+
+    @abstractmethod
+    def _task_finalize(self):
+        pass
+
+class InferenceTask(Task):
 
     def __init__(self, inference: InferenceBase, file_handler: FileHandler, meta_file_path: str):
+        super().__init__(task_id=inference.generation.request_id)
         self.inference = inference
         self.file_handler = file_handler
         self.meta_file_path = meta_file_path
@@ -22,6 +63,30 @@ class Task:
     @classmethod
     def from_inference(cls, inference: InferenceBase, file_handler: FileHandler, meta_file_path: str) -> 'Task':
         return cls(inference, file_handler, meta_file_path)
+
+    def run(self):
+        logger.info(f"generation id{self.inference.generation.request_id} is created, "
+                    "now running")
+        self.inference.run_inference(status_update=self.inference.generation.update_status)
+
+    def task_failure(self, error_msg: str):
+        logger.error(f"generation id{self.inference.generation.request_id} running failed, error: {error_msg}")
+        self.inference.generation.status = InferencePhase.FAILED
+
+    def task_success(self, message: str):
+        logger.info(f"Inference task completed successfully: {message}")
+        self.inference.generation.status = InferencePhase.COMPLETED
+
+    def unwrap(self) -> InferenceBase:
+        return self.inference
+
+    def task_appended(self, message: str):
+        generations = self._load_metadata()
+        generations.append(self.inference.generation.to_dict())
+        self._save_metadata(generations)
+
+    def _task_finalize(self):
+        self._update_metadata(self.inference.generation.to_dict())
 
     def _load_metadata(self) -> List[Dict[str, Any]]:
         """
@@ -65,47 +130,39 @@ class Manager:
     def __init__(self):
         self.task: Task = None
 
-    def generation_run_loop(self):
+    def task_run_loop(self):
         while True:
             try:
                 if self.task is not None:
-                    logger.info(f"generation id{self.task.inference.generation.request_id} is created, "
-                                "now running")
-                    self.task.inference.run_inference(status_update=self.task.inference.generation.update_status)
-                    self.task.inference.generation.status = InferencePhase.COMPLETED
+                    self.task.run()
+                    self.task.task_success("Task run completed successfully.")
             except Exception as e:
                 logger.error("TaskManager task_run_loop error:", exc_info=e)
                 if self.task is not None:
-                    self.task.inference.generation.status = InferencePhase.FAILED
-                    logger.error(f"generation id{self.task.inference.generation.request_id} running failed,")
+                    self.task.task_failure(str(e))
             finally:
-                try:
-                    if self.task is not None:
-                        self.task._update_metadata(self.task.inference.generation.to_dict())
-                except Exception as e:
-                    logger.error("Failed to update metadata:", exc_info=e)
+                if self.task is not None:
+                    self.task._task_finalize()
                 self.task = None
 
             sleep(0.5)
 
-    def add_inference_task(self, task: Task) -> bool:
+    def add_task(self, task: Task) -> bool:
         if self.task is None:
             self.task = task
-            logger.info(f"Added generation id{task.inference.generation.request_id} to current inference")
-            generations = self.task._load_metadata()
-            generations.append(task.inference.generation.to_dict())
-            self.task._save_metadata(generations)
+            self.task.task_appended("Task added to the manager.")
+            logger.info(f"Added task id{self.task.id()} to current inference")
             return True
         else:
-            logger.warning(f"Cannot add generation id{task.inference.generation.request_id}, another "
-                           f"inference {self.task.inference.generation.request_id} is in progress")
+            logger.warning(f"Cannot add task id{self.task.id()}, another "
+                           f"inference {self.task.id()} is in progress")
             return False
 
-    def get_current_generation(self) -> Generation:
-        if self.task is not None and self.task.inference is not None:
-            return self.task.inference.generation
+    def get_current_task(self) -> Task:
+        if self.task is not None:
+            return self.task
         return None
 
 
 gm = Manager()
-threading.Thread(target=gm.generation_run_loop, daemon=True).start()
+threading.Thread(target=gm.task_run_loop, daemon=True).start()
