@@ -24,6 +24,10 @@ class TrainerVisitor(ABC):
     @abstractmethod
     def visit_epoch_end(self, timestamp: float, epoch: int, epoch_elapsed: float, loss: float, diffusion_loss: float, ce_loss: float, total_run_steps: int):
         pass
+    
+    @abstractmethod
+    def visit_training_failed(self, timestamp: float, error_msg: str):
+        pass
 
 
 class VisitorManager(TrainerVisitor):
@@ -56,3 +60,7 @@ class VisitorManager(TrainerVisitor):
     def visit_epoch_end(self, timestamp: float, epoch: int, epoch_elapsed: float, loss: float, diffusion_loss: float, ce_loss: float, total_run_steps: int):
         for visitor in self.visitors:
             visitor.visit_epoch_end(timestamp, epoch, epoch_elapsed, loss, diffusion_loss, ce_loss, total_run_steps)
+
+    def visit_training_failed(self, timestamp: float, error_msg: str):
+        for visitor in self.visitors:
+            visitor.visit_training_failed(timestamp, error_msg)

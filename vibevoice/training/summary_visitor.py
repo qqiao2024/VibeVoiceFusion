@@ -122,3 +122,6 @@ class SummaryVisitor(TrainerVisitor):
         # Log total steps completed
         self.writer.add_scalar("progress/total_steps", total_run_steps, epoch)
         self.writer.flush()
+    
+    def visit_training_failed(self, timestamp, error_msg):
+        pass

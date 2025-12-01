@@ -138,8 +138,15 @@ class VibeVoiceTrainer:
         self.dtype = torch.bfloat16 if train_config.dtype == "bfloat16" else torch.float8_e4m3fn
         self.device = torch.device(train_config.device)
         self.visitor = visitor if visitor is not None else VisitorManager()
-
+    
     def train(self):
+        try:
+            self._train()
+        except Exception as e:
+            self.visitor.visit_training_failed(datetime.now().timestamp(), str(e))
+            raise e
+
+    def _train(self):
 
         metadata = self.train_config.to_metadata()
         logger.info(f"Training configuration: {metadata}")
@@ -169,7 +176,6 @@ class VibeVoiceTrainer:
 
         optimizer.zero_grad()
         gradient_accumulation_steps = self.train_config.gradient_accumulation_steps
-        current_step = 0
         global_step = 0
         start_time = datetime.now()
         logger.info(f"Optimizer: {optimizer_name}({optimizer_args}) | Learning Rate: {self.train_config.learning_rate}")
@@ -206,7 +212,8 @@ class VibeVoiceTrainer:
             epoch_steps = 0
 
             for _ in range(self.train_config.dataset_repeats):
-                for step, inputs in enumerate(train_dataloader):
+                step = 0
+                for _, inputs in enumerate(train_dataloader):
                     step_start_time = datetime.now()
 
                     # Notify step begin
@@ -223,7 +230,7 @@ class VibeVoiceTrainer:
                     output = model.call_for_train(**inputs)
                     real_loss = self.train_config.ce_loss_weight * output.loss + self.train_config.diffusion_loss_weight * output.diffusion_loss
                     real_loss.backward()
-                    current_step += 1
+                    step += 1
                     global_step += 1
 
                     # Accumulate losses for epoch average
@@ -232,7 +239,11 @@ class VibeVoiceTrainer:
                     epoch_diffusion_loss_sum += output.diffusion_loss.item()
                     epoch_steps += 1
 
-                    if current_step % gradient_accumulation_steps == 0:
+                    if gradient_accumulation_steps > 0:
+                        if global_step % gradient_accumulation_steps == 0:
+                            optimizer.step()
+                            optimizer.zero_grad()
+                    else:
                         optimizer.step()
                         optimizer.zero_grad()
 
@@ -242,9 +253,9 @@ class VibeVoiceTrainer:
                     # Notify step end
                     self.visitor.visit_step_end(
                         timestamp=step_end_time.timestamp(),
-                        step=step + 1,
+                        step=step,
                         epoch=epoch + 1,
-                        step_in_epoch=step + 1,
+                        step_in_epoch=step,
                         lr=self.train_config.learning_rate,
                         global_step=global_step,
                         loss=real_loss.item(),
