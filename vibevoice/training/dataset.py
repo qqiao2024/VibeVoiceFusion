@@ -74,7 +74,7 @@ class VibeVoiceDataset:
 
                 min_len_sec = min(5.0, audio_len_seconds / 4.0)
                 max_len_sec = min(15.0, audio_len_seconds / 2.0)
-                
+
                 if min_len_sec > max_len_sec:
                     min_len_sec = max_len_sec
                 max_len_sec = min(max_len_sec, audio_len_seconds)
@@ -85,16 +85,16 @@ class VibeVoiceDataset:
 
                     max_start_sample = len(wav_array) - prompt_len_samples
                     start_sample = random.randint(0, max_start_sample)
-                    
+
                     prompt_crop = wav_array[start_sample : start_sample + prompt_len_samples]
-                    
+
                     data["voice_prompts"] = [prompt_crop]
                 else:
                     data["voice_prompts"] = None
 
             except Exception as e:
                 warnings.warn(f"Could not create voice prompt for item {idx}: {e}")
-                data["voice_prompts"] = None            
+                data["voice_prompts"] = None
         return data
 
 
@@ -207,7 +207,6 @@ class VibeVoiceCollator:
     dataset_root_path: Optional[str] = None
 
     def __call__(self, features: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
-        batch_size = len(features)
 
         sample_input_ids: List[List[int]] = []
         sample_attention_masks: List[List[int]] = []
@@ -232,7 +231,7 @@ class VibeVoiceCollator:
 
             if self.dataset_root_path is not None and voice_prompts is not None:
                 voice_prompts = [f"{self.dataset_root_path}/{str(vp)}" if not str(vp).startswith('/') else str(vp) for vp in voice_prompts]
-                
+
             proc = self.processor(
                 text=[text],
                 voice_samples=[voice_prompts] if voice_prompts is not None and random.random() >= _drop_rate else None,
