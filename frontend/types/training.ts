@@ -3,17 +3,9 @@
  */
 
 /**
- * Training status enum
+ * Backend training status values
  */
-export enum TrainingStatus {
-  PENDING = 'pending',
-  INITIALIZING = 'initializing',
-  TRAINING = 'training',
-  SAVING = 'saving',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled'
-}
+export type TrainingStatus = 'Prepare' | 'Training' | 'Completed' | 'Failed';
 
 /**
  * Optimizer types supported
@@ -24,6 +16,59 @@ export type OptimizerType = 'AdamW' | 'AdamW8bit';
  * Model dtype options for training
  */
 export type TrainingDtype = 'bfloat16' | 'float8_e4m3fn';
+
+/**
+ * TrainingState from backend (matches backend/training/state.py)
+ */
+export interface TrainingState {
+  // Job Metadata
+  task_id: string;
+  job_name: string;
+  project_id: string;
+  config: TrainConfig;
+  created_at: string;
+
+  // Progress
+  current_step: number | null;
+  estimated_total_steps: number | null;
+  current_epoch: number | null;
+  total_epochs: number | null;
+
+  // Training Parameters
+  learning_rate: number | null;
+  batch_size: number | null;
+  accumlate_grad_steps: number | null;
+
+  // Loss Metrics
+  current_loss: number | null;
+  current_diffusion_loss: number | null;
+  current_ce_loss: number | null;
+  average_epoch_loss: number | null;
+  average_epoch_diffusion_loss: number | null;
+  average_epoch_ce_loss: number | null;
+
+  // Timing
+  start_time: string | null;
+  current_timestamp: string | null;
+  estimated_total_elpase: number | null;
+  latest_epoch_elapsed: number | null;
+  latest_step_elapsed: number | null;
+  average_step_time: number | null;
+  steps_per_second: number | null;
+
+  // Status
+  status: TrainingStatus;
+
+  // TensorBoard
+  tensorboard_logdir: string | null;
+
+  // Output Files
+  lora_files: string[];
+  final_lora_file: string | null;
+
+  // Error message (if failed)
+  error_message?: string | null;
+}
 
 /**
  * Training configuration matching TrainConfig from trainer.py
@@ -58,71 +103,6 @@ export interface TrainConfig {
 }
 
 /**
- * Live training metrics during training
- */
-export interface TrainingMetrics {
-  // Progress
-  current_step: number;
-  current_epoch: number;
-  total_steps: number;
-  total_epochs: number;
-
-  // Losses
-  current_loss: number;
-  current_ce_loss: number;
-  current_diffusion_loss: number;
-
-  // Timing
-  elapsed_seconds: number;
-  estimated_remaining_seconds: number | null;
-  avg_step_time: number | null;
-  avg_epoch_time: number | null;
-
-  // Learning rate
-  learning_rate: number;
-
-  // TensorBoard metrics (if available)
-  tensorboard_metrics?: {
-    [key: string]: number;
-  };
-}
-
-/**
- * Training job representing a single training run
- */
-export interface TrainingJob {
-  job_id: string;
-  job_name: string;
-  status: TrainingStatus;
-  config: TrainConfig;
-
-  // Timestamps
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-
-  // Live metrics (during training)
-  metrics: TrainingMetrics | null;
-
-  // Final results (after completion)
-  final_loss: number | null;
-  final_ce_loss: number | null;
-  final_diffusion_loss: number | null;
-  total_steps: number | null;
-  total_epochs: number | null;
-  total_training_time: number | null;
-
-  // Saved models
-  saved_lora_files: string[];
-
-  // Error info (if failed)
-  error_message: string | null;
-
-  // Project info
-  project_id: string;
-}
-
-/**
  * Request body for creating a training job
  */
 export interface CreateTrainingRequest {
@@ -131,42 +111,54 @@ export interface CreateTrainingRequest {
 }
 
 /**
- * Response from POST /training
+ * Response from POST /api/v1/projects/{id}/training
  */
 export interface CreateTrainingResponse {
   message: string;
-  job_id: string;
-  job: TrainingJob;
+  task_id: string;
+  state: TrainingState;
 }
 
 /**
- * Response from GET /training/current
+ * Response from GET /api/v1/projects/{id}/training/current
  */
 export interface CurrentTrainingResponse {
   message: string;
-  job: TrainingJob | null;
+  state: TrainingState | null;
 }
 
 /**
- * Response from GET /training
+ * Response from GET /api/v1/projects/{id}/training
  */
-export interface ListTrainingJobsResponse {
-  jobs: TrainingJob[];
+export interface ListTrainingStatesResponse {
+  states: TrainingState[];
   count: number;
 }
 
 /**
- * Response from GET /training/:job_id
+ * Response from GET /api/v1/projects/{id}/training/{job_id}
  */
-export interface GetTrainingJobResponse {
-  job: TrainingJob;
+export interface GetTrainingStateResponse {
+  state: TrainingState;
 }
 
 /**
- * Response from DELETE /training/:job_id
+ * Response from DELETE /api/v1/projects/{id}/training/{job_id}
  */
-export interface DeleteTrainingJobResponse {
+export interface DeleteTrainingResponse {
   message: string;
+  job_id: string;
+}
+
+/**
+ * Response from POST /api/v1/projects/{id}/training/batch-delete
+ */
+export interface BatchDeleteTrainingResponse {
+  message: string;
+  deleted_count: number;
+  failed_count: number;
+  deleted_ids: string[];
+  failed_ids: string[];
 }
 
 /**

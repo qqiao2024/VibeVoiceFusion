@@ -3,12 +3,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTraining } from '@/lib/TrainingContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import type { TrainingJob } from '@/types/training';
-import { TrainingStatus } from '@/types/training';
+import type { TrainingState, TrainingStatus } from '@/types/training';
 import toast from 'react-hot-toast';
 
 function TrainingHistory() {
-  const { jobs, loading, deleteJob } = useTraining();
+  const { states, loading, deleteJob } = useTraining();
   const { t } = useLanguage();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -29,20 +28,20 @@ function TrainingHistory() {
 
   // Memoize pagination calculations
   const paginationData = useMemo(() => {
-    const totalPages = Math.ceil(jobs.length / itemsPerPage);
+    const totalPages = Math.ceil(states.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const paginatedJobs = jobs.slice(startIndex, endIndex);
+    const paginatedStates = states.slice(startIndex, endIndex);
 
     return {
       totalPages,
       startIndex,
       endIndex,
-      paginatedJobs
+      paginatedStates
     };
-  }, [jobs, currentPage, itemsPerPage]);
+  }, [states, currentPage, itemsPerPage]);
 
-  const { totalPages, startIndex, endIndex, paginatedJobs } = paginationData;
+  const { totalPages, startIndex, endIndex, paginatedStates } = paginationData;
 
   // Selection handlers
   const toggleSelection = useCallback((jobId: string) => {
@@ -59,16 +58,16 @@ function TrainingHistory() {
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds(prev => {
-      if (prev.size === paginatedJobs.length) {
+      if (prev.size === paginatedStates.length) {
         return new Set();
       } else {
-        return new Set(paginatedJobs.map(j => j.job_id));
+        return new Set(paginatedStates.map(s => s.task_id));
       }
     });
-  }, [paginatedJobs]);
+  }, [paginatedStates]);
 
-  const isAllSelected = paginatedJobs.length > 0 && selectedIds.size === paginatedJobs.length;
-  const isSomeSelected = selectedIds.size > 0 && selectedIds.size < paginatedJobs.length;
+  const isAllSelected = paginatedStates.length > 0 && selectedIds.size === paginatedStates.length;
+  const isSomeSelected = selectedIds.size > 0 && selectedIds.size < paginatedStates.length;
 
   // Delete handlers
   const handleDeleteClick = useCallback((jobId: string) => {
@@ -107,17 +106,13 @@ function TrainingHistory() {
 
   const getStatusColor = (status: TrainingStatus): string => {
     switch (status) {
-      case TrainingStatus.COMPLETED:
+      case 'Completed':
         return 'bg-green-100 text-green-800';
-      case TrainingStatus.FAILED:
+      case 'Failed':
         return 'bg-red-100 text-red-800';
-      case TrainingStatus.CANCELLED:
-        return 'bg-gray-100 text-gray-800';
-      case TrainingStatus.PENDING:
+      case 'Prepare':
         return 'bg-yellow-100 text-yellow-800';
-      case TrainingStatus.INITIALIZING:
-      case TrainingStatus.TRAINING:
-      case TrainingStatus.SAVING:
+      case 'Training':
         return 'bg-blue-100 text-blue-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -125,7 +120,14 @@ function TrainingHistory() {
   };
 
   const getStatusLabel = (status: TrainingStatus): string => {
-    return t(`training.status${status.charAt(0).toUpperCase() + status.slice(1)}`);
+    // Map backend status to translation keys
+    const statusMap: Record<TrainingStatus, string> = {
+      'Prepare': 'training.statusPending',
+      'Training': 'training.statusTraining',
+      'Completed': 'training.statusCompleted',
+      'Failed': 'training.statusFailed',
+    };
+    return t(statusMap[status] || 'training.statusPending');
   };
 
   const formatDate = (isoDate: string): string => {
@@ -146,62 +148,67 @@ function TrainingHistory() {
     }
   };
 
-  // Render training job details
-  const renderJobDetails = (job: TrainingJob) => {
+  // Render training state details
+  const renderStateDetails = (state: TrainingState) => {
+    const isCompleted = state.status === 'Completed';
+    const trainingTime = state.start_time && state.current_timestamp
+      ? (new Date(state.current_timestamp).getTime() - new Date(state.start_time).getTime()) / 1000
+      : null;
+
     return (
       <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
         {/* Basic Information */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-medium text-gray-600">{t('training.jobId')}</label>
-            <p className="text-sm font-mono text-gray-900 break-all">{job.job_id}</p>
+            <p className="text-sm font-mono text-gray-900 break-all">{state.task_id}</p>
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600">{t('training.jobName')}</label>
-            <p className="text-sm text-gray-900">{job.job_name}</p>
+            <p className="text-sm text-gray-900">{state.job_name}</p>
           </div>
         </div>
 
         {/* Final Results (for completed jobs) */}
-        {job.status === TrainingStatus.COMPLETED && (
+        {isCompleted && (
           <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-4 border border-green-200">
             <p className="text-sm font-semibold text-gray-800 mb-3">📊 {t('training.finalResults')}</p>
             <div className="grid grid-cols-3 gap-4">
-              {job.final_loss !== null && (
+              {state.current_loss !== null && (
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-green-700">{job.final_loss.toFixed(4)}</p>
+                  <p className="text-2xl font-bold text-green-700">{state.current_loss.toFixed(4)}</p>
                   <p className="text-xs text-gray-600 mt-1">{t('training.finalLoss')}</p>
                 </div>
               )}
-              {job.final_ce_loss !== null && (
+              {state.current_ce_loss !== null && (
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-blue-700">{job.final_ce_loss.toFixed(4)}</p>
+                  <p className="text-2xl font-bold text-blue-700">{state.current_ce_loss.toFixed(4)}</p>
                   <p className="text-xs text-gray-600 mt-1">{t('training.finalCELoss')}</p>
                 </div>
               )}
-              {job.final_diffusion_loss !== null && (
+              {state.current_diffusion_loss !== null && (
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-purple-700">{job.final_diffusion_loss.toFixed(4)}</p>
+                  <p className="text-2xl font-bold text-purple-700">{state.current_diffusion_loss.toFixed(4)}</p>
                   <p className="text-xs text-gray-600 mt-1">{t('training.finalDiffusionLoss')}</p>
                 </div>
               )}
             </div>
             <div className="mt-3 pt-3 border-t border-green-200 grid grid-cols-3 gap-4 text-center text-xs text-gray-600">
-              {job.total_steps !== null && (
+              {state.current_step !== null && (
                 <div>
-                  <p className="font-semibold text-gray-900">{job.total_steps.toLocaleString()}</p>
+                  <p className="font-semibold text-gray-900">{state.current_step.toLocaleString()}</p>
                   <p>{t('training.totalSteps')}</p>
                 </div>
               )}
-              {job.total_epochs !== null && (
+              {state.current_epoch !== null && (
                 <div>
-                  <p className="font-semibold text-gray-900">{job.total_epochs}</p>
+                  <p className="font-semibold text-gray-900">{state.current_epoch}</p>
                   <p>{t('training.totalEpochs')}</p>
                 </div>
               )}
-              {job.total_training_time !== null && (
+              {trainingTime !== null && (
                 <div>
-                  <p className="font-semibold text-gray-900">{formatDuration(job.total_training_time)}</p>
+                  <p className="font-semibold text-gray-900">{formatDuration(trainingTime)}</p>
                   <p>{t('training.totalTime')}</p>
                 </div>
               )}
@@ -210,13 +217,13 @@ function TrainingHistory() {
         )}
 
         {/* Saved LoRA Files */}
-        {job.saved_lora_files.length > 0 && (
+        {state.lora_files.length > 0 && (
           <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
             <p className="text-xs font-semibold text-purple-800 mb-2">
-              💾 {t('training.savedLoRAFiles').replace('{count}', job.saved_lora_files.length.toString())}
+              💾 {t('training.savedLoRAFiles').replace('{count}', state.lora_files.length.toString())}
             </p>
             <div className="space-y-1">
-              {job.saved_lora_files.map((file, idx) => (
+              {state.lora_files.map((file, idx) => (
                 <div key={idx} className="text-xs font-mono bg-white p-2 rounded border border-purple-100">
                   {file}
                 </div>
@@ -231,37 +238,37 @@ function TrainingHistory() {
           <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded p-3">
             <div>
               <p className="text-xs text-gray-600">{t('training.epochs')}</p>
-              <p className="text-sm font-semibold">{job.config.epochs}</p>
+              <p className="text-sm font-semibold">{state.config.epochs}</p>
             </div>
             <div>
               <p className="text-xs text-gray-600">{t('training.batchSize')}</p>
-              <p className="text-sm font-semibold">{job.config.batch_size}</p>
+              <p className="text-sm font-semibold">{state.config.batch_size}</p>
             </div>
             <div>
               <p className="text-xs text-gray-600">{t('training.learningRate')}</p>
-              <p className="text-sm font-semibold">{job.config.learning_rate}</p>
+              <p className="text-sm font-semibold">{state.config.learning_rate}</p>
             </div>
             <div>
               <p className="text-xs text-gray-600">{t('training.loraRank')}</p>
-              <p className="text-sm font-semibold">{job.config.lora_dim}</p>
+              <p className="text-sm font-semibold">{state.config.lora_dim}</p>
             </div>
             <div>
               <p className="text-xs text-gray-600">{t('training.optimizer')}</p>
-              <p className="text-sm font-semibold">{job.config.optimizer_type}</p>
+              <p className="text-sm font-semibold">{state.config.optimizer_type}</p>
             </div>
             <div>
               <p className="text-xs text-gray-600">{t('training.dtype')}</p>
-              <p className="text-sm font-semibold">{job.config.dtype}</p>
+              <p className="text-sm font-semibold">{state.config.dtype}</p>
             </div>
           </div>
         </div>
 
         {/* Error Information (for failed jobs) */}
-        {job.status === TrainingStatus.FAILED && job.error_message && (
+        {state.status === 'Failed' && state.error_message && (
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-2">{t('training.errorInformation')}</label>
             <div className="bg-red-50 rounded p-3">
-              <pre className="text-xs whitespace-pre-wrap text-red-900">{job.error_message}</pre>
+              <pre className="text-xs whitespace-pre-wrap text-red-900">{state.error_message}</pre>
             </div>
           </div>
         )}
@@ -271,18 +278,18 @@ function TrainingHistory() {
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div>
               <p className="text-gray-600">{t('training.created')}</p>
-              <p className="font-medium">{formatDate(job.created_at)}</p>
+              <p className="font-medium">{formatDate(state.created_at)}</p>
             </div>
-            {job.started_at && (
+            {state.start_time && (
               <div>
                 <p className="text-gray-600">{t('training.started')}</p>
-                <p className="font-medium">{formatDate(job.started_at)}</p>
+                <p className="font-medium">{formatDate(state.start_time)}</p>
               </div>
             )}
-            {job.completed_at && (
+            {isCompleted && state.current_timestamp && (
               <div>
                 <p className="text-gray-600">{t('training.completed')}</p>
-                <p className="font-medium">{formatDate(job.completed_at)}</p>
+                <p className="font-medium">{formatDate(state.current_timestamp)}</p>
               </div>
             )}
           </div>
@@ -306,19 +313,19 @@ function TrainingHistory() {
         <h2 className="text-xl font-semibold mb-2">{t('training.trainingHistory')}</h2>
         <p className="text-sm text-gray-600">
           {t('training.totalJobs')
-            .replace('{count}', jobs.length.toString())
-            .replace('{plural}', jobs.length !== 1 ? 's' : '')}
+            .replace('{count}', states.length.toString())
+            .replace('{plural}', states.length !== 1 ? 's' : '')}
         </p>
       </div>
 
-      {jobs.length === 0 ? (
+      {states.length === 0 ? (
         <div className="flex items-center justify-center flex-1 text-gray-500">
           <p>{t('training.noHistory')}</p>
         </div>
       ) : (
         <>
           {/* Select all checkbox */}
-          {paginatedJobs.length > 0 && (
+          {paginatedStates.length > 0 && (
             <div className="mb-2 flex items-center gap-2 px-2">
               <input
                 type="checkbox"
@@ -335,15 +342,16 @@ function TrainingHistory() {
             </div>
           )}
 
-          {/* Training jobs list */}
+          {/* Training states list */}
           <div className="space-y-2 overflow-y-auto flex-1">
-            {paginatedJobs.map((job) => {
-              const isExpanded = expandedId === job.job_id;
-              const isSelected = selectedIds.has(job.job_id);
+            {paginatedStates.map((state) => {
+              const isExpanded = expandedId === state.task_id;
+              const isSelected = selectedIds.has(state.task_id);
+              const isTraining = state.status === 'Training';
 
               return (
                 <div
-                  key={job.job_id}
+                  key={state.task_id}
                   className={`border rounded-lg bg-white transition-all ${
                     isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'
                   }`}
@@ -355,7 +363,7 @@ function TrainingHistory() {
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => toggleSelection(job.job_id)}
+                          onChange={() => toggleSelection(state.task_id)}
                           className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                           onClick={(e) => e.stopPropagation()}
                         />
@@ -366,35 +374,37 @@ function TrainingHistory() {
                         <div className="flex items-center gap-2 mb-2">
                           <span
                             className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(
-                              job.status
+                              state.status
                             )}`}
                           >
-                            {getStatusLabel(job.status)}
+                            {getStatusLabel(state.status)}
                           </span>
-                          <span className="text-xs text-gray-500">{job.config.dtype}</span>
+                          <span className="text-xs text-gray-500">{state.config.dtype}</span>
                         </div>
 
-                        <p className="text-sm font-medium text-gray-900 mb-1">{job.job_name}</p>
+                        <p className="text-sm font-medium text-gray-900 mb-1">{state.job_name}</p>
 
                         <p className="text-xs text-gray-500">
-                          {t('training.created')}: {formatDate(job.created_at)}
+                          {t('training.created')}: {formatDate(state.created_at)}
                         </p>
 
                         {/* Live metrics display (if training) */}
-                        {job.metrics && (
+                        {isTraining && state.current_step !== null && state.current_epoch !== null && (
                           <div className="mt-2 bg-blue-50 rounded p-2 space-y-1">
                             <div className="flex justify-between text-xs">
                               <span>{t('training.currentEpoch')}:</span>
-                              <span className="font-semibold">{job.metrics.current_epoch} / {job.metrics.total_epochs}</span>
+                              <span className="font-semibold">{state.current_epoch} / {state.total_epochs || '?'}</span>
                             </div>
                             <div className="flex justify-between text-xs">
                               <span>{t('training.currentStep')}:</span>
-                              <span className="font-semibold">{job.metrics.current_step.toLocaleString()}</span>
+                              <span className="font-semibold">{state.current_step.toLocaleString()}</span>
                             </div>
-                            <div className="flex justify-between text-xs">
-                              <span>{t('training.currentLoss')}:</span>
-                              <span className="font-semibold">{job.metrics.current_loss.toFixed(4)}</span>
-                            </div>
+                            {state.current_loss !== null && (
+                              <div className="flex justify-between text-xs">
+                                <span>{t('training.currentLoss')}:</span>
+                                <span className="font-semibold">{state.current_loss.toFixed(4)}</span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -402,7 +412,7 @@ function TrainingHistory() {
                       {/* Action buttons */}
                       <div className="flex flex-col gap-2">
                         <button
-                          onClick={() => toggleDetails(job.job_id)}
+                          onClick={() => toggleDetails(state.task_id)}
                           className="w-32 px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 flex items-center justify-center gap-1"
                         >
                           {isExpanded ? (
@@ -424,7 +434,7 @@ function TrainingHistory() {
                         </button>
 
                         <button
-                          onClick={() => handleDeleteClick(job.job_id)}
+                          onClick={() => handleDeleteClick(state.task_id)}
                           className="w-32 px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center gap-1"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -436,7 +446,7 @@ function TrainingHistory() {
                     </div>
 
                     {/* Expandable Details Section */}
-                    {isExpanded && renderJobDetails(job)}
+                    {isExpanded && renderStateDetails(state)}
                   </div>
                 </div>
               );
@@ -464,8 +474,8 @@ function TrainingHistory() {
                 <span className="text-sm text-gray-700">
                   {t('training.page')} {currentPage} {t('training.of')} {totalPages} ({t('training.showingItems')
                     .replace('{start}', (startIndex + 1).toString())
-                    .replace('{end}', Math.min(endIndex, jobs.length).toString())
-                    .replace('{total}', jobs.length.toString())})
+                    .replace('{end}', Math.min(endIndex, states.length).toString())
+                    .replace('{total}', states.length.toString())})
                 </span>
                 <div className="flex gap-1">
                   <button

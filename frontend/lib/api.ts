@@ -10,6 +10,16 @@ import type {
   GetGenerationResponse
 } from '@/types/generation';
 
+import type {
+  CreateTrainingRequest,
+  CreateTrainingResponse,
+  CurrentTrainingResponse,
+  ListTrainingStatesResponse,
+  GetTrainingStateResponse,
+  DeleteTrainingResponse,
+  BatchDeleteTrainingResponse
+} from '@/types/training';
+
 // API base URL configuration
 // Development: Full URL to backend server (different origin)
 // Production: Relative path (same origin, backend serves frontend)
@@ -628,6 +638,64 @@ class ApiClient {
       `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/items/${itemIndex}`,
       {
         method: 'DELETE',
+      }
+    );
+  }
+
+  // ============ Training API ============
+
+  async createTrainingJob(
+    projectId: string,
+    request: CreateTrainingRequest
+  ): Promise<CreateTrainingResponse> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/training`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async listTrainingStates(
+    projectId: string
+  ): Promise<ListTrainingStatesResponse> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/training`);
+  }
+
+  async getCurrentTrainingState(
+    projectId: string
+  ): Promise<CurrentTrainingResponse> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/training/current`);
+  }
+
+  async getTrainingState(
+    projectId: string,
+    jobId: string
+  ): Promise<GetTrainingStateResponse> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}`
+    );
+  }
+
+  async deleteTrainingJob(
+    projectId: string,
+    jobId: string
+  ): Promise<DeleteTrainingResponse> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
+  async batchDeleteTrainingJobs(
+    projectId: string,
+    jobIds: string[]
+  ): Promise<BatchDeleteTrainingResponse> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/training/batch-delete`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ job_ids: jobIds }),
       }
     );
   }

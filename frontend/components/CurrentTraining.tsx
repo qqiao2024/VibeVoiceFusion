@@ -3,28 +3,25 @@
 import React from 'react';
 import { useTraining } from '@/lib/TrainingContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import { TrainingStatus } from '@/types/training';
+import type { TrainingStatus } from '@/types/training';
 
 function CurrentTraining() {
-  const { currentJob } = useTraining();
+  const { currentState } = useTraining();
   const { t } = useLanguage();
 
-  if (!currentJob) {
+  if (!currentState) {
     return null;
   }
 
   const getStatusColor = (status: TrainingStatus): string => {
     switch (status) {
-      case TrainingStatus.COMPLETED:
+      case 'Completed':
         return 'bg-green-100 text-green-800 border-green-300';
-      case TrainingStatus.FAILED:
-      case TrainingStatus.CANCELLED:
+      case 'Failed':
         return 'bg-red-100 text-red-800 border-red-300';
-      case TrainingStatus.PENDING:
+      case 'Prepare':
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case TrainingStatus.INITIALIZING:
-      case TrainingStatus.TRAINING:
-      case TrainingStatus.SAVING:
+      case 'Training':
         return 'bg-blue-100 text-blue-800 border-blue-300';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-300';
@@ -32,15 +29,16 @@ function CurrentTraining() {
   };
 
   const getStatusLabel = (status: TrainingStatus): string => {
-    return t(`training.status${status.charAt(0).toUpperCase() + status.slice(1)}`);
+    const statusMap: Record<TrainingStatus, string> = {
+      'Prepare': 'training.statusPending',
+      'Training': 'training.statusTraining',
+      'Completed': 'training.statusCompleted',
+      'Failed': 'training.statusFailed',
+    };
+    return t(statusMap[status] || 'training.statusPending');
   };
 
-  const isActive = [
-    TrainingStatus.PENDING,
-    TrainingStatus.INITIALIZING,
-    TrainingStatus.TRAINING,
-    TrainingStatus.SAVING
-  ].includes(currentJob.status);
+  const isActive = ['Prepare', 'Training'].includes(currentState.status);
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -55,13 +53,20 @@ function CurrentTraining() {
     }
   };
 
+  // Calculate metrics from state
+  const elapsedSeconds = currentState.start_time && currentState.current_timestamp
+    ? (new Date(currentState.current_timestamp).getTime() - new Date(currentState.start_time).getTime()) / 1000
+    : 0;
+
+  const estimatedRemaining = currentState.estimated_total_elpase && currentState.start_time && currentState.current_timestamp
+    ? currentState.estimated_total_elpase - elapsedSeconds
+    : null;
+
   // Render status-specific details
   const renderStatusDetails = () => {
-    const metrics = currentJob.metrics;
-
     // TRAINING phase - show live metrics
-    if (currentJob.status === TrainingStatus.TRAINING && metrics) {
-      const progressPercentage = (metrics.current_epoch / metrics.total_epochs) * 100;
+    if (currentState.status === 'Training' && currentState.current_epoch !== null && currentState.total_epochs !== null) {
+      const progressPercentage = (currentState.current_epoch / currentState.total_epochs) * 100;
 
       return (
         <div className="space-y-3">
@@ -80,53 +85,61 @@ function CurrentTraining() {
               />
             </div>
             <div className="flex justify-between text-xs mt-1 opacity-75">
-              <span>{t('training.epoch')} {metrics.current_epoch} / {metrics.total_epochs}</span>
-              <span>{t('training.step')} {metrics.current_step.toLocaleString()} / {metrics.total_steps.toLocaleString()}</span>
+              <span>{t('training.epoch')} {currentState.current_epoch} / {currentState.total_epochs}</span>
+              {currentState.current_step !== null && currentState.estimated_total_steps !== null && (
+                <span>{t('training.step')} {currentState.current_step.toLocaleString()} / {currentState.estimated_total_steps.toLocaleString()}</span>
+              )}
             </div>
           </div>
 
           {/* Loss Metrics */}
-          <div className="bg-white bg-opacity-90 rounded p-4">
-            <p className="text-xs font-medium mb-3 opacity-75">📉 {t('training.lossMetrics')}</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center">
-                <p className="text-2xl font-bold">{metrics.current_loss.toFixed(4)}</p>
-                <p className="text-xs opacity-75 mt-1">{t('training.totalLoss')}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold">{metrics.current_ce_loss.toFixed(4)}</p>
-                <p className="text-xs opacity-75 mt-1">{t('training.ceLoss')}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold">{metrics.current_diffusion_loss.toFixed(4)}</p>
-                <p className="text-xs opacity-75 mt-1">{t('training.diffusionLoss')}</p>
+          {currentState.current_loss !== null && (
+            <div className="bg-white bg-opacity-90 rounded p-4">
+              <p className="text-xs font-medium mb-3 opacity-75">📉 {t('training.lossMetrics')}</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{currentState.current_loss.toFixed(4)}</p>
+                  <p className="text-xs opacity-75 mt-1">{t('training.totalLoss')}</p>
+                </div>
+                {currentState.current_ce_loss !== null && (
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{currentState.current_ce_loss.toFixed(4)}</p>
+                    <p className="text-xs opacity-75 mt-1">{t('training.ceLoss')}</p>
+                  </div>
+                )}
+                {currentState.current_diffusion_loss !== null && (
+                  <div className="text-center">
+                    <p className="text-2xl font-bold">{currentState.current_diffusion_loss.toFixed(4)}</p>
+                    <p className="text-xs opacity-75 mt-1">{t('training.diffusionLoss')}</p>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Timing Information */}
           <div className="bg-white bg-opacity-90 rounded p-4">
             <p className="text-xs font-medium mb-3 opacity-75">⏱️ {t('training.timingInfo')}</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="text-center">
-                <p className="text-xl font-bold">{formatDuration(metrics.elapsed_seconds)}</p>
+                <p className="text-xl font-bold">{formatDuration(elapsedSeconds)}</p>
                 <p className="text-xs opacity-75 mt-1">{t('training.elapsed')}</p>
               </div>
-              {metrics.estimated_remaining_seconds !== null && (
+              {estimatedRemaining !== null && estimatedRemaining > 0 && (
                 <div className="text-center">
-                  <p className="text-xl font-bold">{formatDuration(metrics.estimated_remaining_seconds)}</p>
+                  <p className="text-xl font-bold">{formatDuration(estimatedRemaining)}</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.remaining')}</p>
                 </div>
               )}
-              {metrics.avg_step_time !== null && (
+              {currentState.average_step_time !== null && (
                 <div className="text-center">
-                  <p className="text-xl font-bold">{metrics.avg_step_time.toFixed(2)}s</p>
+                  <p className="text-xl font-bold">{currentState.average_step_time.toFixed(2)}s</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.avgStepTime')}</p>
                 </div>
               )}
-              {metrics.avg_epoch_time !== null && (
+              {currentState.latest_epoch_elapsed !== null && (
                 <div className="text-center">
-                  <p className="text-xl font-bold">{formatDuration(metrics.avg_epoch_time)}</p>
+                  <p className="text-xl font-bold">{formatDuration(currentState.latest_epoch_elapsed)}</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.avgEpochTime')}</p>
                 </div>
               )}
@@ -134,24 +147,11 @@ function CurrentTraining() {
           </div>
 
           {/* Learning Rate */}
-          <div className="bg-white bg-opacity-50 rounded p-3">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-medium opacity-75">{t('training.learningRate')}</span>
-              <span className="text-sm font-bold">{metrics.learning_rate.toExponential(2)}</span>
-            </div>
-          </div>
-
-          {/* TensorBoard Metrics (if available) */}
-          {metrics.tensorboard_metrics && Object.keys(metrics.tensorboard_metrics).length > 0 && (
-            <div className="bg-white bg-opacity-90 rounded p-4">
-              <p className="text-xs font-medium mb-2 opacity-75">📊 {t('training.tensorboardMetrics')}</p>
-              <div className="space-y-1">
-                {Object.entries(metrics.tensorboard_metrics).map(([key, value]) => (
-                  <div key={key} className="flex justify-between text-xs">
-                    <span className="opacity-75">{key}:</span>
-                    <span className="font-semibold">{typeof value === 'number' ? value.toFixed(4) : value}</span>
-                  </div>
-                ))}
+          {currentState.learning_rate !== null && (
+            <div className="bg-white bg-opacity-50 rounded p-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-medium opacity-75">{t('training.learningRate')}</span>
+                <span className="text-sm font-bold">{currentState.learning_rate.toExponential(2)}</span>
               </div>
             </div>
           )}
@@ -160,7 +160,11 @@ function CurrentTraining() {
     }
 
     // COMPLETED phase - show final results
-    if (currentJob.status === TrainingStatus.COMPLETED) {
+    if (currentState.status === 'Completed') {
+      const trainingTime = currentState.start_time && currentState.current_timestamp
+        ? (new Date(currentState.current_timestamp).getTime() - new Date(currentState.start_time).getTime()) / 1000
+        : null;
+
       return (
         <div className="space-y-3">
           <label className="text-sm font-medium opacity-75 block">{t('training.finalResults')}</label>
@@ -169,21 +173,21 @@ function CurrentTraining() {
           <div className="bg-white bg-opacity-90 rounded p-4">
             <p className="text-xs font-medium mb-3 opacity-75">📉 {t('training.finalLossValues')}</p>
             <div className="grid grid-cols-3 gap-3">
-              {currentJob.final_loss !== null && (
+              {currentState.current_loss !== null && (
                 <div className="text-center">
-                  <p className="text-2xl font-bold">{currentJob.final_loss.toFixed(4)}</p>
+                  <p className="text-2xl font-bold">{currentState.current_loss.toFixed(4)}</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.finalLoss')}</p>
                 </div>
               )}
-              {currentJob.final_ce_loss !== null && (
+              {currentState.current_ce_loss !== null && (
                 <div className="text-center">
-                  <p className="text-2xl font-bold">{currentJob.final_ce_loss.toFixed(4)}</p>
+                  <p className="text-2xl font-bold">{currentState.current_ce_loss.toFixed(4)}</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.finalCELoss')}</p>
                 </div>
               )}
-              {currentJob.final_diffusion_loss !== null && (
+              {currentState.current_diffusion_loss !== null && (
                 <div className="text-center">
-                  <p className="text-2xl font-bold">{currentJob.final_diffusion_loss.toFixed(4)}</p>
+                  <p className="text-2xl font-bold">{currentState.current_diffusion_loss.toFixed(4)}</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.finalDiffusionLoss')}</p>
                 </div>
               )}
@@ -194,21 +198,21 @@ function CurrentTraining() {
           <div className="bg-white bg-opacity-90 rounded p-4">
             <p className="text-xs font-medium mb-3 opacity-75">📈 {t('training.trainingSummary')}</p>
             <div className="grid grid-cols-3 gap-3">
-              {currentJob.total_steps !== null && (
+              {currentState.current_step !== null && (
                 <div className="text-center">
-                  <p className="text-xl font-bold">{currentJob.total_steps.toLocaleString()}</p>
+                  <p className="text-xl font-bold">{currentState.current_step.toLocaleString()}</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.totalSteps')}</p>
                 </div>
               )}
-              {currentJob.total_epochs !== null && (
+              {currentState.current_epoch !== null && (
                 <div className="text-center">
-                  <p className="text-xl font-bold">{currentJob.total_epochs}</p>
+                  <p className="text-xl font-bold">{currentState.current_epoch}</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.totalEpochs')}</p>
                 </div>
               )}
-              {currentJob.total_training_time !== null && (
+              {trainingTime !== null && (
                 <div className="text-center">
-                  <p className="text-xl font-bold">{formatDuration(currentJob.total_training_time)}</p>
+                  <p className="text-xl font-bold">{formatDuration(trainingTime)}</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.totalTime')}</p>
                 </div>
               )}
@@ -216,13 +220,13 @@ function CurrentTraining() {
           </div>
 
           {/* Saved LoRA Files */}
-          {currentJob.saved_lora_files.length > 0 && (
+          {currentState.lora_files.length > 0 && (
             <div className="bg-white bg-opacity-90 rounded p-4">
               <p className="text-xs font-medium mb-2 opacity-75">
-                💾 {t('training.savedLoRAFiles').replace('{count}', currentJob.saved_lora_files.length.toString())}
+                💾 {t('training.savedLoRAFiles').replace('{count}', currentState.lora_files.length.toString())}
               </p>
               <div className="space-y-1">
-                {currentJob.saved_lora_files.map((file, idx) => (
+                {currentState.lora_files.map((file, idx) => (
                   <div key={idx} className="text-xs font-mono bg-white bg-opacity-50 p-2 rounded">
                     {file}
                   </div>
@@ -235,26 +239,24 @@ function CurrentTraining() {
     }
 
     // FAILED phase - show error
-    if (currentJob.status === TrainingStatus.FAILED && currentJob.error_message) {
+    if (currentState.status === 'Failed' && currentState.error_message) {
       return (
         <div className="space-y-3">
           <label className="text-sm font-medium opacity-75 block">{t('training.errorInformation')}</label>
           <div className="bg-white bg-opacity-90 rounded p-4">
-            <pre className="text-xs whitespace-pre-wrap">{currentJob.error_message}</pre>
+            <pre className="text-xs whitespace-pre-wrap">{currentState.error_message}</pre>
           </div>
         </div>
       );
     }
 
-    // INITIALIZING or PENDING phase
+    // PREPARE (PENDING) phase
     return (
       <div className="space-y-3">
         <div className="bg-white bg-opacity-50 rounded p-4 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-current mx-auto mb-3"></div>
           <p className="text-sm font-medium opacity-75">
-            {currentJob.status === TrainingStatus.INITIALIZING
-              ? t('training.initializingMessage')
-              : t('training.pendingMessage')}
+            {t('training.pendingMessage')}
           </p>
         </div>
       </div>
@@ -264,7 +266,7 @@ function CurrentTraining() {
   return (
     <div
       className={`border-2 rounded-lg p-6 shadow-lg ${getStatusColor(
-        currentJob.status
+        currentState.status
       )}`}
     >
       <div className="mb-4">
@@ -279,18 +281,18 @@ function CurrentTraining() {
             {t('training.currentTraining')}
           </h2>
           <span className="px-3 py-1 rounded-full text-xs font-semibold border-2">
-            {getStatusLabel(currentJob.status)}
+            {getStatusLabel(currentState.status)}
           </span>
         </div>
 
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">{t('training.jobName')}:</span>
-            <span className="text-sm">{currentJob.job_name}</span>
+            <span className="text-sm">{currentState.job_name}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold">{t('training.jobId')}:</span>
-            <span className="text-xs font-mono">{currentJob.job_id}</span>
+            <span className="text-xs font-mono">{currentState.task_id}</span>
           </div>
         </div>
       </div>
@@ -303,27 +305,27 @@ function CurrentTraining() {
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="flex justify-between">
             <span className="opacity-75">{t('training.epochs')}:</span>
-            <span className="font-semibold">{currentJob.config.epochs}</span>
+            <span className="font-semibold">{currentState.config.epochs}</span>
           </div>
           <div className="flex justify-between">
             <span className="opacity-75">{t('training.batchSize')}:</span>
-            <span className="font-semibold">{currentJob.config.batch_size}</span>
+            <span className="font-semibold">{currentState.config.batch_size}</span>
           </div>
           <div className="flex justify-between">
             <span className="opacity-75">{t('training.learningRate')}:</span>
-            <span className="font-semibold">{currentJob.config.learning_rate.toExponential(2)}</span>
+            <span className="font-semibold">{currentState.config.learning_rate.toExponential(2)}</span>
           </div>
           <div className="flex justify-between">
             <span className="opacity-75">{t('training.loraRank')}:</span>
-            <span className="font-semibold">{currentJob.config.lora_dim}</span>
+            <span className="font-semibold">{currentState.config.lora_dim}</span>
           </div>
           <div className="flex justify-between">
             <span className="opacity-75">{t('training.optimizer')}:</span>
-            <span className="font-semibold">{currentJob.config.optimizer_type}</span>
+            <span className="font-semibold">{currentState.config.optimizer_type}</span>
           </div>
           <div className="flex justify-between">
             <span className="opacity-75">{t('training.dtype')}:</span>
-            <span className="font-semibold">{currentJob.config.dtype}</span>
+            <span className="font-semibold">{currentState.config.dtype}</span>
           </div>
         </div>
       </div>

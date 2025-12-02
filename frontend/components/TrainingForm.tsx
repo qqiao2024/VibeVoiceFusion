@@ -140,8 +140,8 @@ export default function TrainingForm() {
     };
 
     try {
-      const job = await startTraining(request);
-      setSuccess(t('training.startSuccess').replace('{jobId}', job.job_id));
+      const state = await startTraining(request);
+      setSuccess(t('training.startSuccess').replace('{jobId}', state.task_id));
 
       // Reset form after 3 seconds
       setTimeout(() => {
