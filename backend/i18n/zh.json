@@ -14,6 +14,10 @@
     "generation_not_found": "生成记录未找到",
     "dataset_not_found": "数据集未找到",
     "item_not_found": "数据项未找到",
+    "training_job_not_found": "训练任务未找到",
+    "task_manager_busy": "任务管理器繁忙，请等待当前任务完成",
+    "cannot_delete_running_job": "无法删除正在运行的训练任务",
+    "conflict": "冲突",
     "dataset_name_required": "数据集名称为必填项",
     "text_required": "文本为必填项",
     "audio_file_required": "音频文件为必填项",
@@ -50,7 +54,10 @@
     "dataset_deleted": "数据集删除成功",
     "item_created": "数据项创建成功",
     "item_updated": "数据项更新成功",
-    "item_deleted": "数据项删除成功"
+    "item_deleted": "数据项删除成功",
+    "training_started": "训练任务启动成功",
+    "training_job_deleted": "训练任务删除成功",
+    "training_jobs_deleted": "训练任务批量删除成功"
   },
   "status": {
     "healthy": "服务正常",

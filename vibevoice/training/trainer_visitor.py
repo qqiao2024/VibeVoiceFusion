@@ -29,12 +29,20 @@ class TrainerVisitor(ABC):
     def visit_training_failed(self, timestamp: float, error_msg: str):
         pass
 
+    @abstractmethod
+    def lora_file_saved(self, lora_file: str):
+        pass
+
+    @abstractmethod
+    def final_lora_file_saved(self, lora_file: str):
+        pass
+
 
 class VisitorManager(TrainerVisitor):
     def __init__(self):
         self.visitors = []
 
-    def register_visitors(self, visitor: TrainerVisitor):
+    def register_visitor(self, visitor: TrainerVisitor):
         self.visitors.append(visitor)
 
     def visit_training_begin(self, timestamp: float, batch_size: int, total_epochs: int, lr_rate: float, accumlate_grad_steps: int, data_repeat: int):
@@ -64,3 +72,11 @@ class VisitorManager(TrainerVisitor):
     def visit_training_failed(self, timestamp: float, error_msg: str):
         for visitor in self.visitors:
             visitor.visit_training_failed(timestamp, error_msg)
+
+    def lora_file_saved(self, lora_file: str):
+        for visitor in self.visitors:
+            visitor.lora_file_saved(lora_file)
+
+    def final_lora_file_saved(self, lora_file: str):
+        for visitor in self.visitors:
+            visitor.final_lora_file_saved(lora_file)

@@ -7,7 +7,7 @@ import toml
 from typing import Any, Dict, Optional
 from abc import ABC, abstractmethod
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from torch.utils.data import DataLoader
 
@@ -118,6 +118,9 @@ class TrainConfig:
             "dataload_workers": str(self.dataload_workers),
             "save_model_per_num_epoch": str(self.save_model_per_num_epoch),
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 class Trainer(ABC):
 
@@ -299,7 +302,8 @@ class VibeVoiceTrainer(Trainer):
                 checkpoint_metadata["checkpoint_loss"] = f"{real_loss.item():.4f}"
                 checkpoint_metadata["checkpoint_ce_loss"] = f"{output.loss.item():.4f}"
                 checkpoint_metadata["checkpoint_diffusion_loss"] = f"{output.diffusion_loss.item():.4f}"
-                self.save_model(checkpoint_metadata, network, global_step, epoch + 1)
+                model_file = self.save_model(checkpoint_metadata, network, global_step, epoch + 1)
+                self.visitor.lora_file_saved(model_file)
                 logger.info(f"Checkpoint saved at epoch {epoch + 1}")
 
         end_time = datetime.now()
@@ -324,15 +328,17 @@ class VibeVoiceTrainer(Trainer):
             total_run_epochs=self.train_config.epochs
         )
 
-        self.save_model(metadata, network, global_step, epoch + 1)
+        final_lora_file = self.save_model(metadata, network, global_step, epoch + 1)
+        self.visitor.final_lora_file_saved(final_lora_file)
 
-    def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int):
+    def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int) -> str:
         os.makedirs(self.train_config.output_dir, exist_ok=True)
         now = datetime.now()
         ckpt_file = os.path.join(self.train_config.output_dir, self.train_config.lora_name + f"_{now.strftime('%m%d%H%M')}_{epoch_no}_{steps}.safetensors")
         metadata["total_steps"] = str(steps)
         metadata["total_epoch"] = str(epoch_no)
         network.save_weights(ckpt_file, torch.bfloat16, metadata)
+        return ckpt_file
 
     def _preprocess_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         inputs = self._to_device(inputs)

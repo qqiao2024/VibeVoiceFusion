@@ -1,4 +1,467 @@
-# Dataset Item Management API Documentation
+# VibeVoice API Documentation
+
+This document provides complete API documentation for VibeVoice backend services.
+
+## Table of Contents
+
+1. [Training Management API](#training-management-api)
+2. [Dataset Management API](#dataset-management-api)
+
+---
+
+# Training Management API
+
+## Overview
+
+The Training Management API provides endpoints for managing LoRA fine-tuning training jobs. All endpoints are project-scoped and work with **TrainingState** objects directly. Training and inference share a global task queue (only one runs at a time).
+
+## Base URL
+
+```
+http://localhost:9527/api/v1/projects/{project_id}/training
+```
+
+## Data Models
+
+### TrainingState
+
+The complete training state object that includes both job metadata and live metrics:
+
+```json
+{
+  // Job Metadata
+  "task_id": "abc123",
+  "job_name": "My LoRA Training",
+  "project_id": "my-project",
+  "config": { /* TrainConfig object */ },
+  "created_at": "2025-12-02T10:30:00Z",
+
+  // Progress
+  "current_step": 150,
+  "estimated_total_steps": 1000,
+  "current_epoch": 5,
+  "total_epochs": 10,
+
+  // Training Parameters
+  "learning_rate": 0.0001,
+  "batch_size": 1,
+  "accumlate_grad_steps": 16,
+
+  // Loss Metrics
+  "current_loss": 0.245,
+  "current_diffusion_loss": 0.21,
+  "current_ce_loss": 0.035,
+  "average_epoch_loss": 0.28,
+  "average_epoch_diffusion_loss": 0.24,
+  "average_epoch_ce_loss": 0.04,
+
+  // Timing
+  "start_time": "2025-12-02T10:35:00Z",
+  "current_timestamp": "2025-12-02T10:45:00Z",
+  "estimated_total_elpase": 3600.0,
+  "latest_epoch_elapsed": 120.5,
+  "latest_step_elapsed": 1.2,
+  "average_step_time": 1.15,
+  "steps_per_second": 0.87,
+
+  // Status
+  "status": "Training",  // Prepare, Training, Completed, Failed
+
+  // TensorBoard
+  "tensorboard_logdir": "./tensorboard_logs/my_lora_abc123_20251202",
+
+  // Output Files
+  "lora_files": ["checkpoint_epoch_5.pt", "checkpoint_epoch_10.pt"],
+  "final_lora_file": "final_model.pt"
+}
+```
+
+### TrainConfig
+
+Training configuration object (matches `vibevoice/training/trainer.py`):
+
+```json
+{
+  "lora_name": "vibevoice_lora",
+  "epochs": 10,
+  "batch_size": 1,
+  "learning_rate": 0.0001,
+  "dataset_path": "workspace/project-id/datasets/dataset-id/datasets.jsonl",
+  "output_dir": "./lora_output",
+  "multiplier": 1.0,
+  "lora_dim": 4,
+  "lora_alpha": null,
+  "lora_dropout": null,
+  "model_path": null,
+  "number_of_layers": 0,
+  "dtype": "bfloat16",
+  "model_config_path": null,
+  "optimizer_type": "AdamW8bit",
+  "optimizer_args": null,
+  "seeds": 42,
+  "dataset_repeats": 1,
+  "speech_compress_ratio": 3200,
+  "semantic_dim": 128,
+  "diffusion_loss_weight": 10.4,
+  "ce_loss_weight": 0.004,
+  "device": "cuda",
+  "gradient_accumulation_steps": 16,
+  "dataload_workers": 2,
+  "save_model_per_num_epoch": 10
+}
+```
+
+## API Endpoints
+
+### 1. Create Training Job
+
+**POST** `/api/v1/projects/{project_id}/training`
+
+Create and start a new training job. Returns 409 if task manager is busy.
+
+**Request Body:**
+```json
+{
+  "job_name": "My LoRA Training",
+  "config": {
+    "lora_name": "my_lora",
+    "epochs": 10,
+    "batch_size": 1,
+    "learning_rate": 0.0001,
+    "dataset_path": "workspace/project-id/datasets/dataset-id/datasets.jsonl",
+    ...
+  }
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "message": "Training started successfully",
+  "task_id": "abc123def456",
+  "state": { /* TrainingState object */ }
+}
+```
+
+**Status Codes:**
+- `201 Created` - Training job created and started
+- `400 Bad Request` - Invalid configuration or missing fields
+- `404 Not Found` - Project not found
+- `409 Conflict` - Task manager is busy (another task is running)
+- `500 Internal Server Error` - Server error
+
+**Example:**
+```bash
+curl -X POST "http://localhost:9527/api/v1/projects/my-project/training" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job_name": "LoRA Fine-tuning v1",
+    "config": {
+      "lora_name": "my_lora",
+      "epochs": 10,
+      "batch_size": 1,
+      "learning_rate": 0.0001,
+      "dataset_path": "workspace/my-project/datasets/dataset-abc/datasets.jsonl"
+    }
+  }'
+```
+
+---
+
+### 2. List Training Jobs
+
+**GET** `/api/v1/projects/{project_id}/training`
+
+Get all training jobs for a project, sorted by created_at (newest first).
+
+**Response (200 OK):**
+```json
+{
+  "states": [
+    { /* TrainingState object 1 */ },
+    { /* TrainingState object 2 */ }
+  ],
+  "count": 2
+}
+```
+
+**Status Codes:**
+- `200 OK` - Success
+- `404 Not Found` - Project not found
+- `500 Internal Server Error` - Server error
+
+**Example:**
+```bash
+curl "http://localhost:9527/api/v1/projects/my-project/training"
+```
+
+---
+
+### 3. Get Current Training Job
+
+**GET** `/api/v1/projects/{project_id}/training/current`
+
+Get the currently running training job with live metrics from task manager.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Current training job retrieved successfully",
+  "state": { /* Live TrainingState object */ }
+}
+```
+
+**Response (200 OK, no active training):**
+```json
+{
+  "message": "No active training job at the moment",
+  "state": null
+}
+```
+
+**Status Codes:**
+- `200 OK` - Success (state may be null if no active training)
+- `404 Not Found` - Project not found
+- `500 Internal Server Error` - Server error
+
+**Example:**
+```bash
+curl "http://localhost:9527/api/v1/projects/my-project/training/current"
+```
+
+**Note:** This endpoint reads live state from the training engine in memory, providing real-time metrics updates.
+
+---
+
+### 4. Get Specific Training Job
+
+**GET** `/api/v1/projects/{project_id}/training/{job_id}`
+
+Get details of a specific training job by task_id.
+
+**Response (200 OK):**
+```json
+{
+  "state": { /* TrainingState object */ }
+}
+```
+
+**Status Codes:**
+- `200 OK` - Success
+- `404 Not Found` - Job or project not found
+- `500 Internal Server Error` - Server error
+
+**Example:**
+```bash
+curl "http://localhost:9527/api/v1/projects/my-project/training/abc123def456"
+```
+
+---
+
+### 5. Delete Training Job
+
+**DELETE** `/api/v1/projects/{project_id}/training/{job_id}`
+
+Delete a training job. Cannot delete a currently running job.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Training job deleted successfully",
+  "job_id": "abc123def456"
+}
+```
+
+**Status Codes:**
+- `200 OK` - Job deleted successfully
+- `400 Bad Request` - Cannot delete running job
+- `404 Not Found` - Job or project not found
+- `500 Internal Server Error` - Server error
+
+**Example:**
+```bash
+curl -X DELETE "http://localhost:9527/api/v1/projects/my-project/training/abc123def456"
+```
+
+**Behavior:**
+- Deletes job from `training_history.json`
+- Cannot delete if job is currently running
+- LoRA files are not automatically deleted (TODO)
+
+---
+
+### 6. Batch Delete Training Jobs
+
+**POST** `/api/v1/projects/{project_id}/training/batch-delete`
+
+Delete multiple training jobs in one request.
+
+**Request Body:**
+```json
+{
+  "job_ids": ["job1", "job2", "job3"]
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "message": "Training jobs deleted successfully",
+  "deleted_count": 2,
+  "failed_count": 1,
+  "deleted_ids": ["job1", "job2"],
+  "failed_ids": ["job3"]
+}
+```
+
+**Status Codes:**
+- `200 OK` - Batch deletion completed (check counts for details)
+- `400 Bad Request` - Invalid request body
+- `404 Not Found` - Project not found
+- `500 Internal Server Error` - Server error
+
+**Example:**
+```bash
+curl -X POST "http://localhost:9527/api/v1/projects/my-project/training/batch-delete" \
+  -H "Content-Type: application/json" \
+  -d '{"job_ids": ["abc123", "def456", "ghi789"]}'
+```
+
+---
+
+## Training Status Values
+
+| Backend Status | Frontend Mapping | Description |
+|---------------|-----------------|-------------|
+| `Prepare` | `pending` | Job created, waiting to start |
+| `Training` | `training` | Training in progress |
+| `Completed` | `completed` | Training finished successfully |
+| `Failed` | `failed` | Training failed with error |
+
+---
+
+## Architecture Notes
+
+### Shared Task Manager
+
+- Inference and training share a **global task queue** (`task_manager.task.gm`)
+- Only **one task** (inference OR training) can run at a time
+- Starting a training job when queue is busy returns **409 Conflict**
+
+### Storage Model
+
+- **Single file**: `workspace/{project-id}/training/training_history.json`
+- Structure: `{ "task_id": TrainingState, ... }`
+- No separate job metadata file - all data in TrainingState
+
+### Live Metrics
+
+**Get current training:**
+```python
+task = gm.get_current_task()
+engine = task.unwrap()
+if isinstance(engine, BaseTrainingEngine):
+    live_state = engine.get_state()  # Returns live TrainingState
+```
+
+**Get historical training:**
+```python
+# Read from training_history.json
+states_meta = json.load(open("training_history.json"))
+state = TrainingState.from_dict(states_meta[task_id])
+```
+
+### Engine Types
+
+- **TrainingEngine**: Production with GPU, integrates with VibeVoiceTrainer
+- **FakeTrainingEngine**: Development/testing, simulates realistic metrics
+- Both engines update TrainingState via `TrainingStateWriter`
+
+---
+
+## Translation Support
+
+All messages support bilingual translation (English/Chinese):
+
+**Language Detection:**
+- Via `X-Language` header (`en` or `zh`)
+- Via `Accept-Language` header
+- Defaults to English
+
+**Example:**
+```bash
+curl -H "X-Language: zh" \
+  "http://localhost:9527/api/v1/projects/my-project/training"
+```
+
+---
+
+## Error Handling
+
+### Common Error Responses
+
+**Task Manager Busy (409):**
+```json
+{
+  "error": "Conflict",
+  "message": "Task manager is busy. Please wait for the current task to complete"
+}
+```
+
+**Training Job Not Found (404):**
+```json
+{
+  "error": "Not Found",
+  "message": "Training job not found"
+}
+```
+
+**Cannot Delete Running Job (400):**
+```json
+{
+  "error": "Bad Request",
+  "message": "Cannot delete a currently running training job"
+}
+```
+
+---
+
+## Workspace Structure
+
+```
+workspace/{project-id}/training/
+├── training_history.json  # { "task_id": TrainingState, ... }
+└── lora_output/           # LoRA checkpoints (created by trainer)
+    └── {lora-name}/
+        ├── checkpoint_epoch_5.pt
+        ├── checkpoint_epoch_10.pt
+        └── final_model.pt
+```
+
+---
+
+## Implementation Notes
+
+### Service Layer
+
+Backend follows service layer architecture:
+
+- **API Layer** (`backend/api/training.py`) - HTTP endpoint handlers
+- **Service Layer** (`backend/services/training_service.py`) - Business logic with TrainingState
+- **Training Layer** (`backend/training/state.py`, `backend/training/engine.py`) - Core training logic
+
+### Key Features
+
+1. **TrainingState-based** - Single dataclass for all job data
+2. **Live metrics** - Real-time state from running engine
+3. **Atomic operations** - Ensures data consistency
+4. **409 on conflict** - Clear feedback when queue is busy
+5. **i18n support** - Full bilingual support
+6. **FakeTrainingEngine** - Development without GPU
+
+---
+
+# Dataset Management API
 
 ## Overview
 

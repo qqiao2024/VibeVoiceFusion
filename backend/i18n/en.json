@@ -14,6 +14,10 @@
     "generation_not_found": "Generation not found",
     "dataset_not_found": "Dataset not found",
     "item_not_found": "Item not found",
+    "training_job_not_found": "Training job not found",
+    "task_manager_busy": "Task manager is busy. Please wait for the current task to complete",
+    "cannot_delete_running_job": "Cannot delete a currently running training job",
+    "conflict": "Conflict",
     "dataset_name_required": "Dataset name is required",
     "text_required": "Text is required",
     "audio_file_required": "Audio file is required",
@@ -50,7 +54,10 @@
     "dataset_deleted": "Dataset deleted successfully",
     "item_created": "Item created successfully",
     "item_updated": "Item updated successfully",
-    "item_deleted": "Item deleted successfully"
+    "item_deleted": "Item deleted successfully",
+    "training_started": "Training started successfully",
+    "training_job_deleted": "Training job deleted successfully",
+    "training_jobs_deleted": "Training jobs deleted successfully"
   },
   "status": {
     "healthy": "Service is healthy",

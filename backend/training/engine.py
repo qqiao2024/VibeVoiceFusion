@@ -9,9 +9,11 @@ from vibevoice.training.trainer_visitor import TrainerVisitor, VisitorManager
 
 class BaseTrainingEngine(TrainerVisitor):
 
-    def __init__(self, trainer: Trainer, task_id: str, state_writer: TrainingStateWriter, update_step_interval: int = 5):
+    def __init__(self, trainer: Trainer, task_id: str, state_writer: TrainingStateWriter,
+                 update_step_interval: int = 5,
+                 initial_state: TrainingState = None):
         self.trainer = trainer
-        self.state = TrainingState()
+        self.state = initial_state if initial_state else TrainingState()
         self.epoch_start_time = None
         self.step_start_time = None
         self.state_writer = state_writer
@@ -85,6 +87,9 @@ class BaseTrainingEngine(TrainerVisitor):
     def visit_training_failed(self, timestamp, error_msg):
         self.state.status = "Failed"
         self.state_writer.update_state(self.state)
+    
+    def get_state(self) -> TrainingState:
+        return self.state
 
 
 class TrainingEngine(BaseTrainingEngine):
@@ -97,18 +102,23 @@ class TrainingEngine(BaseTrainingEngine):
     - Loss values (total, diffusion, cross-entropy)
     """
 
-    def __init__(self, training_config: TrainConfig, task_id: str, state_writer: TrainingStateWriter, update_step_interval: int = 5):
+    def __init__(self,
+                 training_config: TrainConfig,
+                 task_id: str,
+                 state_writer: TrainingStateWriter,
+                 update_step_interval: int = 5,
+                 initial_state: TrainingState = None):
         vm = VisitorManager()
-        vm.register_visitors(self)
+        vm.register_visitor(self)
 
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_prefix = f"./tensorboard_logs/{training_config.lora_name}_{task_id}_{now}"
-        vm.register_visitors(SummaryVisitor(
+        vm.register_visitor(SummaryVisitor(
             log_prefix=log_prefix,
             step_loss_interval=training_config.step_loss_interval
         ))
         trainer = VibeVoiceTrainer(training_config, vm)
-        super().__init__(trainer, task_id, state_writer, update_step_interval)
+        super().__init__(trainer, task_id, state_writer, update_step_interval, initial_state)
 
 
 class FakeTrainingEngine(BaseTrainingEngine):
@@ -116,16 +126,21 @@ class FakeTrainingEngine(BaseTrainingEngine):
     A fake training engine for testing purposes.
     """
 
-    def __init__(self, training_config: TrainConfig, task_id: str, state_writer: TrainingStateWriter, update_step_interval: int = 5):
+    def __init__(self,
+                 training_config: TrainConfig,
+                 task_id: str,
+                 state_writer: TrainingStateWriter,
+                 update_step_interval: int = 5,
+                 initial_state: TrainingState = None):
         vm = VisitorManager()
-        vm.register_visitors(self)
+        vm.register_visitor(self)
 
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_prefix = f"./tensorboard_logs/{training_config.lora_name}_{task_id}_{now}"
-        vm.register_visitors(SummaryVisitor(
+        vm.register_visitor(SummaryVisitor(
             log_prefix=log_prefix,
             step_loss_interval=training_config.step_loss_interval
         ))
         trainer = FakeTrainer(training_config, vm)
 
-        super().__init__(trainer, task_id, state_writer, update_step_interval)
+        super().__init__(trainer, task_id, state_writer, update_step_interval, initial_state)
