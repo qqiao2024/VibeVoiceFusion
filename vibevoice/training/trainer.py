@@ -119,13 +119,29 @@ class TrainConfig:
             "save_model_per_num_epoch": str(self.save_model_per_num_epoch),
         }
 
-class VibeVoiceTrainer:
+class Trainer(ABC):
 
     def __init__(self, train_config: TrainConfig, visitor: Optional[TrainerVisitor] = None):
         if not os.path.exists(train_config.model_path):
             raise FileNotFoundError(f"Model file {train_config.model_path} does not exist.")
-
         self.train_config = train_config
+        self.visitor = visitor if visitor is not None else VisitorManager()
+
+    def train(self):
+        try:
+            self._train()
+        except Exception as e:
+            self.visitor.visit_training_failed(datetime.now().timestamp(), str(e))
+            raise e
+
+    @abstractmethod
+    def _train(self):
+        pass
+
+class VibeVoiceTrainer(Trainer):
+
+    def __init__(self, train_config: TrainConfig, visitor: Optional[TrainerVisitor] = None):
+        super().__init__(train_config, visitor)
         if train_config.number_of_layers > 0:
             self.offload_config = OffloadConfig(
                 enabled=True,
@@ -137,17 +153,8 @@ class VibeVoiceTrainer:
             self.offload_config = None
         self.dtype = torch.bfloat16 if train_config.dtype == "bfloat16" else torch.float8_e4m3fn
         self.device = torch.device(train_config.device)
-        self.visitor = visitor if visitor is not None else VisitorManager()
-    
-    def train(self):
-        try:
-            self._train()
-        except Exception as e:
-            self.visitor.visit_training_failed(datetime.now().timestamp(), str(e))
-            raise e
 
     def _train(self):
-
         metadata = self.train_config.to_metadata()
         logger.info(f"Training configuration: {metadata}")
 
@@ -528,3 +535,11 @@ class VibeVoiceTrainer:
             logger.info("Patched acoustic_tokenizer.encode() to return [[...]] for legacy indexing.")
         except Exception as e:
             logger.warning(f"Failed to patch acoustic_tokenizer.encode(): {e}")
+
+
+class FakeTrainer(Trainer):
+    def __init__(self, train_config: TrainConfig, visitor: Optional[TrainerVisitor] = None):
+        super().__init__(train_config, visitor)
+
+    def _train(self):
+        logger.info("FakeTrainer: train() called. No operation performed.")
