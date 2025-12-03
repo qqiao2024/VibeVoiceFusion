@@ -2,10 +2,638 @@
 
 This document provides complete API documentation for VibeVoice backend services.
 
+## Base URL
+
+```
+http://localhost:9527/api/v1
+```
+
 ## Table of Contents
 
-1. [Training Management API](#training-management-api)
-2. [Dataset Management API](#dataset-management-api)
+1. [Projects API](#projects-api)
+2. [Speakers API](#speakers-api)
+3. [Dialog Sessions API](#dialog-sessions-api)
+4. [Generation API](#generation-api)
+5. [Dataset Management API](#dataset-management-api)
+6. [Training Management API](#training-management-api)
+
+---
+
+# Projects API
+
+## Overview
+
+The Projects API provides endpoints for managing projects. Each project is a workspace containing speakers, dialog sessions, datasets, and training jobs.
+
+## Endpoints
+
+### 1. List Projects
+
+**GET** `/api/v1/projects`
+
+Get all projects.
+
+**Response (200 OK):**
+```json
+{
+  "projects": [
+    {
+      "id": "my-project",
+      "name": "My Project",
+      "created_at": "2025-12-02T10:00:00Z"
+    }
+  ]
+}
+```
+
+### 2. Create Project
+
+**POST** `/api/v1/projects`
+
+Create a new project.
+
+**Request Body:**
+```json
+{
+  "name": "My New Project"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": "generated-project-id",
+  "name": "My New Project",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 3. Get Project
+
+**GET** `/api/v1/projects/{project_id}`
+
+Get project details.
+
+**Response (200 OK):**
+```json
+{
+  "id": "my-project",
+  "name": "My Project",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 4. Update Project
+
+**PUT** `/api/v1/projects/{project_id}`
+
+Update project details.
+
+**Request Body:**
+```json
+{
+  "name": "Updated Project Name"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": "my-project",
+  "name": "Updated Project Name",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 5. Delete Project
+
+**DELETE** `/api/v1/projects/{project_id}`
+
+Delete a project and all its data.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Project deleted successfully"
+}
+```
+
+---
+
+# Speakers API
+
+## Overview
+
+The Speakers API manages speaker voice samples within a project. Each speaker has a unique ID and one or more voice samples.
+
+## Endpoints
+
+### 1. List Speakers
+
+**GET** `/api/v1/projects/{project_id}/speakers`
+
+Get all speakers for a project.
+
+**Response (200 OK):**
+```json
+{
+  "speakers": [
+    {
+      "id": "speaker-1-id",
+      "name": "Speaker 1",
+      "voice_file": "uuid.wav",
+      "created_at": "2025-12-02T10:00:00Z"
+    }
+  ]
+}
+```
+
+### 2. Create Speaker
+
+**POST** `/api/v1/projects/{project_id}/speakers`
+
+Upload a new speaker voice sample.
+
+**Form Data:**
+- `name` (required) - Speaker name
+- `voice_file` (required) - Audio file (WAV, MP3, M4A, FLAC, WEBM)
+
+**Response (201 Created):**
+```json
+{
+  "id": "speaker-1-id",
+  "name": "Speaker 1",
+  "voice_file": "uuid.wav",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 3. Update Speaker
+
+**PUT** `/api/v1/projects/{project_id}/speakers/{speaker_id}`
+
+Update speaker details or voice sample.
+
+**Form Data:**
+- `name` (optional) - New speaker name
+- `voice_file` (optional) - New audio file
+
+**Response (200 OK):**
+```json
+{
+  "id": "speaker-1-id",
+  "name": "Updated Speaker Name",
+  "voice_file": "new-uuid.wav",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 4. Delete Speaker
+
+**DELETE** `/api/v1/projects/{project_id}/speakers/{speaker_id}`
+
+Delete a speaker and its voice sample.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Speaker deleted successfully"
+}
+```
+
+### 5. Get Speaker Voice File
+
+**GET** `/api/v1/projects/{project_id}/speakers/{speaker_id}/voice`
+
+Download the speaker's voice file.
+
+**Response (200 OK):**
+- Content-Type: `audio/wav` (or appropriate audio type)
+- Binary audio data
+
+---
+
+# Dialog Sessions API
+
+## Overview
+
+The Dialog Sessions API manages dialog scripts within a project. Each session contains a multi-speaker dialog script.
+
+## Dialog Format
+
+```
+Speaker 1: First line
+
+Speaker 2: Second line
+
+Speaker 1: Can appear multiple times
+```
+
+**Critical**: Speaker names must match exactly with uploaded speakers.
+
+## Endpoints
+
+### 1. List Sessions
+
+**GET** `/api/v1/projects/{project_id}/sessions`
+
+Get all dialog sessions for a project.
+
+**Response (200 OK):**
+```json
+{
+  "sessions": [
+    {
+      "id": "session-id",
+      "name": "My Dialog",
+      "script_file": "uuid.txt",
+      "created_at": "2025-12-02T10:00:00Z"
+    }
+  ]
+}
+```
+
+### 2. Create Session
+
+**POST** `/api/v1/projects/{project_id}/sessions`
+
+Create a new dialog session.
+
+**Request Body:**
+```json
+{
+  "name": "My Dialog",
+  "script": "Speaker 1: Hello\n\nSpeaker 2: Hi there"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": "session-id",
+  "name": "My Dialog",
+  "script_file": "uuid.txt",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 3. Get Session
+
+**GET** `/api/v1/projects/{project_id}/sessions/{session_id}`
+
+Get session details and script content.
+
+**Response (200 OK):**
+```json
+{
+  "id": "session-id",
+  "name": "My Dialog",
+  "script": "Speaker 1: Hello\n\nSpeaker 2: Hi there",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 4. Update Session
+
+**PUT** `/api/v1/projects/{project_id}/sessions/{session_id}`
+
+Update session name or script content.
+
+**Request Body:**
+```json
+{
+  "name": "Updated Dialog Name",
+  "script": "Speaker 1: Updated script..."
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": "session-id",
+  "name": "Updated Dialog Name",
+  "script_file": "uuid.txt",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 5. Delete Session
+
+**DELETE** `/api/v1/projects/{project_id}/sessions/{session_id}`
+
+Delete a dialog session.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Session deleted successfully"
+}
+```
+
+---
+
+# Generation API
+
+## Overview
+
+The Generation API handles voice generation requests. It uses a shared task manager with training (only one task can run at a time).
+
+## Endpoints
+
+### 1. Start Generation
+
+**POST** `/api/v1/projects/{project_id}/generate`
+
+Start a new voice generation task.
+
+**Request Body:**
+```json
+{
+  "session_id": "session-id",
+  "number_of_layers": 12,
+  "temperature": 0.7,
+  "top_k": 50,
+  "top_p": 0.95
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "message": "Generation started successfully",
+  "request_id": "generation-request-id",
+  "status": "pending"
+}
+```
+
+**Response (409 Conflict):**
+```json
+{
+  "error": "Conflict",
+  "message": "Task manager is busy"
+}
+```
+
+### 2. Get Generation Status
+
+**GET** `/api/v1/projects/{project_id}/generate/current`
+
+Get current generation task status with live progress.
+
+**Response (200 OK, generation in progress):**
+```json
+{
+  "request_id": "generation-request-id",
+  "status": "processing",
+  "progress": 45.5,
+  "session_name": "My Dialog",
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+**Response (200 OK, no active generation):**
+```json
+{
+  "message": "No active generation",
+  "status": null
+}
+```
+
+### 3. List Generation History
+
+**GET** `/api/v1/projects/{project_id}/generate/history`
+
+Get all generation requests for a project.
+
+**Response (200 OK):**
+```json
+{
+  "generations": [
+    {
+      "request_id": "generation-request-id",
+      "session_id": "session-id",
+      "status": "completed",
+      "output_file": "uuid.wav",
+      "created_at": "2025-12-02T10:00:00Z",
+      "completed_at": "2025-12-02T10:05:00Z"
+    }
+  ]
+}
+```
+
+### 4. Download Generated Audio
+
+**GET** `/api/v1/projects/{project_id}/generate/{request_id}/audio`
+
+Download the generated audio file.
+
+**Response (200 OK):**
+- Content-Type: `audio/wav`
+- Binary audio data
+
+**Response (404 Not Found):**
+```json
+{
+  "error": "Not Found",
+  "message": "Generation not found or not completed"
+}
+```
+
+### 5. Delete Generation
+
+**DELETE** `/api/v1/projects/{project_id}/generate/{request_id}`
+
+Delete a generation request and its output file.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Generation deleted successfully"
+}
+```
+
+## Generation Status Values
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Task created, waiting to start |
+| `processing` | Generation in progress |
+| `completed` | Generation finished successfully |
+| `failed` | Generation failed with error |
+
+---
+
+# Dataset Management API
+
+## Overview
+
+The Dataset Management API provides endpoints for managing datasets and dataset items. Datasets contain collections of text-audio pairs used for training. All endpoints are project-scoped.
+
+## Endpoints
+
+### 1. List Datasets
+
+**GET** `/api/v1/projects/{project_id}/datasets`
+
+Get all datasets for a project.
+
+**Response (200 OK):**
+```json
+{
+  "datasets": [
+    {
+      "id": "dataset-id",
+      "name": "My Dataset",
+      "item_count": 150,
+      "created_at": "2025-12-02T10:00:00Z"
+    }
+  ]
+}
+```
+
+### 2. Create Dataset
+
+**POST** `/api/v1/projects/{project_id}/datasets`
+
+Create a new dataset.
+
+**Request Body:**
+```json
+{
+  "name": "My New Dataset"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": "dataset-id",
+  "name": "My New Dataset",
+  "item_count": 0,
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 3. Update Dataset
+
+**PUT** `/api/v1/projects/{project_id}/datasets/{dataset_id}`
+
+Update dataset name.
+
+**Request Body:**
+```json
+{
+  "name": "Updated Dataset Name"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "id": "dataset-id",
+  "name": "Updated Dataset Name",
+  "item_count": 150,
+  "created_at": "2025-12-02T10:00:00Z"
+}
+```
+
+### 4. Delete Dataset
+
+**DELETE** `/api/v1/projects/{project_id}/datasets/{dataset_id}`
+
+Delete a dataset and all its items.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Dataset deleted successfully"
+}
+```
+
+### 5. Export Dataset
+
+**GET** `/api/v1/projects/{project_id}/datasets/{dataset_id}/export`
+
+Export dataset as ZIP file.
+
+**Response (200 OK):**
+- Content-Type: `application/zip`
+- Content-Disposition: `attachment; filename="{dataset-name}.zip"`
+- Binary ZIP data
+
+**ZIP Structure:**
+```
+datasets.jsonl              # JSONL file with all items
+audio/                      # Audio files directory
+  ├── {uuid}.wav
+  └── ...
+voice_prompts/              # Voice prompt files directory
+  ├── {uuid}.wav
+  └── ...
+```
+
+### 6. Import Dataset
+
+**POST** `/api/v1/projects/{project_id}/datasets/import`
+
+Import dataset from ZIP file.
+
+**Form Data:**
+- `file` (required) - ZIP file with dataset structure
+- `dataset_id` (required) - Target dataset ID to import into
+
+**Response (200 OK):**
+```json
+{
+  "message": "Dataset imported successfully",
+  "item_count": 150
+}
+```
+
+**Status Codes:**
+- `200 OK` - Import successful
+- `400 Bad Request` - Invalid ZIP structure or missing dataset
+- `404 Not Found` - Project or dataset not found
+- `500 Internal Server Error` - Server error
+
+---
+
+## Dataset Item Management
+
+Dataset items contain text-audio pairs with voice prompts for training.
+
+### Base URL
+
+```
+http://localhost:9527/api/v1/projects/{project_id}/datasets/{dataset_id}/items
+```
+
+## Data Models
+
+### DatasetItem
+
+```json
+{
+  "text": "string",
+  "audio": "filename.wav",
+  "voice_prompts": ["prompt1.wav", "prompt2.wav"]
+}
+```
+
+### Storage Structure
+
+```
+workspace/{project_id}/datasets/{dataset_id}/
+├── datasets.jsonl              # JSONL file with one item per line
+├── audio/                      # Audio files referenced in items
+│   └── {uuid}.wav
+└── voice_prompts/              # Voice prompt files
+    └── {uuid}.wav
+```
+
+## API Endpoints
+
+See detailed endpoint documentation below starting with "### 1. List Dataset Items".
 
 ---
 

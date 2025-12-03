@@ -384,9 +384,31 @@ function TrainingHistory() {
 
                         <p className="text-sm font-medium text-gray-900 mb-1">{state.job_name}</p>
 
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 mb-2">
                           {t('training.created')}: {formatDate(state.created_at)}
                         </p>
+
+                        {/* Configuration Summary */}
+                        <div className="bg-gray-50 rounded p-2 space-y-1 text-xs">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">{t('training.epochs')}:</span>
+                              <span className="font-semibold text-gray-900">{state.config.epochs}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">{t('training.batchSize')}:</span>
+                              <span className="font-semibold text-gray-900">{state.config.batch_size}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">{t('training.learningRate')}:</span>
+                              <span className="font-semibold text-gray-900">{state.config.learning_rate.toExponential(1)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">{t('training.loraRank')}:</span>
+                              <span className="font-semibold text-gray-900">{state.config.lora_dim}</span>
+                            </div>
+                          </div>
+                        </div>
 
                         {/* Live metrics display (if training) */}
                         {isTraining && state.current_step !== null && state.current_epoch !== null && (

@@ -72,22 +72,63 @@ function CurrentTraining() {
         <div className="space-y-3">
           <label className="text-sm font-medium opacity-75 block">{t('training.liveMetrics')}</label>
 
-          {/* Progress Bar */}
+          {/* Progress Bar - tqdm style */}
           <div className="bg-white bg-opacity-50 rounded p-3">
-            <div className="flex justify-between text-xs mb-1">
-              <span>{t('training.progress')}</span>
-              <span className="font-semibold">{progressPercentage.toFixed(1)}%</span>
-            </div>
-            <div className="w-full bg-gray-200 bg-opacity-50 rounded-full h-2">
+            {/* Progress bar with inline metrics */}
+            <div className="w-full bg-gray-200 bg-opacity-50 rounded-full h-6 relative overflow-hidden">
               <div
-                className="bg-current h-2 rounded-full transition-all"
+                className="bg-current h-6 rounded-full transition-all flex items-center"
                 style={{ width: `${progressPercentage}%` }}
-              />
+              >
+                {progressPercentage > 15 && (
+                  <span className="text-white text-xs font-semibold ml-2">
+                    {progressPercentage.toFixed(1)}%
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex justify-between text-xs mt-1 opacity-75">
-              <span>{t('training.epoch')} {currentState.current_epoch} / {currentState.total_epochs}</span>
-              {currentState.current_step !== null && currentState.estimated_total_steps !== null && (
-                <span>{t('training.step')} {currentState.current_step.toLocaleString()} / {currentState.estimated_total_steps.toLocaleString()}</span>
+            {/* Inline metrics display - tqdm style */}
+            <div className="mt-2 text-xs font-mono space-y-1">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-semibold text-blue-900">
+                  {t('training.epoch')} {currentState.current_epoch}/{currentState.total_epochs}
+                </span>
+                {currentState.current_step !== null && currentState.estimated_total_steps !== null && (
+                  <>
+                    <span className="text-gray-400">│</span>
+                    <span className="font-semibold text-blue-900">
+                      {t('training.step')} {currentState.current_step.toLocaleString()}/{currentState.estimated_total_steps.toLocaleString()}
+                    </span>
+                  </>
+                )}
+                {currentState.current_loss !== null && (
+                  <>
+                    <span className="text-gray-400">│</span>
+                    <span className="font-semibold text-green-900">
+                      Loss: {currentState.current_loss.toFixed(4)}
+                    </span>
+                  </>
+                )}
+              </div>
+              {/* Additional loss breakdown if available */}
+              {(currentState.current_ce_loss !== null || currentState.current_diffusion_loss !== null) && (
+                <div className="flex items-center gap-3 flex-wrap text-gray-600">
+                  {currentState.current_ce_loss !== null && (
+                    <span>CE: {currentState.current_ce_loss.toFixed(4)}</span>
+                  )}
+                  {currentState.current_diffusion_loss !== null && (
+                    <>
+                      {currentState.current_ce_loss !== null && <span className="text-gray-400">│</span>}
+                      <span>Diff: {currentState.current_diffusion_loss.toFixed(4)}</span>
+                    </>
+                  )}
+                  {currentState.average_step_time !== null && (
+                    <>
+                      <span className="text-gray-400">│</span>
+                      <span>{currentState.average_step_time.toFixed(2)}s/step</span>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           </div>

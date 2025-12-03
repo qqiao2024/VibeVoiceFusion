@@ -123,6 +123,7 @@ class TrainingEngine(BaseTrainingEngine):
             log_prefix=log_prefix,
         ))
         trainer = VibeVoiceTrainer(training_config, vm)
+        initial_state.tensorboard_logdir = log_prefix
         super().__init__(trainer, task_id, state_writer, update_step_interval, initial_state)
 
 
@@ -146,5 +147,6 @@ class FakeTrainingEngine(BaseTrainingEngine):
             log_prefix=log_prefix,
         ))
         trainer = FakeTrainer(training_config, vm)
+        initial_state.tensorboard_logdir = log_prefix
 
         super().__init__(trainer, task_id, state_writer, update_step_interval, initial_state)

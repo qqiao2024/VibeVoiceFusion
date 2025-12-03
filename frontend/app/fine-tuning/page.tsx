@@ -12,7 +12,7 @@ import TrainingForm from '@/components/TrainingForm';
 
 function TrainingContent() {
   const { currentProject } = useProject();
-  const { currentJob } = useTraining();
+  const { currentState } = useTraining();
   const { t } = useLanguage();
 
   // Safety check - should not happen due to wrapper logic, but prevents errors
@@ -48,10 +48,10 @@ function TrainingContent() {
           {/* Right Column - Current Training or Form */}
           <div className="flex flex-col gap-6 overflow-y-auto">
             {/* Current Training Status (if active) */}
-            {currentJob && <CurrentTraining />}
+            {currentState && <CurrentTraining />}
 
             {/* Training Form (if no active training) */}
-            {!currentJob && (
+            {!currentState && (
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <TrainingForm />
               </div>
