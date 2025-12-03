@@ -30,11 +30,11 @@ class TrainerVisitor(ABC):
         pass
 
     @abstractmethod
-    def lora_file_saved(self, lora_file: str):
+    def visit_lora_file_saved(self, lora_file: str):
         pass
 
     @abstractmethod
-    def final_lora_file_saved(self, lora_file: str):
+    def visit_final_lora_file_saved(self, lora_file: str):
         pass
 
 
@@ -73,10 +73,10 @@ class VisitorManager(TrainerVisitor):
         for visitor in self.visitors:
             visitor.visit_training_failed(timestamp, error_msg)
 
-    def lora_file_saved(self, lora_file: str):
+    def visit_lora_file_saved(self, lora_file: str):
         for visitor in self.visitors:
             visitor.lora_file_saved(lora_file)
 
-    def final_lora_file_saved(self, lora_file: str):
+    def visit_final_lora_file_saved(self, lora_file: str):
         for visitor in self.visitors:
             visitor.final_lora_file_saved(lora_file)

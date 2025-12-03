@@ -85,6 +85,9 @@ class Manager:
             return self.task
         return None
 
+    def has_task(self) -> bool:
+        return self.task is not None
+
 
 gm = Manager()
 threading.Thread(target=gm.task_run_loop, daemon=True).start()

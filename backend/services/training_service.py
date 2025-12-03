@@ -1,7 +1,10 @@
+from flask import current_app
+
 from pathlib import Path
 from uuid import uuid4
 from typing import List, Optional
 from datetime import datetime
+
 from backend.task_manager.training_task import TrainingTask
 from backend.utils.file_handler import FileHandler
 from backend.task_manager.task import gm
@@ -81,6 +84,7 @@ class TrainingService:
 
         # Create task_id
         task_id = uuid4().hex
+        train_config.model_path = f"{current_app.config['MODEL_PATH']}/vibevoice7b_{'bf16' if train_config.dtype == 'bfloat16' else 'float8_e4m3fn'}.safetensors"
 
         # Initialize TrainingState with metadata
         initial_state = TrainingState(

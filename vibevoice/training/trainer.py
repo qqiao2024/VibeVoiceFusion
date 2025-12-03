@@ -107,7 +107,7 @@ class TrainConfig:
             "number_of_layers": str(self.number_of_layers),
             "dtype": self.dtype,
             "model_config_path": self.model_config_path or "",
-            "optimizer": self.optimizer_type + (f"({self.optimizer_args})" if len(self.optimizer_args) > 0 else ""),
+            "optimizer": self.optimizer_type + (f"({self.optimizer_args})" if self.optimizer_args and len(self.optimizer_args) > 0 else ""),
             "seeds": str(self.seeds),
             "dataset_repeats": str(self.dataset_repeats),
             "speech_compress_ratio": str(self.speech_compress_ratio),
@@ -303,7 +303,7 @@ class VibeVoiceTrainer(Trainer):
                 checkpoint_metadata["checkpoint_ce_loss"] = f"{output.loss.item():.4f}"
                 checkpoint_metadata["checkpoint_diffusion_loss"] = f"{output.diffusion_loss.item():.4f}"
                 model_file = self.save_model(checkpoint_metadata, network, global_step, epoch + 1)
-                self.visitor.lora_file_saved(model_file)
+                self.visitor.visit_lora_file_saved(model_file)
                 logger.info(f"Checkpoint saved at epoch {epoch + 1}")
 
         end_time = datetime.now()
@@ -329,7 +329,7 @@ class VibeVoiceTrainer(Trainer):
         )
 
         final_lora_file = self.save_model(metadata, network, global_step, epoch + 1)
-        self.visitor.final_lora_file_saved(final_lora_file)
+        self.visitor.visit_final_lora_file_saved(final_lora_file)
 
     def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int) -> str:
         os.makedirs(self.train_config.output_dir, exist_ok=True)
@@ -547,7 +547,7 @@ class FakeTrainer(Trainer):
     def __init__(self,
                  train_config: TrainConfig,
                  visitor: Optional[TrainerVisitor] = None,
-                 simulated_steps_per_epoch: int = 10):
+                 simulated_steps_per_epoch: int = 1000):
         super().__init__(train_config, visitor)
         self.simulated_steps_per_epoch = simulated_steps_per_epoch  # Simulated number of steps per epoch
 

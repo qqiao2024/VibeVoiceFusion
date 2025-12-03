@@ -133,7 +133,7 @@ def create_training_job(project_id: str):
         }), 201
 
     except Exception as e:
-        logger.error(f"Error creating training job: {e}")
+        logger.error(f"Error creating training job job_name: {job_name} train_config: {train_config.to_dict()}", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)

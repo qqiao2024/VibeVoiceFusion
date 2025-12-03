@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
+from pathlib import Path
 
 from backend.utils.file_handler import FileHandler
 from typing import Any, Dict, List, Optional
@@ -88,4 +89,4 @@ class TrainingStateWriter:
     def update_state(self, train_state: TrainingState) -> None:
         states = self.file_handler.read_json(self.path)
         states[self.task_id] = train_state.to_dict()
-        self.file_handler.write_json_atomic(self.path, states)
+        self.file_handler.write_json_atomic(Path(self.path), states)

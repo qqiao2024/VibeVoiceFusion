@@ -87,9 +87,15 @@ class BaseTrainingEngine(TrainerVisitor):
     def visit_training_failed(self, timestamp, error_msg):
         self.state.status = "Failed"
         self.state_writer.update_state(self.state)
-    
+
     def get_state(self) -> TrainingState:
         return self.state
+
+    def visit_lora_file_saved(self, lora_file):
+        return self.state.lora_files.append(lora_file)
+
+    def visit_final_lora_file_saved(self, lora_file):
+        self.state.final_lora_file = lora_file
 
 
 class TrainingEngine(BaseTrainingEngine):
@@ -115,7 +121,6 @@ class TrainingEngine(BaseTrainingEngine):
         log_prefix = f"./tensorboard_logs/{training_config.lora_name}_{task_id}_{now}"
         vm.register_visitor(SummaryVisitor(
             log_prefix=log_prefix,
-            step_loss_interval=training_config.step_loss_interval
         ))
         trainer = VibeVoiceTrainer(training_config, vm)
         super().__init__(trainer, task_id, state_writer, update_step_interval, initial_state)
@@ -139,7 +144,6 @@ class FakeTrainingEngine(BaseTrainingEngine):
         log_prefix = f"./tensorboard_logs/{training_config.lora_name}_{task_id}_{now}"
         vm.register_visitor(SummaryVisitor(
             log_prefix=log_prefix,
-            step_loss_interval=training_config.step_loss_interval
         ))
         trainer = FakeTrainer(training_config, vm)
 
