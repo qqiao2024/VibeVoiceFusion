@@ -6,6 +6,7 @@ from flask import request, jsonify, current_app
 from backend.api import api_bp
 from backend.services.training_service import TrainingService
 from backend.services.project_service import ProjectService
+from backend.utils.tensorboard_reader import TensorBoardReader
 from backend.i18n import t
 from util.logger import get_logger
 
@@ -353,6 +354,79 @@ def batch_delete_training_jobs(project_id: str):
 
     except Exception as e:
         logger.error(f"Error batch deleting training jobs: {e}")
+        return jsonify({
+            'error': t('errors.internal_error'),
+            'message': str(e)
+        }), 500
+
+
+@api_bp.route('/projects/<project_id>/training/<job_id>/metrics', methods=['GET'])
+def get_training_metrics(project_id: str, job_id: str):
+    """
+    Get training metrics from TensorBoard logs
+
+    Query parameters:
+        - max_points: Maximum number of data points per metric (default: 500)
+        - metrics: Comma-separated list of metric types (loss, learning_rate, timing, all)
+
+    Returns:
+        200: Training metrics data
+        404: Job or project not found, or tensorboard logs not available
+        500: Internal error
+    """
+    try:
+        # Get training service
+        result = _get_training_service(project_id)
+        if isinstance(result[0], TrainingService):
+            service = result[0]
+        else:
+            return result
+
+        # Get job to access tensorboard_logdir
+        state = service.get_job(job_id)
+
+        if not state:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.training_job_not_found')
+            }), 404
+
+        # Check if tensorboard logs exist
+        if not state.tensorboard_logdir:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': 'TensorBoard logs not available for this job'
+            }), 404
+
+        # Parse query parameters
+        max_points = request.args.get('max_points', default=500, type=int)
+        metrics_param = request.args.get('metrics', default='all', type=str)
+
+        # Read tensorboard logs
+        reader = TensorBoardReader(state.tensorboard_logdir)
+
+        # Get requested metrics
+        if metrics_param == 'all':
+            metrics_data = reader.get_all_metrics(max_points)
+        else:
+            metrics_types = [m.strip() for m in metrics_param.split(',')]
+            metrics_data = {}
+
+            if 'loss' in metrics_types:
+                metrics_data['loss'] = reader.get_loss_metrics(max_points)
+            if 'learning_rate' in metrics_types:
+                metrics_data['learning_rate'] = reader.get_learning_rate(max_points)
+            if 'timing' in metrics_types:
+                metrics_data['timing'] = reader.get_timing_metrics(max_points)
+
+        return jsonify({
+            'message': 'Training metrics retrieved successfully',
+            'job_id': job_id,
+            'metrics': metrics_data
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting training metrics: {e}")
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)

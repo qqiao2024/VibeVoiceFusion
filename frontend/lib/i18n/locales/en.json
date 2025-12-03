@@ -460,7 +460,10 @@
     "loraInfo": "Low-Rank Adaptation - efficient fine-tuning method that trains small adapter layers",
     "adamw8bitInfo": "8-bit Adam optimizer - reduces memory usage during training",
     "gradientAccumulationInfo": "Accumulates gradients over multiple steps to simulate larger batch sizes",
-    "layerOffloadingInfo": "Moves some layers to CPU to reduce GPU memory usage at the cost of speed"
+    "layerOffloadingInfo": "Moves some layers to CPU to reduce GPU memory usage at the cost of speed",
+    "trainingMetrics": "Training Metrics",
+    "metricsNotAvailable": "Metrics not available",
+    "autoRefreshingEvery": "Auto-refreshing every"
   },
   "dataset": {
     "title": "Dataset Management",

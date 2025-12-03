@@ -162,6 +162,55 @@ export interface BatchDeleteTrainingResponse {
 }
 
 /**
+ * Training metrics data point
+ */
+export interface MetricDataPoint {
+  step: number;
+  value: number;
+  wall_time: number;
+}
+
+/**
+ * Loss metrics from TensorBoard
+ */
+export interface LossMetrics {
+  train_loss: MetricDataPoint[];
+  train_diffusion_loss: MetricDataPoint[];
+  train_ce_loss: MetricDataPoint[];
+  epoch_loss: MetricDataPoint[];
+  epoch_diffusion_loss: MetricDataPoint[];
+  epoch_ce_loss: MetricDataPoint[];
+}
+
+/**
+ * Timing metrics from TensorBoard
+ */
+export interface TimingMetrics {
+  step_time: MetricDataPoint[];
+  steps_per_second: MetricDataPoint[];
+  epoch_time: MetricDataPoint[];
+}
+
+/**
+ * All metrics from TensorBoard
+ */
+export interface TrainingMetrics {
+  loss: LossMetrics;
+  learning_rate: MetricDataPoint[];
+  timing: TimingMetrics;
+  available_tags?: string[];
+}
+
+/**
+ * Response from GET /api/v1/projects/{id}/training/{job_id}/metrics
+ */
+export interface GetTrainingMetricsResponse {
+  message: string;
+  job_id: string;
+  metrics: TrainingMetrics;
+}
+
+/**
  * Default training configuration values
  */
 export const DEFAULT_TRAIN_CONFIG: Partial<TrainConfig> = {

@@ -17,7 +17,8 @@ import type {
   ListTrainingStatesResponse,
   GetTrainingStateResponse,
   DeleteTrainingResponse,
-  BatchDeleteTrainingResponse
+  BatchDeleteTrainingResponse,
+  GetTrainingMetricsResponse
 } from '@/types/training';
 
 // API base URL configuration
@@ -698,6 +699,31 @@ class ApiClient {
         body: JSON.stringify({ job_ids: jobIds }),
       }
     );
+  }
+
+  /**
+   * Get training metrics from TensorBoard logs
+   */
+  async getTrainingMetrics(
+    projectId: string,
+    jobId: string,
+    options?: {
+      maxPoints?: number;
+      metrics?: 'all' | 'loss' | 'learning_rate' | 'timing' | string;
+    }
+  ): Promise<GetTrainingMetricsResponse> {
+    const params = new URLSearchParams();
+    if (options?.maxPoints) {
+      params.append('max_points', options.maxPoints.toString());
+    }
+    if (options?.metrics) {
+      params.append('metrics', options.metrics);
+    }
+
+    const queryString = params.toString();
+    const url = `/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}/metrics${queryString ? '?' + queryString : ''}`;
+
+    return this.fetch(url);
   }
 }
 

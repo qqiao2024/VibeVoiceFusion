@@ -460,7 +460,10 @@
     "loraInfo": "低秩适配（LoRA）- 高效的微调方法，训练小型适配器层",
     "adamw8bitInfo": "8位Adam优化器 - 减少训练过程中的内存使用",
     "gradientAccumulationInfo": "在多个步骤上累积梯度以模拟更大的批次大小",
-    "layerOffloadingInfo": "将一些层移至CPU以减少GPU内存使用，但会降低速度"
+    "layerOffloadingInfo": "将一些层移至CPU以减少GPU内存使用，但会降低速度",
+    "trainingMetrics": "训练指标",
+    "metricsNotAvailable": "指标不可用",
+    "autoRefreshingEvery": "每隔"
   },
   "dataset": {
     "title": "数据集管理",

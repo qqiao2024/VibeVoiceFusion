@@ -2,14 +2,17 @@
 
 import React from 'react';
 import { useTraining } from '@/lib/TrainingContext';
+import { useProject } from '@/lib/ProjectContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import TrainingMetricsChart from '@/components/TrainingMetricsChart';
 import type { TrainingStatus } from '@/types/training';
 
 function CurrentTraining() {
   const { currentState } = useTraining();
+  const { currentProject } = useProject();
   const { t } = useLanguage();
 
-  if (!currentState) {
+  if (!currentState || !currentProject) {
     return null;
   }
 
@@ -196,6 +199,19 @@ function CurrentTraining() {
               </div>
             </div>
           )}
+
+          {/* Metrics Charts */}
+          {currentState.tensorboard_logdir && (
+            <div className="bg-white bg-opacity-90 rounded p-4">
+              <p className="text-xs font-medium mb-3 opacity-75">📊 {t('training.trainingMetrics')}</p>
+              <TrainingMetricsChart
+                projectId={currentProject.id}
+                jobId={currentState.task_id}
+                autoRefresh={true}
+                refreshInterval={5000}
+              />
+            </div>
+          )}
         </div>
       );
     }
@@ -273,6 +289,19 @@ function CurrentTraining() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Metrics Charts (Final Results) */}
+          {currentState.tensorboard_logdir && (
+            <div className="bg-white bg-opacity-90 rounded p-4">
+              <p className="text-xs font-medium mb-3 opacity-75">📊 {t('training.trainingMetrics')}</p>
+              <TrainingMetricsChart
+                projectId={currentProject.id}
+                jobId={currentState.task_id}
+                autoRefresh={false}
+                refreshInterval={5000}
+              />
             </div>
           )}
         </div>
