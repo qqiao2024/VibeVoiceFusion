@@ -94,17 +94,25 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
     return new Date(dateString).toLocaleString();
   };
 
+  // Helper to extract filename from relative path
+  const extractFilename = (path: string) => {
+    // Extract filename from relative path (e.g., "./audio/file.wav" -> "file.wav")
+    return path.split('/').pop() || path;
+  };
+
   // Get audio URLs for an item
-  const getAudioUrl = (filename: string) => {
+  const getAudioUrl = (path: string) => {
     if (!currentProject || !datasetId) return '';
+    const filename = extractFilename(path);
     // The audio files are stored in workspace/{project_id}/datasets/{dataset_id}/audio/{filename}
     // We'll need to add a backend endpoint to serve these files, or use a direct path
     // For now, returning a placeholder that should work when backend serves files
     return `/api/v1/projects/${currentProject.id}/datasets/${datasetId}/audio/${filename}`;
   };
 
-  const getVoicePromptUrl = (filename: string) => {
+  const getVoicePromptUrl = (path: string) => {
     if (!currentProject || !datasetId) return '';
+    const filename = extractFilename(path);
     return `/api/v1/projects/${currentProject.id}/datasets/${datasetId}/voice-prompts/${filename}`;
   };
 
@@ -232,9 +240,9 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
                         index={actualIndex}
                         text={item.text}
                         audioUrl={getAudioUrl(item.audio)}
-                        audioFilename={item.audio}
+                        audioFilename={extractFilename(item.audio)}
                         voicePromptUrls={item.voice_prompts.map(getVoicePromptUrl)}
-                        voicePromptFilenames={item.voice_prompts}
+                        voicePromptFilenames={item.voice_prompts.map(extractFilename)}
                         onTextUpdate={(newText) => handleTextUpdate(actualIndex, newText)}
                         onDelete={() => handleDelete(actualIndex)}
                       />

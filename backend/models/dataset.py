@@ -54,8 +54,8 @@ class Dataset:
 class DatasetItem:
     """Dataset item model"""
     text: str  # Text content
-    audio: str  # Audio filename (stored in dataset's audio directory)
-    voice_prompts: List[str]  # Voice prompt filenames (stored in dataset's voice_prompts directory)
+    audio: str  # Relative path to audio file (e.g., "./audio/file.wav")
+    voice_prompts: List[str]  # List of relative paths to voice prompt files (e.g., ["./voice_prompts/prompt.wav"])
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert dataset item to dictionary"""

@@ -194,6 +194,18 @@ class DatasetService:
         ext = Path(filename).suffix.lower()
         return ext in self.ALLOWED_AUDIO_EXTENSIONS
 
+    def _extract_filename_from_path(self, path: str) -> str:
+        """
+        Extract filename from relative or absolute path
+
+        Args:
+            path: Path string (e.g., "./audio/file.wav" or "file.wav")
+
+        Returns:
+            Just the filename (e.g., "file.wav")
+        """
+        return Path(path).name
+
     def list_datasets(self) -> List[Dataset]:
         """
         List all datasets
@@ -433,11 +445,11 @@ class DatasetService:
                 vp_file.save(str(vp_path))
                 saved_files.append(vp_path)
 
-            # Create dataset item
+            # Create dataset item with relative paths
             item = DatasetItem(
                 text=text.strip(),
-                audio=audio_filename,
-                voice_prompts=voice_prompt_filenames
+                audio=f"./{self.AUDIO_DIR}/{audio_filename}",
+                voice_prompts=[f"./{self.VOICE_PROMPTS_DIR}/{vp}" for vp in voice_prompt_filenames]
             )
 
             # Load existing items and append
@@ -510,7 +522,7 @@ class DatasetService:
 
             try:
                 audio_file.save(str(new_audio_path))
-                item.audio = audio_filename
+                item.audio = f"./{self.AUDIO_DIR}/{audio_filename}"
             except Exception as e:
                 if new_audio_path and new_audio_path.exists():
                     new_audio_path.unlink()
@@ -541,7 +553,7 @@ class DatasetService:
                     new_vp_paths.append(vp_path)
                     new_vp_filenames.append(vp_filename)
 
-                item.voice_prompts = new_vp_filenames
+                item.voice_prompts = [f"./{self.VOICE_PROMPTS_DIR}/{vp}" for vp in new_vp_filenames]
 
             except Exception as e:
                 # Cleanup new voice prompt files
@@ -557,15 +569,17 @@ class DatasetService:
         try:
             self._save_items(dataset_id, items)
 
-            # Delete old files after successful save
+            # Delete old files after successful save (extract filename from relative path)
             if new_audio_path:
-                old_audio_path = self._get_audio_dir(dataset_id) / old_audio_filename
+                old_audio_only_filename = self._extract_filename_from_path(old_audio_filename)
+                old_audio_path = self._get_audio_dir(dataset_id) / old_audio_only_filename
                 if old_audio_path.exists():
                     old_audio_path.unlink()
 
             if new_vp_paths:
                 voice_prompts_dir = self._get_voice_prompts_dir(dataset_id)
-                for old_vp_filename in old_voice_prompt_filenames:
+                for old_vp_path_str in old_voice_prompt_filenames:
+                    old_vp_filename = self._extract_filename_from_path(old_vp_path_str)
                     old_vp_path = voice_prompts_dir / old_vp_filename
                     if old_vp_path.exists():
                         old_vp_path.unlink()
@@ -605,13 +619,15 @@ class DatasetService:
         item = items[item_index]
 
         try:
-            # Delete associated files
-            audio_path = self._get_audio_dir(dataset_id) / item.audio
+            # Delete associated files (extract filename from relative path)
+            audio_filename = self._extract_filename_from_path(item.audio)
+            audio_path = self._get_audio_dir(dataset_id) / audio_filename
             if audio_path.exists():
                 audio_path.unlink()
 
             voice_prompts_dir = self._get_voice_prompts_dir(dataset_id)
-            for vp_filename in item.voice_prompts:
+            for vp_path_str in item.voice_prompts:
+                vp_filename = self._extract_filename_from_path(vp_path_str)
                 vp_path = voice_prompts_dir / vp_filename
                 if vp_path.exists():
                     vp_path.unlink()
