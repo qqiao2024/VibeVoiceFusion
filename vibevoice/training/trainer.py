@@ -164,7 +164,7 @@ class VibeVoiceTrainer(Trainer):
         torch.manual_seed(self.train_config.seeds)
         torch.cuda.manual_seed_all(self.train_config.seeds)
 
-        model_file = Path(self.train_config.model_path) / Path(f"vibevoice7b_{'bf16' if self.dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors")
+        model_file = Path(self.train_config.model_path)
         config_dict = self.get_model_config()
         model = self._load_model(model_file, self.dtype, config_dict)
         model.requires_grad_(False)  # Freeze the model parameters
@@ -390,7 +390,7 @@ class VibeVoiceTrainer(Trainer):
         return config_dict
 
 
-    def _load_model(self, model_file: str,
+    def _load_model(self, model_file: Path,
                     dtype: torch.dtype = torch.bfloat16,
                     config_dict: dict = DEFAULT_CONFIG) -> VibeVoiceForConditionalInference:
         config = VibeVoiceConfig.from_dict(config_dict,

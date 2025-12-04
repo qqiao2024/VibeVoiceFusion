@@ -177,7 +177,7 @@ class TrainingService:
                 state = TrainingState.from_dict(state_dict)
 
                 # Detect orphaned 'Training' status jobs
-                if state.status == "Training" and task_id != current_training_task_id:
+                if (state.status == "Training"  or state.status== "Prepare") and task_id != current_training_task_id:
                     logger.warning(f"Detected orphaned training job {task_id}, marking as Failed")
                     state.status = "Failed"
                     state.error_message = "Training interrupted (server restart or crash)"
