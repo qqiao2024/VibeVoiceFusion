@@ -813,7 +813,13 @@ curl -X POST "http://localhost:9527/api/v1/projects/my-project/training" \
 
 **GET** `/api/v1/projects/{project_id}/training`
 
-Get all training jobs for a project, sorted by created_at (newest first).
+Get all training jobs for a project, sorted by created_at (newest first). **This endpoint automatically detects and marks orphaned jobs as Failed.**
+
+**Orphaned Job Detection:**
+- If a job has status `Training` but there's no active training task in the task manager
+- This happens when the server restarts or crashes during training
+- The job status is automatically changed to `Failed` with error message: "Training interrupted (server restart or crash)"
+- The metadata is updated immediately and persisted
 
 **Response (200 OK):**
 ```json
@@ -903,7 +909,12 @@ curl "http://localhost:9527/api/v1/projects/my-project/training/abc123def456"
 
 **DELETE** `/api/v1/projects/{project_id}/training/{job_id}`
 
-Delete a training job. Cannot delete a currently running job.
+Delete a training job. **Only completed training jobs can be deleted.** This also deletes all associated LoRA files from disk.
+
+**Important Changes:**
+- Only jobs with status `Completed` can be deleted
+- LoRA files in `output_dir` are automatically deleted using `shutil.rmtree()`
+- Failed, Prepare, or Training status jobs cannot be deleted
 
 **Response (200 OK):**
 ```json
@@ -913,9 +924,17 @@ Delete a training job. Cannot delete a currently running job.
 }
 ```
 
+**Response (400 Bad Request - Not Completed):**
+```json
+{
+  "error": "Bad Request",
+  "message": "Only completed training jobs can be deleted"
+}
+```
+
 **Status Codes:**
-- `200 OK` - Job deleted successfully
-- `400 Bad Request` - Cannot delete running job
+- `200 OK` - Job and LoRA files deleted successfully
+- `400 Bad Request` - Job is not completed (status != Completed)
 - `404 Not Found` - Job or project not found
 - `500 Internal Server Error` - Server error
 
@@ -926,12 +945,42 @@ curl -X DELETE "http://localhost:9527/api/v1/projects/my-project/training/abc123
 
 **Behavior:**
 - Deletes job from `training_history.json`
-- Cannot delete if job is currently running
-- LoRA files are not automatically deleted (TODO)
+- Deletes LoRA directory at `{workspace}/{project}/training/lora_output/{job_name}/`
+- Only completed jobs can be deleted (prevents accidental deletion of in-progress work)
 
 ---
 
-### 6. Batch Delete Training Jobs
+### 6. Download LoRA File
+
+**GET** `/api/v1/projects/{project_id}/training/{job_id}/lora/{filename}`
+
+Download a LoRA checkpoint file from a completed training job.
+
+**Path Parameters:**
+- `filename`: The LoRA filename from `TrainingState.lora_files` array (e.g., `checkpoint_epoch_10.pt`)
+
+**Response (200 OK):**
+- File download with `Content-Disposition: attachment`
+- Content-Type: `application/octet-stream`
+
+**Status Codes:**
+- `200 OK` - File download started
+- `404 Not Found` - Job not found, file not found, or job not completed
+- `500 Internal Server Error` - Server error
+
+**Example:**
+```bash
+curl -O "http://localhost:9527/api/v1/projects/my-project/training/abc123/lora/checkpoint_epoch_10.pt"
+```
+
+**Behavior:**
+- Only works for completed training jobs (status == Completed)
+- Returns 404 if job is not completed or file doesn't exist
+- Downloads from `{workspace}/{project}/training/lora_output/{job_name}/{filename}`
+
+---
+
+### 7. Batch Delete Training Jobs
 
 **POST** `/api/v1/projects/{project_id}/training/batch-delete`
 

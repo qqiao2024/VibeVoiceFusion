@@ -464,7 +464,9 @@
     "trainingMetrics": "Training Metrics",
     "metricsNotAvailable": "Metrics not available",
     "autoRefreshingEvery": "Auto-refreshing every",
-    "clickLegendToToggle": "💡 Click legend items to show/hide specific metrics"
+    "clickLegendToToggle": "💡 Click legend items to show/hide specific metrics",
+    "downloadStarted": "Download started",
+    "downloadFailed": "Failed to download file"
   },
   "dataset": {
     "title": "Dataset Management",

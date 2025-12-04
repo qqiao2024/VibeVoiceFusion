@@ -45,6 +45,7 @@ class TrainingState:
 
     # Training status
     status: str = "Prepare"  # Prepare, Training, Completed, Failed
+    error_message: str = ""
 
     # TensorBoard
     tensorboard_logdir: str = ""
@@ -52,6 +53,18 @@ class TrainingState:
     # Output files
     lora_files: List[str] = field(default_factory=list)
     final_lora_file: str = ""
+
+    def get_all_lora_files(self) -> List[str]:
+        """
+        Get all LoRA files (both temporary checkpoints and final model)
+
+        Returns:
+            List of all LoRA file paths
+        """
+        all_files = list(self.lora_files)  # Copy the list
+        if self.final_lora_file:
+            all_files.append(self.final_lora_file)
+        return all_files
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with datetime serialization"""
@@ -61,11 +74,19 @@ class TrainingState:
             result['start_time'] = self.start_time.isoformat()
         if isinstance(self.current_timestamp, datetime):
             result['current_timestamp'] = self.current_timestamp.isoformat()
+
+        # Add all_lora_files for convenience (includes both lora_files and final_lora_file)
+        result['all_lora_files'] = self.get_all_lora_files()
+
         return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TrainingState':
         """Create TrainingState from dictionary"""
+        # Remove all_lora_files if present (it's computed, not a field)
+        data = data.copy()  # Don't modify the original dict
+        data.pop('all_lora_files', None)
+
         # Convert ISO strings back to datetime
         if 'start_time' in data and isinstance(data['start_time'], str):
             try:

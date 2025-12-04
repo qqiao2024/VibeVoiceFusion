@@ -725,6 +725,21 @@ class ApiClient {
 
     return this.fetch(url);
   }
+
+  /**
+   * Download a LoRA file from a completed training job
+   */
+  downloadLoRAFile(projectId: string, jobId: string, filename: string): void {
+    const url = `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}/lora/${encodeURIComponent(filename)}`;
+
+    // Create a temporary anchor element to trigger download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
 }
 
 // Export singleton instance

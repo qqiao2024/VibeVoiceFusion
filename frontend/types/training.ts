@@ -65,6 +65,7 @@ export interface TrainingState {
   // Output Files
   lora_files: string[];
   final_lora_file: string | null;
+  all_lora_files?: string[];  // Combined list of all LoRA files (added by backend)
 
   // Error message (if failed)
   error_message?: string | null;

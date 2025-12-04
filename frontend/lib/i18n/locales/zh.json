@@ -464,7 +464,9 @@
     "trainingMetrics": "训练指标",
     "metricsNotAvailable": "指标不可用",
     "autoRefreshingEvery": "每隔",
-    "clickLegendToToggle": "💡 点击图例项以显示/隐藏特定指标"
+    "clickLegendToToggle": "💡 点击图例项以显示/隐藏特定指标",
+    "downloadStarted": "开始下载",
+    "downloadFailed": "下载文件失败"
   },
   "dataset": {
     "title": "数据集管理",

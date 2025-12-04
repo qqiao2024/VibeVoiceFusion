@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 from typing import List, Optional
 from datetime import datetime
+import shutil
 
 from backend.task_manager.training_task import TrainingTask
 from backend.utils.file_handler import FileHandler
@@ -150,21 +151,49 @@ class TrainingService:
 
     def list_jobs(self) -> List[TrainingState]:
         """
-        List all training jobs
+        List all training jobs and detect orphaned 'Training' status jobs
+
+        If a job has status 'Training' but there's no active training task,
+        it means the job was interrupted (e.g., server restart). Mark it as 'Failed'.
 
         Returns:
             List of TrainingState objects
         """
         states_meta = self._load_metadata()
+        current_task = gm.get_current_task()
+        current_training_task_id = None
+
+        # Check if there's a current training task
+        if current_task:
+            engine = current_task.unwrap()
+            if isinstance(engine, BaseTrainingEngine):
+                current_training_task_id = current_task.task_id
 
         jobs = []
+        states_updated = False
+
         for task_id, state_dict in states_meta.items():
             try:
                 state = TrainingState.from_dict(state_dict)
+
+                # Detect orphaned 'Training' status jobs
+                if state.status == "Training" and task_id != current_training_task_id:
+                    logger.warning(f"Detected orphaned training job {task_id}, marking as Failed")
+                    state.status = "Failed"
+                    state.error_message = "Training interrupted (server restart or crash)"
+
+                    # Update metadata
+                    states_meta[task_id] = state.to_dict()
+                    states_updated = True
+
                 jobs.append(state)
             except Exception as e:
                 logger.error(f"Failed to parse training state for task {task_id}: {e}")
                 continue
+
+        # Save updated metadata if any jobs were marked as failed
+        if states_updated:
+            self._save_metadata(states_meta)
 
         # Sort by created_at descending (newest first)
         jobs.sort(key=lambda x: x.created_at or "", reverse=True)
@@ -213,34 +242,73 @@ class TrainingService:
 
         return live_state
 
+    def get_lora_file_path(self, job_id: str, filename: str) -> Optional[Path]:
+        """
+        Get the full path to a LoRA file for a specific job
+
+        Args:
+            job_id: Job identifier (task_id)
+            filename: LoRA filename from state.lora_files (can be full path or just filename)
+
+        Returns:
+            Path to the LoRA file if exists, None otherwise
+        """
+        state = self.get_job(job_id)
+        if not state or state.status != "Completed":
+            return None
+
+        if not state.config or not state.config.get('output_dir'):
+            return None
+
+        # Extract just the filename in case full path is stored
+        filename_only = Path(filename).name
+
+        lora_file_path = Path(state.config['output_dir']) / filename_only
+        if lora_file_path.exists() and lora_file_path.is_file():
+            return lora_file_path
+
+        return None
+
     def delete_job(self, job_id: str) -> bool:
         """
-        Delete a training job (only if not currently running)
+        Delete a training job (only if completed)
 
         Args:
             job_id: Job identifier (task_id)
 
         Returns:
-            True if deleted, False if not found or currently running
+            True if deleted, False if not found, not completed, or currently running
         """
-        # Check if this job is currently running
-        current_job = self.get_current_job()
-        if current_job and current_job.task_id == job_id:
-            logger.warning(f"Cannot delete job {job_id}: currently running")
-            return False
-
-        # Delete from training state metadata
+        # Get job state
         states_meta = self._load_metadata()
         if job_id not in states_meta:
             return False
 
+        try:
+            state = TrainingState.from_dict(states_meta[job_id])
+        except Exception as e:
+            logger.error(f"Failed to parse training state for job {job_id}: {e}")
+            return False
+
+        # Only allow deletion of completed jobs
+        if state.status != "Completed":
+            logger.warning(f"Cannot delete job {job_id}: status is {state.status}, only Completed jobs can be deleted")
+            return False
+
+        # Delete LoRA files if they exist
+        if state.config and state.config.get('output_dir'):
+            lora_output_path = Path(state.config['output_dir'])
+            if lora_output_path.exists() and lora_output_path.is_dir():
+                try:
+                    shutil.rmtree(lora_output_path)
+                    logger.info(f"Deleted LoRA files for job {job_id} at {lora_output_path}")
+                except Exception as e:
+                    logger.error(f"Failed to delete LoRA files for job {job_id}: {e}")
+                    # Continue with metadata deletion even if file deletion fails
+
+        # Delete from training state metadata
         del states_meta[job_id]
         self._save_metadata(states_meta)
-
-        # TODO: Delete saved LoRA files if needed
-        # lora_files = state.get('lora_files', [])
-        # for lora_file in lora_files:
-        #     # Delete lora_file
 
         return True
 

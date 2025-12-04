@@ -247,12 +247,12 @@ export default function TrainingMetricsChart({
             <div className="mb-3 text-xs text-gray-500 italic">
               {t('training.clickLegendToToggle')}
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={prepareLossData()}>
+            <ResponsiveContainer width="100%" height={350}>
+              <LineChart data={prepareLossData()} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="step"
-                  label={{ value: 'Step', position: 'insideBottom', offset: -5 }}
+                  label={{ value: 'Step', position: 'insideBottomRight', offset: 0 }}
                 />
                 <YAxis label={{ value: 'Loss', angle: -90, position: 'insideLeft' }} />
                 <Tooltip />
@@ -290,12 +290,12 @@ export default function TrainingMetricsChart({
         )}
 
         {selectedChart === 'learning_rate' && (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={prepareLearningRateData()}>
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart data={prepareLearningRateData()} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="step"
-                label={{ value: 'Step', position: 'insideBottom', offset: -5 }}
+                label={{ value: 'Step', position: 'insideBottomRight', offset: 0 }}
               />
               <YAxis
                 label={{ value: 'Learning Rate', angle: -90, position: 'insideLeft' }}
@@ -320,12 +320,12 @@ export default function TrainingMetricsChart({
             <div className="mb-3 text-xs text-gray-500 italic">
               {t('training.clickLegendToToggle')}
             </div>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={prepareTimingData()}>
+            <ResponsiveContainer width="100%" height={350}>
+              <LineChart data={prepareTimingData()} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="step"
-                  label={{ value: 'Step', position: 'insideBottom', offset: -5 }}
+                  label={{ value: 'Step', position: 'insideBottomRight', offset: 0 }}
                 />
                 <YAxis label={{ value: 'Time (s)', angle: -90, position: 'insideLeft' }} />
                 <Tooltip />

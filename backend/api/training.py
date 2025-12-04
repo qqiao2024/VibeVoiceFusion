@@ -2,7 +2,7 @@
 Training API endpoints
 """
 from typing import Dict, Any
-from flask import request, jsonify, current_app
+from flask import request, jsonify, current_app, send_file
 from backend.api import api_bp
 from backend.services.training_service import TrainingService
 from backend.services.project_service import ProjectService
@@ -284,7 +284,7 @@ def delete_training_job(project_id: str, job_id: str):
         success = service.delete_job(job_id)
 
         if not success:
-            # Could be not found or currently running
+            # Could be not found or not completed
             state = service.get_job(job_id)
             if not state:
                 return jsonify({
@@ -294,7 +294,7 @@ def delete_training_job(project_id: str, job_id: str):
             else:
                 return jsonify({
                     'error': t('errors.bad_request'),
-                    'message': t('errors.cannot_delete_running_job')
+                    'message': t('errors.cannot_delete_non_completed_job')
                 }), 400
 
         return jsonify({
@@ -361,6 +361,50 @@ def batch_delete_training_jobs(project_id: str):
 
     except Exception as e:
         logger.error(f"Error batch deleting training jobs: {e}")
+        return jsonify({
+            'error': t('errors.internal_error'),
+            'message': str(e)
+        }), 500
+
+
+@api_bp.route('/projects/<project_id>/training/<job_id>/lora/<filename>', methods=['GET'])
+def download_lora_file(project_id: str, job_id: str, filename: str):
+    """
+    Download a LoRA file from a completed training job
+
+    Returns:
+        200: LoRA file download
+        404: Job, project, or file not found
+        400: Job is not completed
+        500: Internal error
+    """
+    try:
+        # Get training service
+        result = _get_training_service(project_id)
+        if isinstance(result[0], TrainingService):
+            service = result[0]
+        else:
+            return result
+
+        # Get LoRA file path
+        lora_file_path = service.get_lora_file_path(job_id, filename)
+
+        if not lora_file_path:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.lora_file_not_found')
+            }), 404
+
+        # Send file for download
+        return send_file(
+            lora_file_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/octet-stream'
+        )
+
+    except Exception as e:
+        logger.error(f"Error downloading LoRA file: {e}")
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)

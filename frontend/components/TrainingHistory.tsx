@@ -5,6 +5,7 @@ import { useTraining } from '@/lib/TrainingContext';
 import { useProject } from '@/lib/ProjectContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import TrainingMetricsChart from '@/components/TrainingMetricsChart';
+import { api } from '@/lib/api';
 import type { TrainingState, TrainingStatus } from '@/types/training';
 import toast from 'react-hot-toast';
 
@@ -232,18 +233,39 @@ function TrainingHistory() {
           </div>
         )}
 
-        {/* Saved LoRA Files */}
-        {state.lora_files.length > 0 && (
+        {/* Saved LoRA Files - Use all_lora_files which includes both temporary and final */}
+        {state.all_lora_files && state.all_lora_files.length > 0 && currentProject && (
           <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
             <p className="text-xs font-semibold text-purple-800 mb-2">
-              💾 {t('training.savedLoRAFiles').replace('{count}', state.lora_files.length.toString())}
+              💾 {t('training.savedLoRAFiles').replace('{count}', state.all_lora_files.length.toString())}
             </p>
-            <div className="space-y-1">
-              {state.lora_files.map((file, idx) => (
-                <div key={idx} className="text-xs font-mono bg-white p-2 rounded border border-purple-100">
-                  {file}
-                </div>
-              ))}
+            <div className="space-y-2">
+              {state.all_lora_files.map((filePath, idx) => {
+                // Extract just the filename (handle both full paths and filenames)
+                const filename = filePath.split('/').pop() || filePath.split('\\').pop() || filePath;
+
+                return (
+                  <div key={idx} className="flex items-center justify-between bg-white p-2 rounded border border-purple-100">
+                    <span className="text-xs font-mono flex-1 truncate" title={filename}>{filename}</span>
+                    <button
+                      onClick={() => {
+                        try {
+                          api.downloadLoRAFile(currentProject.id, state.task_id, filePath);
+                          toast.success(t('training.downloadStarted'));
+                        } catch (error) {
+                          toast.error(t('training.downloadFailed'));
+                        }
+                      }}
+                      className="ml-2 px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-1 flex-shrink-0"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      <span>{t('common.download')}</span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
