@@ -64,7 +64,7 @@ class SummaryVisitor(TrainerVisitor):
         self.writer.flush()
         self.writer.close()
 
-    def visit_step_begin(self, timestemp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
+    def visit_step_begin(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
         """Called at the beginning of each training step."""
         # Log learning rate at step begin
         self.writer.add_scalar("train/learning_rate", lr, global_step)

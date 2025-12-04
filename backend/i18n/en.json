@@ -17,6 +17,7 @@
     "training_job_not_found": "Training job not found",
     "task_manager_busy": "Task manager is busy. Please wait for the current task to complete",
     "cannot_delete_running_job": "Cannot delete a currently running training job",
+    "job_name_duplicate": "Job name already exists. Please choose a unique name for your training job",
     "conflict": "Conflict",
     "dataset_name_required": "Dataset name is required",
     "text_required": "Text is required",

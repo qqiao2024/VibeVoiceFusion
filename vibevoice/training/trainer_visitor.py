@@ -1,3 +1,4 @@
+from typing import List
 from abc import ABC, abstractmethod
 
 class TrainerVisitor(ABC):
@@ -10,7 +11,7 @@ class TrainerVisitor(ABC):
         pass
 
     @abstractmethod
-    def visit_step_begin(self, timestemp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
+    def visit_step_begin(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
         pass
 
     @abstractmethod
@@ -40,7 +41,7 @@ class TrainerVisitor(ABC):
 
 class VisitorManager(TrainerVisitor):
     def __init__(self):
-        self.visitors = []
+        self.visitors : List[TrainerVisitor] = []
 
     def register_visitor(self, visitor: TrainerVisitor):
         self.visitors.append(visitor)
@@ -53,9 +54,9 @@ class VisitorManager(TrainerVisitor):
         for visitor in self.visitors:
             visitor.visit_training_end(timestamp, loss, diffusion_loss, ce_loss, total_elapsed, total_run_steps, total_run_epochs)
 
-    def visit_step_begin(self, timestemp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
+    def visit_step_begin(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
         for visitor in self.visitors:
-            visitor.visit_step_begin(timestemp, step, epoch, step_in_epoch, lr, global_step)
+            visitor.visit_step_begin(timestamp, step, epoch, step_in_epoch, lr, global_step)
 
     def visit_step_end(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int, loss: float, diffusion_loss: float, ce_loss: float, step_elapsed: float):
         for visitor in self.visitors:
@@ -75,8 +76,8 @@ class VisitorManager(TrainerVisitor):
 
     def visit_lora_file_saved(self, lora_file: str):
         for visitor in self.visitors:
-            visitor.lora_file_saved(lora_file)
+            visitor.visit_lora_file_saved(lora_file)
 
     def visit_final_lora_file_saved(self, lora_file: str):
         for visitor in self.visitors:
-            visitor.final_lora_file_saved(lora_file)
+            visitor.visit_final_lora_file_saved(lora_file)

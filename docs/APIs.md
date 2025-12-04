@@ -745,7 +745,12 @@ Training configuration object (matches `vibevoice/training/trainer.py`):
 
 **POST** `/api/v1/projects/{project_id}/training`
 
-Create and start a new training job. Returns 409 if task manager is busy.
+Create and start a new training job. Returns 409 if task manager is busy or job name is duplicate.
+
+**IMPORTANT**: The backend automatically calculates the `output_dir` field based on the job name:
+- Path format: `{workspace}/{project}/training/lora_output/{job_name}`
+- Job names must be unique within a project
+- Any `output_dir` value in the request will be overwritten
 
 **Request Body:**
 ```json
@@ -757,7 +762,7 @@ Create and start a new training job. Returns 409 if task manager is busy.
     "batch_size": 1,
     "learning_rate": 0.0001,
     "dataset_path": "workspace/project-id/datasets/dataset-id/datasets.jsonl",
-    ...
+    "output_dir": "ignored-will-be-overwritten"
   }
 }
 ```
@@ -771,11 +776,19 @@ Create and start a new training job. Returns 409 if task manager is busy.
 }
 ```
 
+**Response (409 Conflict - Duplicate Job Name):**
+```json
+{
+  "error": "Conflict",
+  "message": "Job name already exists. Please choose a unique name for your training job"
+}
+```
+
 **Status Codes:**
 - `201 Created` - Training job created and started
 - `400 Bad Request` - Invalid configuration or missing fields
 - `404 Not Found` - Project not found
-- `409 Conflict` - Task manager is busy (another task is running)
+- `409 Conflict` - Task manager is busy OR job name already exists
 - `500 Internal Server Error` - Server error
 
 **Example:**

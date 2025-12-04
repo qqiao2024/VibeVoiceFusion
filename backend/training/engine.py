@@ -42,9 +42,9 @@ class BaseTrainingEngine(TrainerVisitor):
         self.state.current_loss = loss
         self.state.current_diffusion_loss = diffusion_loss
         self.state.current_ce_loss = ce_loss
-        self.state_writer.update_state(self.state)
         self.state.estimated_total_steps = total_run_steps
         self.state.estimated_total_elpase = total_elapsed
+        self.state_writer.update_state(self.state)
 
     def visit_step_begin(self, timestamp: float, step: int, epoch: int,
                          step_in_epoch: int, lr: float, global_step: int):
@@ -96,6 +96,9 @@ class BaseTrainingEngine(TrainerVisitor):
 
     def visit_final_lora_file_saved(self, lora_file):
         self.state.final_lora_file = lora_file
+
+    def finalize(self):
+        self.state_writer.update_state(self.state)
 
 
 class TrainingEngine(BaseTrainingEngine):

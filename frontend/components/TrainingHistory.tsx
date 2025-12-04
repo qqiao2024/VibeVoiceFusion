@@ -2,12 +2,15 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTraining } from '@/lib/TrainingContext';
+import { useProject } from '@/lib/ProjectContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import TrainingMetricsChart from '@/components/TrainingMetricsChart';
 import type { TrainingState, TrainingStatus } from '@/types/training';
 import toast from 'react-hot-toast';
 
 function TrainingHistory() {
   const { states, loading, deleteJob } = useTraining();
+  const { currentProject } = useProject();
   const { t } = useLanguage();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -213,6 +216,19 @@ function TrainingHistory() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Training Metrics Charts (for completed jobs with tensorboard data) */}
+        {isCompleted && state.tensorboard_logdir && currentProject && (
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <p className="text-sm font-semibold text-gray-800 mb-3">📊 {t('training.trainingMetrics')}</p>
+            <TrainingMetricsChart
+              projectId={currentProject.id}
+              jobId={state.task_id}
+              autoRefresh={false}
+              refreshInterval={5000}
+            />
           </div>
         )}
 

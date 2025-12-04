@@ -463,7 +463,8 @@
     "layerOffloadingInfo": "Moves some layers to CPU to reduce GPU memory usage at the cost of speed",
     "trainingMetrics": "Training Metrics",
     "metricsNotAvailable": "Metrics not available",
-    "autoRefreshingEvery": "Auto-refreshing every"
+    "autoRefreshingEvery": "Auto-refreshing every",
+    "clickLegendToToggle": "💡 Click legend items to show/hide specific metrics"
   },
   "dataset": {
     "title": "Dataset Management",

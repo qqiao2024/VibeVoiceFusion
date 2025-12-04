@@ -228,7 +228,7 @@ class VibeVoiceTrainer(Trainer):
 
                     # Notify step begin
                     self.visitor.visit_step_begin(
-                        timestemp=step_start_time.timestamp(),
+                        timestamp=step_start_time.timestamp(),
                         step=step + 1,
                         epoch=epoch + 1,
                         step_in_epoch=step + 1,
@@ -620,7 +620,7 @@ class FakeTrainer(Trainer):
 
                     # Notify step begin
                     self.visitor.visit_step_begin(
-                        timestemp=step_start_time.timestamp(),
+                        timestamp=step_start_time.timestamp(),
                         step=step + 1,
                         epoch=epoch + 1,
                         step_in_epoch=step + 1 + repeat * self.simulated_steps_per_epoch,
@@ -691,6 +691,8 @@ class FakeTrainer(Trainer):
             # Simulate checkpoint saving
             if self.train_config.save_model_per_num_epoch > 0 and (epoch + 1) % self.train_config.save_model_per_num_epoch == 0:
                 logger.info(f"FakeTrainer: Simulated checkpoint save at epoch {epoch + 1}")
+                ckpt_file = self.mock_save_model(epoch + 1, global_step)
+                self.visitor.visit_lora_file_saved(ckpt_file)
 
         end_time = datetime.now()
         elapsed_time = end_time - start_time
@@ -715,3 +717,32 @@ class FakeTrainer(Trainer):
             total_run_steps=global_step,
             total_run_epochs=self.train_config.epochs
         )
+
+        file_name = self.mock_save_model(epoch + 1, global_step, is_final=True)
+        self.visitor.visit_final_lora_file_saved(file_name)
+
+    def mock_save_model(self, epoch_no: int, steps: int, is_final: bool = False) -> str:
+        """Save a placeholder file simulating LoRA weights.
+
+        Args:
+            epoch_no: Current epoch number
+            steps: Total training steps completed
+            is_final: Whether this is the final model save
+
+        Returns:
+            The path to the saved file
+        """
+        os.makedirs(self.train_config.output_dir, exist_ok=True)
+        now = datetime.now()
+        suffix = "_final" if is_final else ""
+        ckpt_file = os.path.join(
+            self.train_config.output_dir,
+            f"{self.train_config.lora_name}_{now.strftime('%m%d%H%M')}_{epoch_no}_{steps}{suffix}.safetensors"
+        )
+
+        # Write 1024 placeholder bytes
+        with open(ckpt_file, 'wb') as f:
+            f.write(b'\x00' * 1024)
+
+        logger.info(f"FakeTrainer: Mock model saved to {ckpt_file}")
+        return ckpt_file

@@ -64,19 +64,42 @@ class TrainingService:
             logger.error(f"Failed to load training metadata: {e}")
             return {}
 
+    def _is_job_name_unique(self, job_name: str) -> bool:
+        """
+        Check if job name is unique across all training jobs
+
+        Args:
+            job_name: Job name to check
+
+        Returns:
+            True if unique, False if duplicate exists
+        """
+        states_meta = self._load_metadata()
+        for state_dict in states_meta.values():
+            if state_dict.get('job_name') == job_name:
+                return False
+        return True
+
     def create_training_job(self, job_name: str, train_config: TrainConfig,
                             project_id: str) -> Optional[TrainingState]:
         """
         Create and start a new training job
 
         Args:
-            job_name: Human-readable job name
+            job_name: Human-readable job name (must be unique)
             train_config: Training configuration
             project_id: Project identifier
 
         Returns:
             TrainingState if successful, None if task queue is busy
+
+        Raises:
+            ValueError: If job_name is not unique
         """
+        # Check if job name is unique
+        if not self._is_job_name_unique(job_name):
+            raise ValueError(f"Job name '{job_name}' already exists. Please choose a unique name.")
+
         # Check if task manager is busy
         if gm.has_task():
             logger.warning("Task manager is busy, cannot start new training job")
@@ -85,6 +108,11 @@ class TrainingService:
         # Create task_id
         task_id = uuid4().hex
         train_config.model_path = f"{current_app.config['MODEL_PATH']}/vibevoice7b_{'bf16' if train_config.dtype == 'bfloat16' else 'float8_e4m3fn'}.safetensors"
+
+        # Auto-generate output_dir based on workspace/project/job_name
+        # Path format: {workspace}/{project}/training/lora_output/{job_name}
+        lora_output_dir = self.output_dir / "lora_output" / job_name
+        train_config.output_dir = str(lora_output_dir)
 
         # Initialize TrainingState with metadata
         initial_state = TrainingState(

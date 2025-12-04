@@ -30,4 +30,4 @@ class TrainingTask(Task):
         pass
 
     def _task_finalize(self):
-        pass
+        self.training_engine.finalize()

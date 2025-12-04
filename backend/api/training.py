@@ -117,8 +117,15 @@ def create_training_job(project_id: str):
         else:
             return result  # Return error response
 
-        # Create training job
-        state = service.create_training_job(job_name, train_config, project_id)
+        # Create training job (may raise ValueError for duplicate job_name)
+        try:
+            state = service.create_training_job(job_name, train_config, project_id)
+        except ValueError as e:
+            # Job name is not unique
+            return jsonify({
+                'error': t('errors.conflict'),
+                'message': t('errors.job_name_duplicate')
+            }), 409
 
         if not state:
             # Task manager is busy

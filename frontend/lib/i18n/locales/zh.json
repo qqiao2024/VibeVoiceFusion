@@ -463,7 +463,8 @@
     "layerOffloadingInfo": "将一些层移至CPU以减少GPU内存使用，但会降低速度",
     "trainingMetrics": "训练指标",
     "metricsNotAvailable": "指标不可用",
-    "autoRefreshingEvery": "每隔"
+    "autoRefreshingEvery": "每隔",
+    "clickLegendToToggle": "💡 点击图例项以显示/隐藏特定指标"
   },
   "dataset": {
     "title": "数据集管理",
