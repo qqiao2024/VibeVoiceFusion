@@ -87,9 +87,9 @@ function TrainingHistory() {
       }
       setShowDeleteDialog(false);
       setSingleDeleteId(null);
-    } catch (error) {
-      console.error('Delete failed:', error);
-      toast.error(error instanceof Error ? error.message : t('training.deleteFailed'));
+    } catch (err) {
+      console.error('Delete failed:', err);
+      toast.error(err instanceof Error ? err.message : t('training.deleteFailed'));
     }
   }, [singleDeleteId, deleteJob, t]);
 
@@ -252,7 +252,7 @@ function TrainingHistory() {
                         try {
                           api.downloadLoRAFile(currentProject.id, state.task_id, filePath);
                           toast.success(t('training.downloadStarted'));
-                        } catch (error) {
+                        } catch {
                           toast.error(t('training.downloadFailed'));
                         }
                       }}

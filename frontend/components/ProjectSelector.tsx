@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useProject } from "@/lib/ProjectContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { useRouter } from "next/navigation";
@@ -78,9 +79,11 @@ export default function ProjectSelector() {
         <div className="text-center mb-12">
           {/* Logo */}
           <div className="flex justify-center mb-6">
-            <img
+            <Image
               src="/icon-rect-pulse.svg"
               alt="VibeVoice Logo"
+              width={96}
+              height={96}
               className="w-24 h-24"
             />
           </div>

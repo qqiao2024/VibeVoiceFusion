@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useProject } from "@/lib/ProjectContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
@@ -160,9 +161,11 @@ export default function Navigation() {
         <div className="p-6 border-b border-gray-800">
           <div className="flex items-center gap-3 mb-3">
           {/* Logo */}
-          <img
+          <Image
             src="/icon-rect-pulse.svg"
             alt="VibeVoice Logo"
+            width={40}
+            height={40}
             className="w-10 h-10 flex-shrink-0"
           />
           <div>

@@ -164,6 +164,14 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
     }
   }, [projectId, fetchStates, fetchCurrentState]);
 
+  // Refresh both current and all states
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      fetchStates(),
+      fetchCurrentState()
+    ]);
+  }, [fetchStates, fetchCurrentState]);
+
   // Delete a training job
   const deleteJob = useCallback(async (jobId: string): Promise<void> => {
     if (!projectId) {
@@ -197,6 +205,7 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
       setError(null);
       // TODO: Replace with actual API call when backend is ready
       // await api.cancelTrainingJob(projectId, jobId);
+      console.log('Cancel training job:', jobId); // Placeholder until API is implemented
 
       // Refresh to get updated status
       await refreshAll();
@@ -205,15 +214,7 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
       setError(errorMessage);
       throw err;
     }
-  }, [projectId]);
-
-  // Refresh both current and all states
-  const refreshAll = useCallback(async () => {
-    await Promise.all([
-      fetchStates(),
-      fetchCurrentState()
-    ]);
-  }, [fetchStates, fetchCurrentState]);
+  }, [projectId, refreshAll]);
 
   // Initial load
   useEffect(() => {

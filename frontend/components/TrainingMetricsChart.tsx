@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import type { TrainingMetrics, MetricDataPoint } from '@/types/training';
+import type { TrainingMetrics } from '@/types/training';
 
 interface TrainingMetricsChartProps {
   projectId: string;
@@ -62,6 +62,7 @@ export default function TrainingMetricsChart({
       const interval = setInterval(fetchMetrics, refreshInterval);
       return () => clearInterval(interval);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, jobId, autoRefresh, refreshInterval]);
 
   // Transform data for recharts
@@ -69,6 +70,7 @@ export default function TrainingMetricsChart({
     if (!metrics?.loss) return [];
 
     // Combine all step-based loss metrics
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stepMap = new Map<number, any>();
 
     metrics.loss.train_loss.forEach(point => {
@@ -104,6 +106,7 @@ export default function TrainingMetricsChart({
   const prepareTimingData = () => {
     if (!metrics?.timing) return [];
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stepMap = new Map<number, any>();
 
     metrics.timing.step_time.forEach(point => {
@@ -145,6 +148,7 @@ export default function TrainingMetricsChart({
   }
 
   // Handler for legend click to toggle line visibility
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleLegendClick = (e: any) => {
     const dataKey = e.dataKey;
     if (!dataKey || typeof dataKey !== 'string') return;
@@ -163,6 +167,7 @@ export default function TrainingMetricsChart({
   };
 
   // Custom legend formatter to show active/inactive state
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderLegend = (props: any) => {
     const { payload } = props;
     if (!payload) return null;
@@ -172,6 +177,7 @@ export default function TrainingMetricsChart({
 
     return (
       <ul className="flex justify-center gap-4 flex-wrap" style={{ listStyle: 'none', padding: 0 }}>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {payload.map((entry: any, index: number) => {
           const isVisible = visibleLines ? visibleLines[entry.dataKey as keyof typeof visibleLines] : true;
           return (
