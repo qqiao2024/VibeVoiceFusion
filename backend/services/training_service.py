@@ -291,7 +291,7 @@ class TrainingService:
             return False
 
         # Only allow deletion of completed jobs
-        if state.status != "Completed":
+        if state.status == "Prepare" or state.status == "Training":
             logger.warning(f"Cannot delete job {job_id}: status is {state.status}, only Completed jobs can be deleted")
             return False
 

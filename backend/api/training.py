@@ -168,10 +168,15 @@ def list_training_jobs(project_id: str):
 
         # List all jobs
         states = service.list_jobs()
+        results = []
+        for state in states:
+            state_dict = state.to_dict()
+            state_dict['all_lora_files'] = state.get_all_lora_files()
+            results.append(state_dict)
 
         return jsonify({
-            'states': [state.to_dict() for state in states],
-            'count': len(states)
+            'states': results,
+            'count': len(results)
         }), 200
 
     except Exception as e:
@@ -204,9 +209,11 @@ def get_current_training_job(project_id: str):
         current_state = service.get_current_job()
 
         if current_state:
+            result = current_state.to_dict()
+            result['all_lora_files'] = current_state.get_all_lora_files()
             return jsonify({
                 'message': 'Current training job retrieved successfully',
-                'state': current_state.to_dict()
+                'state': result
             }), 200
         else:
             return jsonify({
