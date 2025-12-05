@@ -69,7 +69,53 @@ function CurrentTraining() {
   const renderStatusDetails = () => {
     // TRAINING phase - show live metrics
     if (currentState.status === 'Training' && currentState.current_epoch !== null && currentState.total_epochs !== null) {
-      const progressPercentage = (currentState.current_epoch / currentState.total_epochs) * 100;
+      // Calculate smooth progress that moves continuously throughout training
+      // Uses steps_per_epoch and steps_in_epoch for accurate intra-epoch progress
+      let progressPercentage = 0;
+
+      if (currentState.current_epoch !== null &&
+          currentState.total_epochs !== null &&
+          currentState.total_epochs > 0) {
+
+        // Calculate number of completed epochs (epochs that have finished)
+        const completedEpochs = Math.max(0, currentState.current_epoch - 1);
+
+        // Calculate progress within the current epoch
+        let progressInCurrentEpoch = 0;
+
+        if (currentState.steps_per_epoch !== null &&
+            currentState.steps_per_epoch > 0 &&
+            currentState.steps_in_epoch !== null) {
+          // BEST: We know steps_per_epoch, so we can calculate exact progress within epoch
+          progressInCurrentEpoch = currentState.steps_in_epoch / currentState.steps_per_epoch;
+        } else if (currentState.current_epoch === 1 &&
+                   currentState.steps_in_epoch !== null &&
+                   currentState.steps_in_epoch > 0) {
+          // FIRST EPOCH EDGE CASE: steps_per_epoch is still 0 during first epoch
+          // We don't know total steps per epoch yet, so estimate conservatively
+          // Show progress within first epoch but cap at 90% to avoid exceeding epoch boundary
+          // This provides visual feedback that training is progressing
+          const estimatedMaxStepsInFirstEpoch = currentState.steps_in_epoch * 1.5; // Assume we're at least 67% through
+          progressInCurrentEpoch = Math.min(0.9, currentState.steps_in_epoch / estimatedMaxStepsInFirstEpoch);
+        } else if (currentState.current_step !== null &&
+                   currentState.estimated_total_steps !== null &&
+                   currentState.estimated_total_steps > 0) {
+          // FALLBACK: Use global step progress
+          progressPercentage = (currentState.current_step / currentState.estimated_total_steps) * 100;
+        } else {
+          // LAST RESORT: Just use epoch boundaries (no intra-epoch progress)
+          progressInCurrentEpoch = 0;
+        }
+
+        // If we calculated progress using epochs (not global steps)
+        if (progressPercentage === 0) {
+          // Total progress = (completed_epochs + progress_in_current_epoch) / total_epochs
+          progressPercentage = ((completedEpochs + progressInCurrentEpoch) / currentState.total_epochs) * 100;
+        }
+      }
+
+      // Clamp to 0-99.9% (never show 100% until status becomes "Completed")
+      progressPercentage = Math.min(99.9, Math.max(0, progressPercentage));
 
       return (
         <div className="space-y-3">

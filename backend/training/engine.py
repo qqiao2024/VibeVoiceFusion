@@ -3,7 +3,8 @@ from datetime import datetime
 from backend.training.state import TrainingState, TrainingStateWriter
 
 from vibevoice.training.summary_visitor import SummaryVisitor
-from vibevoice.training.trainer import TrainConfig, VibeVoiceTrainer, Trainer, FakeTrainer
+from vibevoice.training.trainer import TrainConfig, VibeVoiceTrainer, Trainer
+from vibevoice.training.fake_trainer import FakeTrainer
 from vibevoice.training.trainer_visitor import TrainerVisitor, VisitorManager
 
 
@@ -49,7 +50,7 @@ class BaseTrainingEngine(TrainerVisitor):
     def visit_step_begin(self, timestamp: float, step: int, epoch: int,
                          step_in_epoch: int, lr: float, global_step: int):
         self.step_start_time = datetime.fromtimestamp(timestamp)
-        self.state.current_step = step
+        self.state.current_step = global_step
         self.state.learning_rate = lr
         self.state.current_timestamp = datetime.fromtimestamp(timestamp)
         self.state.current_epoch = epoch
@@ -64,8 +65,11 @@ class BaseTrainingEngine(TrainerVisitor):
             self.state.latest_step_elapsed = step_elapsed
         else:
             self.state.latest_step_elapsed = (self.state.current_timestamp - self.step_start_time).total_seconds()
+
         self.state.average_step_time = (self.state.current_timestamp - self.state.start_time).total_seconds() / global_step
         self.state.steps_per_second = global_step / (self.state.current_timestamp - self.state.start_time).total_seconds()
+        self.state.steps_in_epoch = step_in_epoch
+
         if global_step % self.update_step_interval == 0:
             self.state_writer.update_state(self.state)
 
@@ -74,7 +78,7 @@ class BaseTrainingEngine(TrainerVisitor):
         self.state.learning_rate = lr
         self.epoch_start_time = datetime.fromtimestamp(timestamp)
 
-    def visit_epoch_end(self, timestamp: float, epoch: int, lr: float, avg_loss: float, avg_diffusion_loss: float, avg_ce_loss: float, epoch_elapsed: float):
+    def visit_epoch_end(self, timestamp: float, epoch: int, lr: float, avg_loss: float, avg_diffusion_loss: float, avg_ce_loss: float, epoch_elapsed: float, steps_in_epoch: int):
         self.state.current_timestamp = datetime.fromtimestamp(timestamp)
         self.state.latest_epoch_elapsed = (self.state.current_timestamp - self.epoch_start_time).total_seconds()
         self.state.average_epoch_loss = avg_loss
@@ -83,6 +87,7 @@ class BaseTrainingEngine(TrainerVisitor):
         self.state.current_epoch = epoch
         self.state.estimated_total_elpase = (self.state.current_timestamp - self.state.start_time).total_seconds() / (epoch + 1) * self.state.total_epochs
         self.state_writer.update_state(self.state)
+        self.state.steps_per_epoch = steps_in_epoch
 
     def visit_training_failed(self, timestamp, error_msg):
         self.state.status = "Failed"

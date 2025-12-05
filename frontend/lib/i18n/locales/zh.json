@@ -466,7 +466,12 @@
     "autoRefreshingEvery": "每隔",
     "clickLegendToToggle": "💡 点击图例项以显示/隐藏特定指标",
     "downloadStarted": "开始下载",
-    "downloadFailed": "下载文件失败"
+    "downloadFailed": "下载文件失败",
+    "deleteSelected": "删除选中（{count}）",
+    "confirmBulkDelete": "确定要删除 {count} 个训练任务吗？这也会删除所有相关的LoRA文件。",
+    "bulkDeleteSuccess": "成功删除 {count} 个训练任务",
+    "bulkDeleteFailed": "删除某些训练任务失败",
+    "itemsSelected": "• 已选中 {count} 个"
   },
   "dataset": {
     "title": "数据集管理",

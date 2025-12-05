@@ -104,7 +104,7 @@ class SummaryVisitor(TrainerVisitor):
             elapsed = timestamp - self.start_timestamp
             self.writer.add_scalar("timing/elapsed_time_at_epoch_start", elapsed, epoch)
 
-    def visit_epoch_end(self, timestamp: float, epoch: int, epoch_elapsed: float, loss: float, diffusion_loss: float, ce_loss: float, total_run_steps: int):
+    def visit_epoch_end(self, timestamp: float, epoch: int, epoch_elapsed: float, loss: float, diffusion_loss: float, ce_loss: float, total_run_steps: int, steps_in_epoch: int):
         """Log epoch-level training metrics."""
         # Log epoch losses (average over the epoch)
         self.writer.add_scalar("epoch/loss", loss, epoch)

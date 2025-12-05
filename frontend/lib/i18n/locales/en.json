@@ -466,7 +466,12 @@
     "autoRefreshingEvery": "Auto-refreshing every",
     "clickLegendToToggle": "💡 Click legend items to show/hide specific metrics",
     "downloadStarted": "Download started",
-    "downloadFailed": "Failed to download file"
+    "downloadFailed": "Failed to download file",
+    "deleteSelected": "Delete Selected ({count})",
+    "confirmBulkDelete": "Are you sure you want to delete {count} training job{plural}? This will also delete all associated LoRA files.",
+    "bulkDeleteSuccess": "Successfully deleted {count} training job{plural}",
+    "bulkDeleteFailed": "Failed to delete some training jobs",
+    "itemsSelected": "• {count} selected"
   },
   "dataset": {
     "title": "Dataset Management",

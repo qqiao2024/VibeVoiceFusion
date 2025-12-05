@@ -42,6 +42,8 @@ class TrainingState:
     latest_step_elapsed: float = 0.0
     average_step_time: float = 0.0
     steps_per_second: float = 0.0
+    steps_per_epoch: int = 0
+    steps_in_epoch: int = 0
 
     # Training status
     status: str = "Prepare"  # Prepare, Training, Completed, Failed

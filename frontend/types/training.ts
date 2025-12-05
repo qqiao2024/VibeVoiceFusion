@@ -55,6 +55,8 @@ export interface TrainingState {
   latest_step_elapsed: number | null;
   average_step_time: number | null;
   steps_per_second: number | null;
+  steps_per_epoch: number | null;      // Number of steps per epoch (0 until first epoch completes)
+  steps_in_epoch: number | null;       // Current step number within the current epoch
 
   // Status
   status: TrainingStatus;

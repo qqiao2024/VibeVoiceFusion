@@ -10,7 +10,7 @@ import type { TrainingState, TrainingStatus } from '@/types/training';
 import toast from 'react-hot-toast';
 
 function TrainingHistory() {
-  const { states, loading, deleteJob } = useTraining();
+  const { states, loading, deleteJob, batchDeleteJobs } = useTraining();
   const { currentProject } = useProject();
   const { t } = useLanguage();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -24,6 +24,7 @@ function TrainingHistory() {
 
   // Confirmation dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<'single' | 'batch'>('single');
   const [singleDeleteId, setSingleDeleteId] = useState<string | null>(null);
 
   const toggleDetails = useCallback((jobId: string) => {
@@ -76,26 +77,67 @@ function TrainingHistory() {
   // Delete handlers
   const handleDeleteClick = useCallback((jobId: string) => {
     setSingleDeleteId(jobId);
+    setDeleteMode('single');
+    setShowDeleteDialog(true);
+  }, []);
+
+  const handleBatchDeleteClick = useCallback(() => {
+    setDeleteMode('batch');
     setShowDeleteDialog(true);
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
     try {
-      if (singleDeleteId) {
+      if (deleteMode === 'single' && singleDeleteId) {
         await deleteJob(singleDeleteId);
         toast.success(t('training.deleteSuccess'));
+        // Clear selection if the deleted item was selected
+        setSelectedIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(singleDeleteId);
+          return newSet;
+        });
+      } else if (deleteMode === 'batch' && selectedIds.size > 0) {
+        // Use batch delete API - backend handles deletion one by one
+        const idsToDelete = Array.from(selectedIds);
+
+        const result = await batchDeleteJobs(idsToDelete);
+
+        // Clear all selections after batch delete
+        setSelectedIds(new Set());
+
+        // Show appropriate message based on results
+        if (result.failedCount === 0) {
+          const plural = result.deletedCount !== 1 ? 's' : '';
+          toast.success(
+            t('training.bulkDeleteSuccess')
+              .replace('{count}', result.deletedCount.toString())
+              .replace('{plural}', plural)
+          );
+        } else if (result.deletedCount > 0) {
+          toast.error(
+            `Deleted ${result.deletedCount} job(s), but ${result.failedCount} failed`,
+            { duration: 5000 }
+          );
+        } else {
+          toast.error(t('training.bulkDeleteFailed'));
+        }
       }
       setShowDeleteDialog(false);
       setSingleDeleteId(null);
     } catch (err) {
       console.error('Delete failed:', err);
-      toast.error(err instanceof Error ? err.message : t('training.deleteFailed'));
+      const errorMessage = deleteMode === 'batch'
+        ? t('training.bulkDeleteFailed')
+        : (err instanceof Error ? err.message : t('training.deleteFailed'));
+      toast.error(errorMessage);
     }
-  }, [singleDeleteId, deleteJob, t]);
+  }, [deleteMode, singleDeleteId, selectedIds, deleteJob, batchDeleteJobs, t]);
 
   const handleCancelDelete = useCallback(() => {
     setShowDeleteDialog(false);
     setSingleDeleteId(null);
+    // Don't clear selectedIds on cancel - keep the selection
   }, []);
 
   // Pagination handlers
@@ -362,21 +404,39 @@ function TrainingHistory() {
         </div>
       ) : (
         <>
-          {/* Select all checkbox */}
+          {/* Select all checkbox and batch actions */}
           {paginatedStates.length > 0 && (
-            <div className="mb-2 flex items-center gap-2 px-2">
-              <input
-                type="checkbox"
-                checked={isAllSelected}
-                ref={(el) => {
-                  if (el) el.indeterminate = isSomeSelected;
-                }}
-                onChange={toggleSelectAll}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-              />
-              <label className="text-sm text-gray-700 cursor-pointer" onClick={toggleSelectAll}>
-                {isAllSelected ? t('training.deselectAll') : t('training.selectAllOnPage')}
-              </label>
+            <div className="mb-2 flex items-center justify-between px-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isSomeSelected;
+                  }}
+                  onChange={toggleSelectAll}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <label className="text-sm text-gray-700 cursor-pointer" onClick={toggleSelectAll}>
+                  {isAllSelected ? t('training.deselectAll') : t('training.selectAllOnPage')}
+                </label>
+                {selectedIds.size > 0 && (
+                  <span className="text-xs text-gray-500">
+                    {t('training.itemsSelected').replace('{count}', selectedIds.size.toString())}
+                  </span>
+                )}
+              </div>
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={handleBatchDeleteClick}
+                  className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  <span>{t('training.deleteSelected').replace('{count}', selectedIds.size.toString())}</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -578,7 +638,13 @@ function TrainingHistory() {
         <div className="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
             <h3 className="text-lg font-semibold mb-2">{t('training.confirmDeletionTitle')}</h3>
-            <p className="text-gray-600 mb-4">{t('training.confirmDelete')}</p>
+            <p className="text-gray-600 mb-4">
+              {deleteMode === 'single'
+                ? t('training.confirmDelete')
+                : t('training.confirmBulkDelete')
+                    .replace('{count}', selectedIds.size.toString())
+                    .replace('{plural}', selectedIds.size !== 1 ? 's' : '')}
+            </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={handleCancelDelete}

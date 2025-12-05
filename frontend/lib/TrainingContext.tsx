@@ -16,6 +16,7 @@ interface TrainingContextType {
   fetchCurrentState: () => Promise<void>;
   startTraining: (request: CreateTrainingRequest) => Promise<TrainingState>;
   deleteJob: (jobId: string) => Promise<void>;
+  batchDeleteJobs: (jobIds: string[]) => Promise<{ deletedCount: number; failedCount: number }>;
   cancelJob: (jobId: string) => Promise<void>;
   refreshAll: () => Promise<void>;
 }
@@ -178,22 +179,47 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
       throw new Error('No project selected');
     }
 
-    // Optimistic update - remove from local state immediately
-    const previousStates = states;
-    setStates(prevStates => prevStates.filter(s => s.task_id !== jobId));
-
     try {
       setError(null);
+      // Delete from backend first (no optimistic update for batch operations)
       await api.deleteTrainingJob(projectId, jobId);
-      // Success - the item is already removed from UI
+      // On success, remove from local state
+      setStates(prevStates => prevStates.filter(s => s.task_id !== jobId));
     } catch (err) {
-      // Rollback on error - restore the previous state
-      setStates(previousStates);
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete training job';
       setError(errorMessage);
       throw err;
     }
-  }, [projectId, states]);
+  }, [projectId]);
+
+  // Batch delete training jobs
+  const batchDeleteJobs = useCallback(async (jobIds: string[]): Promise<{ deletedCount: number; failedCount: number }> => {
+    if (!projectId) {
+      throw new Error('No project selected');
+    }
+
+    try {
+      setError(null);
+      // Call backend batch delete API
+      const response = await api.batchDeleteTrainingJobs(projectId, jobIds);
+
+      // Remove successfully deleted jobs from local state
+      if (response.deleted_ids && response.deleted_ids.length > 0) {
+        setStates(prevStates =>
+          prevStates.filter(s => !response.deleted_ids.includes(s.task_id))
+        );
+      }
+
+      return {
+        deletedCount: response.deleted_count,
+        failedCount: response.failed_count
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to batch delete training jobs';
+      setError(errorMessage);
+      throw err;
+    }
+  }, [projectId]);
 
   // Cancel a running training job
   const cancelJob = useCallback(async (jobId: string): Promise<void> => {
@@ -254,6 +280,7 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
     fetchCurrentState,
     startTraining,
     deleteJob,
+    batchDeleteJobs,
     cancelJob,
     refreshAll
   };
