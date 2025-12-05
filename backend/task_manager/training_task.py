@@ -1,6 +1,9 @@
 
 from backend.task_manager.task import Task
 from backend.training.engine import BaseTrainingEngine
+from util.logger import get_logger
+
+logger = get_logger(__name__)
 
 class TrainingTask(Task):
 
@@ -30,4 +33,8 @@ class TrainingTask(Task):
         pass
 
     def _task_finalize(self):
-        self.training_engine.finalize()
+        try:
+            self.training_engine.finalize()
+        except Exception as e:
+            logger.warning(f"Ignore error with the training task finalize failed for task {self.task_id}:", exc_info=e)
+            pass

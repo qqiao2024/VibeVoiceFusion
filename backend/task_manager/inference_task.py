@@ -43,7 +43,11 @@ class InferenceTask(Task):
         self._save_metadata(generations)
 
     def _task_finalize(self):
-        self._update_metadata(self.inference.generation.to_dict())
+        try:
+            self._update_metadata(self.inference.generation.to_dict())
+        except Exception as e:
+            logger.warning(f"Ignored with the inference task finalize failed for task {self.task_id}:", exc_info=e)
+            pass
 
     def _load_metadata(self) -> List[Dict[str, Any]]:
         """

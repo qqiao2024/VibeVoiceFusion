@@ -129,6 +129,10 @@ class TrainingEngine(BaseTrainingEngine):
         initial_state.tensorboard_logdir = log_prefix
         super().__init__(trainer, task_id, state_writer, update_step_interval, initial_state)
 
+    def finalize(self):
+        super().finalize()
+        self.trainer.training_cleanup()
+
 
 class FakeTrainingEngine(BaseTrainingEngine):
     """

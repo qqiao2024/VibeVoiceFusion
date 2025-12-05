@@ -141,6 +141,10 @@ class Trainer(ABC):
     def _train(self):
         pass
 
+    @abstractmethod
+    def training_cleanup(self):
+        pass
+
 class VibeVoiceTrainer(Trainer):
 
     def __init__(self, train_config: TrainConfig, visitor: Optional[TrainerVisitor] = None):
@@ -156,6 +160,8 @@ class VibeVoiceTrainer(Trainer):
             self.offload_config = None
         self.dtype = torch.bfloat16 if train_config.dtype == "bfloat16" else torch.float8_e4m3fn
         self.device = torch.device(train_config.device)
+        self.model: torch.nn.Module = None
+        self.network: LoRANetwork = None
 
     def _train(self):
         metadata = self.train_config.to_metadata()
@@ -166,23 +172,23 @@ class VibeVoiceTrainer(Trainer):
 
         model_file = Path(self.train_config.model_path)
         config_dict = self.get_model_config()
-        model = self._load_model(model_file, self.dtype, config_dict)
-        model.requires_grad_(False)  # Freeze the model parameters
+        self.model = self._load_model(model_file, self.dtype, config_dict)
+        self.model.requires_grad_(False)  # Freeze the model parameters
 
         processor = VibeVoiceProcessor.from_pretrained(None)
-        train_dataloader = self._get_dataloader(processor, model)
+        train_dataloader = self._get_dataloader(processor, self.model)
 
-        network : LoRANetwork = create_network(model,
-                                               self.train_config.multiplier,
-                                               self.train_config.lora_dim,
-                                               self.train_config.lora_alpha,
-                                               self.train_config.lora_dropout)
-        network.apply_to()
-        network.to(device=self.device, dtype=torch.bfloat16)  # only support cuda and bfloat16 for training
-        trainable_parameter, _ = network.prepare_optimizer_params(self.train_config.learning_rate)
+        self.network : LoRANetwork = create_network(self.model,
+                                                    self.train_config.multiplier,
+                                                    self.train_config.lora_dim,
+                                                    self.train_config.lora_alpha,
+                                                    self.train_config.lora_dropout)
+        self.network.apply_to()
+        self.network.to(device=self.device, dtype=torch.bfloat16)  # only support cuda and bfloat16 for training
+        trainable_parameter, _ = self.network.prepare_optimizer_params(self.train_config.learning_rate)
         optimizer_name, optimizer_args, optimizer, optimizer_train_fn, optimizer_eval_fn = self._get_optimizer(trainable_parameter)
 
-        self._patch_acoustic_encode_for_legacy_indexing(model)  # patch speech acoustic encode for legacy indexing
+        self._patch_acoustic_encode_for_legacy_indexing(self.model)  # patch speech acoustic encode for legacy indexing
 
         optimizer.zero_grad()
         gradient_accumulation_steps = self.train_config.gradient_accumulation_steps
@@ -237,7 +243,7 @@ class VibeVoiceTrainer(Trainer):
                     )
 
                     inputs = self._preprocess_inputs(inputs)
-                    output = model.call_for_train(**inputs)
+                    output = self.model.call_for_train(**inputs)
                     real_loss = self.train_config.ce_loss_weight * output.loss + self.train_config.diffusion_loss_weight * output.diffusion_loss
                     real_loss.backward()
                     step += 1
@@ -302,7 +308,7 @@ class VibeVoiceTrainer(Trainer):
                 checkpoint_metadata["checkpoint_loss"] = f"{real_loss.item():.4f}"
                 checkpoint_metadata["checkpoint_ce_loss"] = f"{output.loss.item():.4f}"
                 checkpoint_metadata["checkpoint_diffusion_loss"] = f"{output.diffusion_loss.item():.4f}"
-                model_file = self.save_model(checkpoint_metadata, network, global_step, epoch + 1)
+                model_file = self.save_model(checkpoint_metadata, self.network, global_step, epoch + 1)
                 self.visitor.visit_lora_file_saved(model_file)
                 logger.info(f"Checkpoint saved at epoch {epoch + 1}")
 
@@ -328,7 +334,7 @@ class VibeVoiceTrainer(Trainer):
             total_run_epochs=self.train_config.epochs
         )
 
-        final_lora_file = self.save_model(metadata, network, global_step, epoch + 1)
+        final_lora_file = self.save_model(metadata, self.network, global_step, epoch + 1)
         self.visitor.visit_final_lora_file_saved(final_lora_file)
 
     def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int) -> str:
@@ -542,6 +548,13 @@ class VibeVoiceTrainer(Trainer):
         except Exception as e:
             logger.warning(f"Failed to patch acoustic_tokenizer.encode(): {e}")
 
+    def training_cleanup(self):
+        if self.model is not None:
+            del self.model
+        if self.network is not None:
+            del self.network
+        torch.cuda.empty_cache()
+
 
 class FakeTrainer(Trainer):
     def __init__(self,
@@ -746,3 +759,7 @@ class FakeTrainer(Trainer):
 
         logger.info(f"FakeTrainer: Mock model saved to {ckpt_file}")
         return ckpt_file
+
+    def training_cleanup(self):
+        """Cleanup resources after training if needed."""
+        logger.info("FakeTrainer: Cleaning up resources after training.")
