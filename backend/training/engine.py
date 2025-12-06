@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.training.state import TrainingState, TrainingStateWriter
 
 from vibevoice.training.summary_visitor import SummaryVisitor
@@ -27,8 +27,8 @@ class BaseTrainingEngine(TrainerVisitor):
     def visit_training_begin(self, timestamp: float, batch_size: int, total_epochs: int,
                              lr_rate: float, accumlate_grad_steps: int, data_repeat: int):
         self.state.status = "Training"
-        self.state.start_time = datetime.fromtimestamp(timestamp)
-        self.state.current_timestamp = datetime.fromtimestamp(timestamp)
+        self.state.start_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        self.state.current_timestamp = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         self.state.current_step = 0
         self.state.learning_rate = lr_rate
         self.state.total_epochs = total_epochs
@@ -39,7 +39,7 @@ class BaseTrainingEngine(TrainerVisitor):
                            ce_loss: float, total_elapsed: float, total_run_steps: int,
                            total_run_epochs: int):
         self.state.status = "Completed"
-        self.state.current_timestamp = datetime.fromtimestamp(timestamp)
+        self.state.current_timestamp = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         self.state.current_loss = loss
         self.state.current_diffusion_loss = diffusion_loss
         self.state.current_ce_loss = ce_loss
@@ -49,15 +49,15 @@ class BaseTrainingEngine(TrainerVisitor):
 
     def visit_step_begin(self, timestamp: float, step: int, epoch: int,
                          step_in_epoch: int, lr: float, global_step: int):
-        self.step_start_time = datetime.fromtimestamp(timestamp)
+        self.step_start_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         self.state.current_step = global_step
         self.state.learning_rate = lr
-        self.state.current_timestamp = datetime.fromtimestamp(timestamp)
+        self.state.current_timestamp = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         self.state.current_epoch = epoch
 
     def visit_step_end(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float,
                        global_step: int, loss: float, diffusion_loss: float, ce_loss: float, step_elapsed: float):
-        self.state.current_timestamp = datetime.fromtimestamp(timestamp)
+        self.state.current_timestamp = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         self.state.current_loss = loss
         self.state.current_diffusion_loss = diffusion_loss
         self.state.current_ce_loss = ce_loss
@@ -76,10 +76,10 @@ class BaseTrainingEngine(TrainerVisitor):
     def visit_epoch_begin(self, timestamp: float, epoch: int, lr: float):
         self.state.current_epoch = epoch
         self.state.learning_rate = lr
-        self.epoch_start_time = datetime.fromtimestamp(timestamp)
+        self.epoch_start_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
 
     def visit_epoch_end(self, timestamp: float, epoch: int, lr: float, avg_loss: float, avg_diffusion_loss: float, avg_ce_loss: float, epoch_elapsed: float, steps_in_epoch: int):
-        self.state.current_timestamp = datetime.fromtimestamp(timestamp)
+        self.state.current_timestamp = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         self.state.latest_epoch_elapsed = (self.state.current_timestamp - self.epoch_start_time).total_seconds()
         self.state.average_epoch_loss = avg_loss
         self.state.average_epoch_diffusion_loss = avg_diffusion_loss

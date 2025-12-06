@@ -3,7 +3,7 @@ from flask import current_app
 from pathlib import Path
 from uuid import uuid4
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import shutil
 
 from backend.task_manager.training_task import TrainingTask
@@ -121,7 +121,7 @@ class TrainingService:
             job_name=job_name,
             project_id=project_id,
             config=train_config.to_dict(),
-            created_at=datetime.utcnow().isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
             status="Prepare"
         )
 
@@ -223,24 +223,55 @@ class TrainingService:
 
     def get_current_job(self) -> Optional[TrainingState]:
         """
-        Get the currently running training job from task manager
+        Get the currently running training job from task manager, or the most recent
+        completed/failed job if it finished within the last 10 seconds
 
         Returns:
-            TrainingState with live metrics if training is active, None otherwise
+            TrainingState with live metrics if training is active,
+            or recently completed/failed state, None otherwise
         """
         task = gm.get_current_task()
-        if not task:
+
+        # If there's an active task, return its live state
+        if task:
+            engine = task.unwrap()
+            if isinstance(engine, BaseTrainingEngine):
+                live_state = engine.get_state()
+                return live_state
+            elif engine is not None:
+                # current is inference task, ignored for training
+                return None
+
+        # No active task - check if there's a recently completed/failed job
+        # This helps the frontend catch the final state in fast-completing jobs (FAKE_MODEL)
+        states_meta = self._load_metadata()
+        if not states_meta:
             return None
 
-        # Check if it's a training task
-        engine = task.unwrap()
-        if not isinstance(engine, BaseTrainingEngine):
+        # Find the most recent completed or failed job
+        recent_jobs = []
+        for state_dict in states_meta.values():
+            try:
+                state = TrainingState.from_dict(state_dict)
+                if state.status in ['Completed', 'Failed'] and state.current_timestamp:
+                    recent_jobs.append(state)
+            except Exception:
+                continue
+
+        if not recent_jobs:
             return None
 
-        # Get live state from engine
-        live_state = engine.get_state()
+        # Sort by current_timestamp (most recent first)
+        recent_jobs.sort(key=lambda x: x.current_timestamp or datetime.min, reverse=True)
+        most_recent = recent_jobs[0]
 
-        return live_state
+        # Only return if completed within the last 10 seconds (to catch fast completions)
+        if most_recent.current_timestamp:
+            elapsed = (datetime.now(timezone.utc) - most_recent.current_timestamp).total_seconds()
+            if elapsed <= 10:
+                return most_recent
+
+        return None
 
     def get_lora_file_path(self, job_id: str, filename: str) -> Optional[Path]:
         """

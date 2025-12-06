@@ -19,6 +19,7 @@ interface TrainingContextType {
   batchDeleteJobs: (jobIds: string[]) => Promise<{ deletedCount: number; failedCount: number }>;
   cancelJob: (jobId: string) => Promise<void>;
   refreshAll: () => Promise<void>;
+  clearCurrentState: () => void;
 }
 
 const TrainingContext = createContext<TrainingContextType | undefined>(undefined);
@@ -69,15 +70,19 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
       const response = await api.getCurrentTrainingState(projectId);
       const newCurrentState = response.state;
 
-      // Check if we had an active job that just completed (became null)
+      // Check if we had an active job that just completed
       const hadActiveJob = previousStatusRef.current !== null && activeTaskIdRef.current !== null;
+      const wasActive = previousStatusRef.current && ['Prepare', 'Training'].includes(previousStatusRef.current);
       const jobNowNull = newCurrentState === null;
+      const jobNowCompleted = newCurrentState && ['Completed', 'Failed'].includes(newCurrentState.status);
 
-      // If we had an active job and now it's null, it completed!
-      if (hadActiveJob && jobNowNull) {
+      // Detect completion: either job became null OR status changed from active to completed/failed
+      const justCompleted = hadActiveJob && wasActive && (jobNowNull || jobNowCompleted);
+
+      if (justCompleted) {
         const completedTaskId = activeTaskIdRef.current;
 
-        // Do final poll to get the completed state
+        // Fetch the final state and refresh full history
         if (projectId && completedTaskId) {
           try {
             const finalResponse = await api.getTrainingState(projectId, completedTaskId);
@@ -94,7 +99,7 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
               return [finalState, ...prevStates];
             });
 
-            // Refresh full history
+            // Refresh full history to ensure consistency
             await fetchStates();
           } catch (err) {
             console.error('Error in final poll:', err);
@@ -102,15 +107,22 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
           }
         }
 
-        // Clear tracking refs
-        previousStatusRef.current = null;
-        activeTaskIdRef.current = null;
+        // Update tracking refs even if job is completed (not null)
+        if (jobNowCompleted) {
+          previousStatusRef.current = newCurrentState!.status;
+          activeTaskIdRef.current = newCurrentState!.task_id;
+        } else {
+          // Job is null
+          previousStatusRef.current = null;
+          activeTaskIdRef.current = null;
+        }
       }
 
       setCurrentState(newCurrentState);
 
       // If there's a current state, update it in the states list without re-fetching
-      if (newCurrentState) {
+      // (unless we just did a completion refresh above)
+      if (newCurrentState && !justCompleted) {
         // Track the status for transition detection
         previousStatusRef.current = newCurrentState.status;
         activeTaskIdRef.current = newCurrentState.task_id;
@@ -242,6 +254,13 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
     }
   }, [projectId, refreshAll]);
 
+  // Clear current state (for dismissing completed/failed training)
+  const clearCurrentState = useCallback(() => {
+    setCurrentState(null);
+    previousStatusRef.current = null;
+    activeTaskIdRef.current = null;
+  }, []);
+
   // Initial load
   useEffect(() => {
     if (projectId) {
@@ -250,6 +269,7 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
   }, [projectId, refreshAll]);
 
   // Poll for current state updates (every 2 seconds when there's an active job)
+  // Continue polling for 5 seconds after completion to ensure frontend catches the final state
   useEffect(() => {
     // Only poll if there's an active state
     if (!currentState) {
@@ -258,8 +278,10 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
 
     const currentStatus = currentState.status;
     const isActive = ['Prepare', 'Training'].includes(currentStatus);
+    const isRecentlyCompleted = ['Completed', 'Failed'].includes(currentStatus);
 
-    if (!isActive) {
+    // Poll during active training OR for 5 seconds after completion (to catch fast FAKE_MODEL runs)
+    if (!isActive && !isRecentlyCompleted) {
       return;
     }
 
@@ -268,7 +290,20 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
       fetchCurrentState();
     }, 2000);
 
-    return () => clearInterval(interval);
+    // If completed/failed, stop polling after 5 seconds
+    let completionTimeout: NodeJS.Timeout | null = null;
+    if (isRecentlyCompleted) {
+      completionTimeout = setTimeout(() => {
+        clearInterval(interval);
+      }, 5000);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (completionTimeout) {
+        clearTimeout(completionTimeout);
+      }
+    };
   }, [currentState, fetchCurrentState]);
 
   const value: TrainingContextType = {
@@ -282,7 +317,8 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
     deleteJob,
     batchDeleteJobs,
     cancelJob,
-    refreshAll
+    refreshAll,
+    clearCurrentState
   };
 
   return (

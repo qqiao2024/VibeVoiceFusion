@@ -8,13 +8,17 @@ import TrainingMetricsChart from '@/components/TrainingMetricsChart';
 import type { TrainingStatus } from '@/types/training';
 
 function CurrentTraining() {
-  const { currentState } = useTraining();
+  const { currentState, clearCurrentState } = useTraining();
   const { currentProject } = useProject();
   const { t } = useLanguage();
 
   if (!currentState || !currentProject) {
     return null;
   }
+
+  const handleStartNewTraining = () => {
+    clearCurrentState();
+  };
 
   const getStatusColor = (status: TrainingStatus): string => {
     switch (status) {
@@ -350,6 +354,19 @@ function CurrentTraining() {
               />
             </div>
           )}
+
+          {/* Start New Training Button */}
+          <div className="bg-white bg-opacity-90 rounded p-4">
+            <button
+              onClick={handleStartNewTraining}
+              className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+              </svg>
+              {t('training.startNewTraining')}
+            </button>
+          </div>
         </div>
       );
     }
@@ -361,6 +378,19 @@ function CurrentTraining() {
           <label className="text-sm font-medium opacity-75 block">{t('training.errorInformation')}</label>
           <div className="bg-white bg-opacity-90 rounded p-4">
             <pre className="text-xs whitespace-pre-wrap">{currentState.error_message}</pre>
+          </div>
+
+          {/* Start New Training Button */}
+          <div className="bg-white bg-opacity-90 rounded p-4">
+            <button
+              onClick={handleStartNewTraining}
+              className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+              </svg>
+              {t('training.startNewTraining')}
+            </button>
           </div>
         </div>
       );
@@ -379,6 +409,9 @@ function CurrentTraining() {
     );
   };
 
+  const isCompleted = currentState.status === 'Completed' || currentState.status === 'Failed';
+  const titleKey = isCompleted ? 'training.trainingSummary' : 'training.currentTraining';
+
   return (
     <div
       className={`border-2 rounded-lg p-6 shadow-lg ${getStatusColor(
@@ -394,7 +427,7 @@ function CurrentTraining() {
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-current"></span>
               </span>
             )}
-            {t('training.currentTraining')}
+            {t(titleKey)}
           </h2>
           <span className="px-3 py-1 rounded-full text-xs font-semibold border-2">
             {getStatusLabel(currentState.status)}

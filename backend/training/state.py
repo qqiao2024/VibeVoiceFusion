@@ -1,5 +1,5 @@
 from dataclasses import dataclass, asdict, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from backend.utils.file_handler import FileHandler
@@ -83,15 +83,23 @@ class TrainingState:
     def from_dict(cls, data: Dict[str, Any]) -> 'TrainingState':
         """Create TrainingState from dictionary"""
 
-        # Convert ISO strings back to datetime
+        # Convert ISO strings back to datetime (ensure timezone-aware)
         if 'start_time' in data and isinstance(data['start_time'], str):
             try:
-                data['start_time'] = datetime.fromisoformat(data['start_time'])
+                dt = datetime.fromisoformat(data['start_time'])
+                # If naive datetime, assume UTC
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                data['start_time'] = dt
             except (ValueError, TypeError):
                 data['start_time'] = None
         if 'current_timestamp' in data and isinstance(data['current_timestamp'], str):
             try:
-                data['current_timestamp'] = datetime.fromisoformat(data['current_timestamp'])
+                dt = datetime.fromisoformat(data['current_timestamp'])
+                # If naive datetime, assume UTC
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                data['current_timestamp'] = dt
             except (ValueError, TypeError):
                 data['current_timestamp'] = None
         return cls(**data)
