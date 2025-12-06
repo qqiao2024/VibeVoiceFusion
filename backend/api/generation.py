@@ -5,12 +5,13 @@ from uuid import uuid4
 from typing import Dict, Any
 from flask import request, jsonify, current_app, send_file
 from backend.api import api_bp
+from backend.inference.inference import InferenceBase
 from backend.models.generation import Generation
 from backend.services.voice_gerneration_service import VoiceGenerationService
 from backend.services.dialog_session_service import DialogSessionService
 from backend.services.speaker_service import SpeakerService
 from backend.services.project_service import ProjectService
-from backend.gen_voice.task import gm
+from backend.task_manager.task import gm, Task
 from backend.i18n import t
 from util.logger import get_logger
 
@@ -187,18 +188,20 @@ def get_current_generation():
     Returns:
         JSON response with current generation status (200 with null if none active)
     """
-    generation: Generation = gm.get_current_generation()
-    if not generation:
+    task: Task = gm.get_current_task()
+    if not task or not isinstance(task.unwrap(), InferenceBase):
         return jsonify({
-            'message': 'No active generation at the moment',
+            'message': 'No active generation task at the moment',
             'generation': None
         }), 200
+    inference: InferenceBase = task.unwrap()
+    generation: Generation = inference.generation
 
     # Enrich with session name
     try:
         if generation.project_id:
             project_service = ProjectService(workspace_dir=current_app.config['WORKSPACE_DIR'],
-                                           meta_file_name=current_app.config['PROJECTS_META_FILE'])
+                                             meta_file_name=current_app.config['PROJECTS_META_FILE'])
             project_path = project_service.get_project_path(generation.project_id)
 
             if project_path:

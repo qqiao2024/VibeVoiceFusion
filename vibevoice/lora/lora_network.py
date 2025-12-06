@@ -92,7 +92,6 @@ class LoRAModule(nn.Module):
         return org_forwarded + lx * self.multiplier * scale
 
 class LoRANetwork(nn.Module):
-    # only supports U-Net (DiT), Text Encoders are not supported
 
     def __init__(
         self,
@@ -264,7 +263,6 @@ class LoRANetwork(nn.Module):
                     logger.info(f"no weight for {lora.lora_name}")
                     continue
 
-                # lora.merge_to(sd_for_lora, dtype, device)
                 futures.append(executor.submit(lora.merge_to, sd_for_lora, dtype, device, non_blocking))
 
         for future in futures:

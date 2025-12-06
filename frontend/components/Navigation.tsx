@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useProject } from "@/lib/ProjectContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
@@ -14,36 +15,74 @@ interface MenuItem {
   icon: React.ReactNode;
 }
 
-const getMenuItems = (): MenuItem[] => [
+interface MenuGroup {
+  id: string;
+  labelKey: string;
+  items: MenuItem[];
+}
+
+const getMenuGroups = (): MenuGroup[] => [
   {
-    id: "speaker-role",
-    labelKey: "navigation.speakerRole",
-    path: "/speaker-role",
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-      </svg>
-    ),
+    id: "inference",
+    labelKey: "navigation.inference",
+    items: [
+      {
+        id: "speaker-role",
+        labelKey: "navigation.speakerRole",
+        path: "/speaker-role",
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        ),
+      },
+      {
+        id: "voice-editor",
+        labelKey: "navigation.voiceEditor",
+        path: "/voice-editor",
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        ),
+      },
+      {
+        id: "generate-voice",
+        labelKey: "navigation.generateVoice",
+        path: "/generate-voice",
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    id: "voice-editor",
-    labelKey: "navigation.voiceEditor",
-    path: "/voice-editor",
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-      </svg>
-    ),
-  },
-  {
-    id: "generate-voice",
-    labelKey: "navigation.generateVoice",
-    path: "/generate-voice",
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-      </svg>
-    ),
+    id: "training",
+    labelKey: "navigation.training",
+    items: [
+      {
+        id: "dataset",
+        labelKey: "navigation.dataset",
+        path: "/dataset",
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+          </svg>
+        ),
+      },
+      {
+        id: "fine-tuning",
+        labelKey: "navigation.fineTuning",
+        path: "/fine-tuning",
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        ),
+      },
+    ],
   },
 ];
 
@@ -56,7 +95,7 @@ export default function Navigation() {
   const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const menuItems = getMenuItems();
+  const menuGroups = getMenuGroups();
 
   // Only show project-dependent content after client-side mount
   useEffect(() => {
@@ -122,9 +161,11 @@ export default function Navigation() {
         <div className="p-6 border-b border-gray-800">
           <div className="flex items-center gap-3 mb-3">
           {/* Logo */}
-          <img
+          <Image
             src="/icon-rect-pulse.svg"
             alt="VibeVoice Logo"
+            width={40}
+            height={40}
             className="w-10 h-10 flex-shrink-0"
           />
           <div>
@@ -196,36 +237,48 @@ export default function Navigation() {
       </div>
 
       {/* Menu Items */}
-      <div className="flex-1 py-4">
-        {menuItems.map((item) => {
-          const isActive = pathname === item.path;
+      <div className="flex-1 py-4 overflow-y-auto">
+        {menuGroups.map((group, groupIndex) => (
+          <div key={group.id} className={groupIndex > 0 ? "mt-6" : ""}>
+            {/* Group Header */}
+            <div className="px-6 mb-2">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {t(group.labelKey)}
+              </h3>
+            </div>
 
-          return (
-            <Link
-              key={item.id}
-              href={item.path}
-              className={`
-                flex items-center space-x-3 px-6 py-3 transition-all duration-200
-                relative
-                ${
-                  isActive
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-300 hover:bg-gray-800 hover:text-white"
-                }
-              `}
-            >
-              {/* Active indicator */}
-              {isActive && (
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-400" />
-              )}
+            {/* Group Items */}
+            {group.items.map((item) => {
+              const isActive = pathname === item.path;
 
-              <div className={isActive ? "text-white" : "text-gray-400"}>
-                {item.icon}
-              </div>
-              <span className="font-medium text-sm">{t(item.labelKey)}</span>
-            </Link>
-          );
-        })}
+              return (
+                <Link
+                  key={item.id}
+                  href={item.path}
+                  className={`
+                    flex items-center space-x-3 px-6 py-3 transition-all duration-200
+                    relative
+                    ${
+                      isActive
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                    }
+                  `}
+                >
+                  {/* Active indicator */}
+                  {isActive && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-400" />
+                  )}
+
+                  <div className={isActive ? "text-white" : "text-gray-400"}>
+                    {item.icon}
+                  </div>
+                  <span className="font-medium text-sm">{t(item.labelKey)}</span>
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       {/* Footer */}

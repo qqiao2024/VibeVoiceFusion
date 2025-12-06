@@ -5,13 +5,13 @@ import json
 import toml
 
 from typing import Any, Dict, Optional
+from abc import ABC, abstractmethod
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from torch.utils.data import DataLoader
 
 from config.configuration_vibevoice import VibeVoiceConfig, DEFAULT_CONFIG
-from util.rand_init import get_generator
 from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalInference
 from vibevoice.modular.adaptive_offload import OffloadConfig
 from vibevoice.lora.lora_network import create_network, LoRANetwork
@@ -47,7 +47,7 @@ class TrainConfig:
     speech_compress_ratio: int = 3200
     semantic_dim: int = 128
     diffusion_loss_weight: float = 10.4
-    ce_loss_weight: float = 0.004 
+    ce_loss_weight: float = 0.004
     device : str = "cuda"
     gradient_accumulation_steps: int = 16
     dataload_workers: int = 2
@@ -83,14 +83,14 @@ class TrainConfig:
             dataload_workers=config_dict.get("dataload_workers", 2),
             save_model_per_num_epoch=config_dict.get("save_model_per_num_epoch", config_dict.get("number_epoch_save_model", 10)),
         )
-    
+
     @classmethod
     def from_toml(cls, toml_path: str) -> "TrainConfig":
         config_dict = {}
         with open(toml_path, 'r') as f:
             config_dict = toml.load(f)
         return cls.from_dict(config_dict)
-    
+
     def to_metadata(self) -> Dict[str, Any]:
         return {
             "lora_name": self.lora_name,
@@ -107,7 +107,7 @@ class TrainConfig:
             "number_of_layers": str(self.number_of_layers),
             "dtype": self.dtype,
             "model_config_path": self.model_config_path or "",
-            "optimizer":  self.optimizer_type + (f"({self.optimizer_args})" if len(self.optimizer_args) > 0 else ""),
+            "optimizer": self.optimizer_type + (f"({self.optimizer_args})" if self.optimizer_args and len(self.optimizer_args) > 0 else ""),
             "seeds": str(self.seeds),
             "dataset_repeats": str(self.dataset_repeats),
             "speech_compress_ratio": str(self.speech_compress_ratio),
@@ -117,16 +117,38 @@ class TrainConfig:
             "gradient_accumulation_steps": str(self.gradient_accumulation_steps),
             "dataload_workers": str(self.dataload_workers),
             "save_model_per_num_epoch": str(self.save_model_per_num_epoch),
-        }   
+        }
 
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
-class VibeVoiceTrainer:
+class Trainer(ABC):
 
     def __init__(self, train_config: TrainConfig, visitor: Optional[TrainerVisitor] = None):
         if not os.path.exists(train_config.model_path):
             raise FileNotFoundError(f"Model file {train_config.model_path} does not exist.")
-
         self.train_config = train_config
+        self.visitor = visitor if visitor is not None else VisitorManager()
+
+    def train(self):
+        try:
+            self._train()
+        except Exception as e:
+            self.visitor.visit_training_failed(datetime.now().timestamp(), str(e))
+            raise e
+
+    @abstractmethod
+    def _train(self):
+        pass
+
+    @abstractmethod
+    def training_cleanup(self):
+        pass
+
+class VibeVoiceTrainer(Trainer):
+
+    def __init__(self, train_config: TrainConfig, visitor: Optional[TrainerVisitor] = None):
+        super().__init__(train_config, visitor)
         if train_config.number_of_layers > 0:
             self.offload_config = OffloadConfig(
                 enabled=True,
@@ -138,39 +160,38 @@ class VibeVoiceTrainer:
             self.offload_config = None
         self.dtype = torch.bfloat16 if train_config.dtype == "bfloat16" else torch.float8_e4m3fn
         self.device = torch.device(train_config.device)
-        self.visitor = visitor if visitor is not None else VisitorManager()
+        self.model: torch.nn.Module = None
+        self.network: LoRANetwork = None
 
-    def train(self):
-
+    def _train(self):
         metadata = self.train_config.to_metadata()
         logger.info(f"Training configuration: {metadata}")
 
         torch.manual_seed(self.train_config.seeds)
         torch.cuda.manual_seed_all(self.train_config.seeds)
 
-        model_file = Path(self.train_config.model_path) / Path(f"vibevoice7b_{'bf16' if self.dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors")
+        model_file = Path(self.train_config.model_path)
         config_dict = self.get_model_config()
-        model = self._load_model(model_file, self.dtype, config_dict)
-        model.requires_grad_(False)  # Freeze the model parameters
+        self.model = self._load_model(model_file, self.dtype, config_dict)
+        self.model.requires_grad_(False)  # Freeze the model parameters
 
         processor = VibeVoiceProcessor.from_pretrained(None)
-        train_dataloader = self._get_dataloader(processor, model)
+        train_dataloader = self._get_dataloader(processor, self.model)
 
-        network :LoRANetwork = create_network(model,
-                                              self.train_config.multiplier,
-                                              self.train_config.lora_dim,
-                                              self.train_config.lora_alpha,
-                                              self.train_config.lora_dropout)
-        network.apply_to()
-        network.to(device=self.device, dtype=torch.bfloat16)  # only support cuda and bfloat16 for training
-        trainable_parameter, _ = network.prepare_optimizer_params(self.train_config.learning_rate)
+        self.network : LoRANetwork = create_network(self.model,
+                                                    self.train_config.multiplier,
+                                                    self.train_config.lora_dim,
+                                                    self.train_config.lora_alpha,
+                                                    self.train_config.lora_dropout)
+        self.network.apply_to()
+        self.network.to(device=self.device, dtype=torch.bfloat16)  # only support cuda and bfloat16 for training
+        trainable_parameter, _ = self.network.prepare_optimizer_params(self.train_config.learning_rate)
         optimizer_name, optimizer_args, optimizer, optimizer_train_fn, optimizer_eval_fn = self._get_optimizer(trainable_parameter)
 
-        self._patch_acoustic_encode_for_legacy_indexing(model)  # 
+        self._patch_acoustic_encode_for_legacy_indexing(self.model)  # patch speech acoustic encode for legacy indexing
 
         optimizer.zero_grad()
         gradient_accumulation_steps = self.train_config.gradient_accumulation_steps
-        current_step = 0
         global_step = 0
         start_time = datetime.now()
         logger.info(f"Optimizer: {optimizer_name}({optimizer_args}) | Learning Rate: {self.train_config.learning_rate}")
@@ -179,7 +200,7 @@ class VibeVoiceTrainer:
 
         logger.info(f"Starting training for {self.train_config.epochs} epochs | total_steps is approx. {total_steps} | batch_size: {self.train_config.batch_size} | gradient_accumulation_steps: {gradient_accumulation_steps}")
         optimizer_train_fn()
-        
+
         # Notify training begin
         self.visitor.visit_training_begin(
             timestamp=start_time.timestamp(),
@@ -193,59 +214,64 @@ class VibeVoiceTrainer:
         for epoch in range(self.train_config.epochs):
             logger.info(f"\nepoch {epoch + 1}/{self.train_config.epochs}")
             epoch_start_time = datetime.now()
-            
+
             # Notify epoch begin
             self.visitor.visit_epoch_begin(
                 timestamp=epoch_start_time.timestamp(),
                 epoch=epoch + 1,
                 lr=self.train_config.learning_rate
             )
-            
+
             epoch_loss_sum = 0.0
             epoch_ce_loss_sum = 0.0
             epoch_diffusion_loss_sum = 0.0
             epoch_steps = 0
-            
+
             for _ in range(self.train_config.dataset_repeats):
-                for step, inputs in enumerate(train_dataloader):
+                step = 0
+                for _, inputs in enumerate(train_dataloader):
                     step_start_time = datetime.now()
-                    
+
                     # Notify step begin
                     self.visitor.visit_step_begin(
-                        timestemp=step_start_time.timestamp(),
+                        timestamp=step_start_time.timestamp(),
                         step=step + 1,
                         epoch=epoch + 1,
                         step_in_epoch=step + 1,
                         lr=self.train_config.learning_rate,
                         global_step=global_step
                     )
-                    
+
                     inputs = self._preprocess_inputs(inputs)
-                    output = model.call_for_train(**inputs)
+                    output = self.model.call_for_train(**inputs)
                     real_loss = self.train_config.ce_loss_weight * output.loss + self.train_config.diffusion_loss_weight * output.diffusion_loss
                     real_loss.backward()
-                    current_step += 1
+                    step += 1
                     global_step += 1
-                    
+
                     # Accumulate losses for epoch average
                     epoch_loss_sum += real_loss.item()
                     epoch_ce_loss_sum += output.loss.item()
                     epoch_diffusion_loss_sum += output.diffusion_loss.item()
                     epoch_steps += 1
-                    
-                    if current_step % gradient_accumulation_steps == 0:
+
+                    if gradient_accumulation_steps > 0:
+                        if global_step % gradient_accumulation_steps == 0:
+                            optimizer.step()
+                            optimizer.zero_grad()
+                    else:
                         optimizer.step()
                         optimizer.zero_grad()
-                    
+
                     step_end_time = datetime.now()
                     step_elapsed = (step_end_time - step_start_time).total_seconds()
-                    
+
                     # Notify step end
                     self.visitor.visit_step_end(
                         timestamp=step_end_time.timestamp(),
-                        step=step + 1,
+                        step=step,
                         epoch=epoch + 1,
-                        step_in_epoch=step + 1,
+                        step_in_epoch=epoch_steps,
                         lr=self.train_config.learning_rate,
                         global_step=global_step,
                         loss=real_loss.item(),
@@ -253,17 +279,17 @@ class VibeVoiceTrainer:
                         ce_loss=output.loss.item(),
                         step_elapsed=step_elapsed
                     )
-            
+
             # Calculate epoch averages
             epoch_avg_loss = epoch_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
             epoch_avg_ce_loss = epoch_ce_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
             epoch_avg_diffusion_loss = epoch_diffusion_loss_sum / epoch_steps if epoch_steps > 0 else 0.0
-            
+
             epoch_end_time = datetime.now()
             epoch_elapsed = (epoch_end_time - epoch_start_time).total_seconds()
-            
+
             logger.info(f"Epoch {epoch + 1} completed, and current loss is {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, diffusion_loss: {output.diffusion_loss.item():.4f}")
-            
+
             # Notify epoch end
             self.visitor.visit_epoch_end(
                 timestamp=epoch_end_time.timestamp(),
@@ -272,9 +298,10 @@ class VibeVoiceTrainer:
                 loss=epoch_avg_loss,
                 diffusion_loss=epoch_avg_diffusion_loss,
                 ce_loss=epoch_avg_ce_loss,
-                total_run_steps=global_step
+                total_run_steps=global_step,
+                steps_in_epoch=epoch_steps
             )
-            
+
             # Save checkpoint per number of epochs
             if self.train_config.save_model_per_num_epoch > 0 and (epoch + 1) % self.train_config.save_model_per_num_epoch == 0:
                 checkpoint_metadata = metadata.copy()
@@ -282,7 +309,8 @@ class VibeVoiceTrainer:
                 checkpoint_metadata["checkpoint_loss"] = f"{real_loss.item():.4f}"
                 checkpoint_metadata["checkpoint_ce_loss"] = f"{output.loss.item():.4f}"
                 checkpoint_metadata["checkpoint_diffusion_loss"] = f"{output.diffusion_loss.item():.4f}"
-                self.save_model(checkpoint_metadata, network, global_step, epoch + 1)
+                model_file = self.save_model(checkpoint_metadata, self.network, global_step, epoch + 1)
+                self.visitor.visit_lora_file_saved(model_file)
                 logger.info(f"Checkpoint saved at epoch {epoch + 1}")
 
         end_time = datetime.now()
@@ -295,7 +323,7 @@ class VibeVoiceTrainer:
         logger.info(f"Training completed. Final loss: {real_loss.item():.4f}, ce_loss: {output.loss.item():.4f}, "
                     f"diffusion_loss: {output.diffusion_loss.item():.4f}, total training steps: {global_step}, "
                     f"total time elapsed: {elapsed_seconds:.2f} seconds")
-        
+
         # Notify training end
         self.visitor.visit_training_end(
             timestamp=end_time.timestamp(),
@@ -306,26 +334,28 @@ class VibeVoiceTrainer:
             total_run_steps=global_step,
             total_run_epochs=self.train_config.epochs
         )
-        
-        self.save_model(metadata, network, global_step, epoch + 1)
 
-    def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int):
+        final_lora_file = self.save_model(metadata, self.network, global_step, epoch + 1)
+        self.visitor.visit_final_lora_file_saved(final_lora_file)
+
+    def save_model(self, metadata: Dict[str, str], network: LoRANetwork, steps: int, epoch_no: int) -> str:
         os.makedirs(self.train_config.output_dir, exist_ok=True)
         now = datetime.now()
         ckpt_file = os.path.join(self.train_config.output_dir, self.train_config.lora_name + f"_{now.strftime('%m%d%H%M')}_{epoch_no}_{steps}.safetensors")
         metadata["total_steps"] = str(steps)
         metadata["total_epoch"] = str(epoch_no)
         network.save_weights(ckpt_file, torch.bfloat16, metadata)
-    
+        return ckpt_file
+
     def _preprocess_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         inputs = self._to_device(inputs)
-        labels = inputs.get("input_ids")
-        attention_mask = inputs.get("attention_mask")
-        acoustic_input_mask = inputs.get("acoustic_input_mask")
+        # labels = inputs.get("input_ids")
+        # attention_mask = inputs.get("attention_mask")
+        # acoustic_input_mask = inputs.get("acoustic_input_mask")
 
         # Ensure semantic tensors exist and have correct dtype/device
         sem = inputs.get("speech_semantic_tensors", None)
-        target_dtype = torch.bfloat16 # all data must be bfloat16 for training
+        target_dtype = torch.bfloat16  # all data must be bfloat16 for training
 
         if sem is None:
             sm = inputs.get("speech_masks")
@@ -339,7 +369,7 @@ class VibeVoiceTrainer:
                 inputs["speech_semantic_tensors"] = zeros
         else:
             if isinstance(sem, torch.Tensor):
-                inputs["speech_semantic_tensors"] = sem.to(dtype=target_dtype)        
+                inputs["speech_semantic_tensors"] = sem.to(dtype=target_dtype)
 
         return inputs
 
@@ -367,7 +397,7 @@ class VibeVoiceTrainer:
         return config_dict
 
 
-    def _load_model(self, model_file: str,
+    def _load_model(self, model_file: Path,
                     dtype: torch.dtype = torch.bfloat16,
                     config_dict: dict = DEFAULT_CONFIG) -> VibeVoiceForConditionalInference:
         config = VibeVoiceConfig.from_dict(config_dict,
@@ -448,7 +478,7 @@ class VibeVoiceTrainer:
             eval_fn = optimizer.eval
 
         return optimizer_name, optimizer_args, optimizer, train_fn, eval_fn
-    
+
     def _get_dataloader(self, processor: VibeVoiceProcessor, model: VibeVoiceForConditionalInference) -> DataLoader:
 
         processor.semantic_tokenizer = getattr(model.model, "semantic_tokenizer", None)
@@ -465,7 +495,7 @@ class VibeVoiceTrainer:
 
         except Exception as e:
             raise RuntimeError(f"Failed to load dataset from {self.train_config.dataset_path}: {e}")
-       
+
         if len(dataset) == 0:
             raise ValueError(f"Dataset is empty. Please check the dataset jsonl file at {self.train_config.dataset_path}.")
 
@@ -474,8 +504,9 @@ class VibeVoiceTrainer:
                                           speech_compress_ratio=self.train_config.speech_compress_ratio,
                                           semantic_vae_dim=self.train_config.semantic_dim,
                                           compute_semantics=compute_semantics_flag,
-                                          debug_checks=False, 
+                                          debug_checks=False,
                                           dataset_root_path=os.path.dirname(self.train_config.dataset_path))
+
         return DataLoader(train_dataset,
                           batch_size=self.train_config.batch_size,
                           shuffle=True,
@@ -490,6 +521,7 @@ class VibeVoiceTrainer:
                 logger.warning("No acoustic_tokenizer.encode() found to patch.")
                 return
             base_encode = acoustic.encode
+
             def encode_wrapped(*args, **kwargs):
                 out = base_encode(*args, **kwargs)
                 try:
@@ -516,3 +548,11 @@ class VibeVoiceTrainer:
             logger.info("Patched acoustic_tokenizer.encode() to return [[...]] for legacy indexing.")
         except Exception as e:
             logger.warning(f"Failed to patch acoustic_tokenizer.encode(): {e}")
+
+    def training_cleanup(self):
+        if self.model is not None:
+            del self.model
+        if self.network is not None:
+            del self.network
+        torch.cuda.empty_cache()
+

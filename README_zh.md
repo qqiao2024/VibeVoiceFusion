@@ -443,7 +443,7 @@ vibevoice/
 │   │   └── generation.py   # 语音生成
 │   ├── services/           # 业务逻辑层
 │   ├── models/             # 数据模型
-│   ├── gen_voice/          # 后台任务队列
+│   ├── task_manager/          # 后台任务队列
 │   ├── inference/          # 推理引擎
 │   ├── i18n/              # 后端翻译
 │   └── dist/              # 前端静态文件（生产）

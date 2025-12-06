@@ -1,3 +1,4 @@
+from typing import List
 from abc import ABC, abstractmethod
 
 class TrainerVisitor(ABC):
@@ -10,7 +11,7 @@ class TrainerVisitor(ABC):
         pass
 
     @abstractmethod
-    def visit_step_begin(self, timestemp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
+    def visit_step_begin(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
         pass
 
     @abstractmethod
@@ -22,29 +23,41 @@ class TrainerVisitor(ABC):
         pass
 
     @abstractmethod
-    def visit_epoch_end(self, timestamp: float, epoch: int, epoch_elapsed: float, loss: float, diffusion_loss: float, ce_loss: float, total_run_steps: int):
+    def visit_epoch_end(self, timestamp: float, epoch: int, epoch_elapsed: float, loss: float, diffusion_loss: float, ce_loss: float, total_run_steps: int, steps_in_epoch: int):
+        pass
+
+    @abstractmethod
+    def visit_training_failed(self, timestamp: float, error_msg: str):
+        pass
+
+    @abstractmethod
+    def visit_lora_file_saved(self, lora_file: str):
+        pass
+
+    @abstractmethod
+    def visit_final_lora_file_saved(self, lora_file: str):
         pass
 
 
 class VisitorManager(TrainerVisitor):
     def __init__(self):
-        self.visitors = []
+        self.visitors : List[TrainerVisitor] = []
 
-    def register_visitors(self, visitor: TrainerVisitor):
+    def register_visitor(self, visitor: TrainerVisitor):
         self.visitors.append(visitor)
 
     def visit_training_begin(self, timestamp: float, batch_size: int, total_epochs: int, lr_rate: float, accumlate_grad_steps: int, data_repeat: int):
         for visitor in self.visitors:
             visitor.visit_training_begin(timestamp, batch_size, total_epochs, lr_rate, accumlate_grad_steps, data_repeat)
-    
+
     def visit_training_end(self, timestamp: float, loss: float, diffusion_loss: float, ce_loss: float, total_elapsed: float, total_run_steps: int, total_run_epochs: int):
         for visitor in self.visitors:
             visitor.visit_training_end(timestamp, loss, diffusion_loss, ce_loss, total_elapsed, total_run_steps, total_run_epochs)
-    
-    def visit_step_begin(self, timestemp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
+
+    def visit_step_begin(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int):
         for visitor in self.visitors:
-            visitor.visit_step_begin(timestemp, step, epoch, step_in_epoch, lr, global_step)
-    
+            visitor.visit_step_begin(timestamp, step, epoch, step_in_epoch, lr, global_step)
+
     def visit_step_end(self, timestamp: float, step: int, epoch: int, step_in_epoch: int, lr: float, global_step: int, loss: float, diffusion_loss: float, ce_loss: float, step_elapsed: float):
         for visitor in self.visitors:
             visitor.visit_step_end(timestamp, step, epoch, step_in_epoch, lr, global_step, loss, diffusion_loss, ce_loss, step_elapsed)
@@ -53,6 +66,18 @@ class VisitorManager(TrainerVisitor):
         for visitor in self.visitors:
             visitor.visit_epoch_begin(timestamp, epoch, lr)
 
-    def visit_epoch_end(self, timestamp: float, epoch: int, epoch_elapsed: float, loss: float, diffusion_loss: float, ce_loss: float, total_run_steps: int):
+    def visit_epoch_end(self, timestamp: float, epoch: int, epoch_elapsed: float, loss: float, diffusion_loss: float, ce_loss: float, total_run_steps: int, steps_in_epoch: int):
         for visitor in self.visitors:
-            visitor.visit_epoch_end(timestamp, epoch, epoch_elapsed, loss, diffusion_loss, ce_loss, total_run_steps)
+            visitor.visit_epoch_end(timestamp, epoch, epoch_elapsed, loss, diffusion_loss, ce_loss, total_run_steps, steps_in_epoch)
+
+    def visit_training_failed(self, timestamp: float, error_msg: str):
+        for visitor in self.visitors:
+            visitor.visit_training_failed(timestamp, error_msg)
+
+    def visit_lora_file_saved(self, lora_file: str):
+        for visitor in self.visitors:
+            visitor.visit_lora_file_saved(lora_file)
+
+    def visit_final_lora_file_saved(self, lora_file: str):
+        for visitor in self.visitors:
+            visitor.visit_final_lora_file_saved(lora_file)

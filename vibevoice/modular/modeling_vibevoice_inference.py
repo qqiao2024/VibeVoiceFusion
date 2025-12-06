@@ -279,7 +279,7 @@ class VibeVoiceForConditionalInference(nn.Module):
             last_hidden_state=hidden_states,
             attentions=outputs.attentions,
         )
-    
+
     def _build_generate_config_model_kwargs(self, generation_config, inputs, tokenizer, return_processors=False, **kwargs):
         if generation_config is None:
             generation_config = GenerationConfig(
@@ -316,9 +316,9 @@ class VibeVoiceForConditionalInference(nn.Module):
         input_ids = inputs_tensor.to(self.device)
 
         input_ids_length = input_ids.shape[1]
-        has_default_max_length = kwargs.get("max_length") is None and generation_config.max_length is not None
-        has_default_min_length = kwargs.get("min_length") is None and generation_config.min_length is not None
         # Commented out for now, as we handle max length simplicity
+        # has_default_max_length = kwargs.get("max_length") is None and generation_config.max_length is not None
+        # has_default_min_length = kwargs.get("min_length") is None and generation_config.min_length is not None
         # generation_config = self._prepare_generated_length(
         #     generation_config=generation_config,
         #     has_default_max_length=has_default_max_length,
@@ -328,6 +328,7 @@ class VibeVoiceForConditionalInference(nn.Module):
         #     input_ids_length=input_ids_length,
         # )
 
+        # Manually set max_length based on max_new_tokens
         generation_config.max_length = input_ids_length + generation_config.max_new_tokens
 
         max_cache_length = generation_config.max_length - 1
@@ -389,8 +390,8 @@ class VibeVoiceForConditionalInference(nn.Module):
 
         # 1. Handle `generation_config` and kwargs that might update it, and validate the `.generate()` call
         tokenizer = kwargs.pop("tokenizer", None)  # Pull this out first, we only use it for stopping criteria
-        parsed_scripts = kwargs.pop("parsed_scripts", None)
-        all_speakers_list = kwargs.pop("all_speakers_list", None)
+        # parsed_scripts = kwargs.pop("parsed_scripts", None)
+        # all_speakers_list = kwargs.pop("all_speakers_list", None)
         max_length_times = kwargs.pop("max_length_times", 2)
 
         if kwargs.get('max_new_tokens', None) is None:

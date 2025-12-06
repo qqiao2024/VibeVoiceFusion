@@ -10,6 +10,17 @@ import type {
   GetGenerationResponse
 } from '@/types/generation';
 
+import type {
+  CreateTrainingRequest,
+  CreateTrainingResponse,
+  CurrentTrainingResponse,
+  ListTrainingStatesResponse,
+  GetTrainingStateResponse,
+  DeleteTrainingResponse,
+  BatchDeleteTrainingResponse,
+  GetTrainingMetricsResponse
+} from '@/types/training';
+
 // API base URL configuration
 // Development: Full URL to backend server (different origin)
 // Production: Relative path (same origin, backend serves frontend)
@@ -40,6 +51,21 @@ export interface DialogSession {
   text_filename: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Dataset {
+  id: string;
+  name: string;
+  description: string;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatasetItem {
+  text: string;
+  audio: string;
+  voice_prompts: string[];
 }
 
 class ApiClient {
@@ -361,6 +387,358 @@ class ApiClient {
 
   getGenerationDownloadUrl(projectId: string, requestId: string): string {
     return `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/generations/${encodeURIComponent(requestId)}/download`;
+  }
+
+  // ============ Datasets API ============
+
+  async listDatasets(projectId: string): Promise<{ datasets: Dataset[]; count: number }> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/datasets`);
+  }
+
+  async getDataset(projectId: string, datasetId: string): Promise<Dataset> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}`
+    );
+  }
+
+  async createDataset(
+    projectId: string,
+    data: {
+      name: string;
+      description?: string;
+    }
+  ): Promise<Dataset> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/datasets`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateDataset(
+    projectId: string,
+    datasetId: string,
+    data: { name?: string; description?: string }
+  ): Promise<Dataset> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async deleteDataset(
+    projectId: string,
+    datasetId: string
+  ): Promise<{ message: string; dataset_id: string }> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
+  getDatasetExportUrl(projectId: string, datasetId: string): string {
+    return `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/export`;
+  }
+
+  async importToExistingDataset(
+    projectId: string,
+    datasetId: string,
+    datasetFile: File
+  ): Promise<Dataset> {
+    const formData = new FormData();
+    formData.append('dataset_file', datasetFile);
+
+    const url = `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/import`;
+    const locale = typeof window !== 'undefined'
+      ? localStorage.getItem('vibevoice-locale') || 'en'
+      : 'en';
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'X-Language': locale,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: response.statusText
+      }));
+      throw new Error(error.message || error.error || response.statusText);
+    }
+
+    return await response.json();
+  }
+
+  async importDataset(
+    projectId: string,
+    data: {
+      dataset_file: File;
+      name?: string;
+    }
+  ): Promise<Dataset> {
+    const formData = new FormData();
+    formData.append('dataset_file', data.dataset_file);
+    if (data.name) {
+      formData.append('name', data.name);
+    }
+
+    const url = `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/datasets/import`;
+    const locale = typeof window !== 'undefined'
+      ? localStorage.getItem('vibevoice-locale') || 'en'
+      : 'en';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Language': locale,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: response.statusText
+      }));
+      throw new Error(error.message || error.error || response.statusText);
+    }
+
+    return await response.json();
+  }
+
+  // ============ Dataset Items API ============
+
+  async listDatasetItems(
+    projectId: string,
+    datasetId: string,
+    options?: {
+      offset?: number;
+      limit?: number;
+    }
+  ): Promise<{
+    items: DatasetItem[];
+    count: number;
+    total: number;
+    offset: number;
+    limit: number | null;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.offset !== undefined) {
+      params.append('offset', options.offset.toString());
+    }
+    if (options?.limit !== undefined) {
+      params.append('limit', options.limit.toString());
+    }
+
+    const queryString = params.toString();
+    const endpoint = `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/items${queryString ? `?${queryString}` : ''}`;
+
+    return this.fetch(endpoint);
+  }
+
+  async createDatasetItem(
+    projectId: string,
+    datasetId: string,
+    data: {
+      text: string;
+      audio_file: File;
+      voice_prompt_files: File[];
+    }
+  ): Promise<DatasetItem> {
+    const formData = new FormData();
+    formData.append('text', data.text);
+    formData.append('audio_file', data.audio_file);
+    data.voice_prompt_files.forEach((file) => {
+      formData.append('voice_prompt_files', file);
+    });
+
+    const url = `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/items`;
+    const locale = typeof window !== 'undefined'
+      ? localStorage.getItem('vibevoice-locale') || 'en'
+      : 'en';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Language': locale,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: response.statusText
+      }));
+      throw new Error(error.message || error.error || response.statusText);
+    }
+
+    return await response.json();
+  }
+
+  async updateDatasetItem(
+    projectId: string,
+    datasetId: string,
+    itemIndex: number,
+    data: {
+      text?: string;
+      audio_file?: File;
+      voice_prompt_files?: File[];
+    }
+  ): Promise<DatasetItem> {
+    const formData = new FormData();
+    if (data.text !== undefined) {
+      formData.append('text', data.text);
+    }
+    if (data.audio_file) {
+      formData.append('audio_file', data.audio_file);
+    }
+    if (data.voice_prompt_files) {
+      data.voice_prompt_files.forEach((file) => {
+        formData.append('voice_prompt_files', file);
+      });
+    }
+
+    const url = `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/items/${itemIndex}`;
+    const locale = typeof window !== 'undefined'
+      ? localStorage.getItem('vibevoice-locale') || 'en'
+      : 'en';
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'X-Language': locale,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: response.statusText
+      }));
+      throw new Error(error.message || error.error || response.statusText);
+    }
+
+    return await response.json();
+  }
+
+  async deleteDatasetItem(
+    projectId: string,
+    datasetId: string,
+    itemIndex: number
+  ): Promise<{ message: string; item_index: number }> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/datasets/${encodeURIComponent(datasetId)}/items/${itemIndex}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
+  // ============ Training API ============
+
+  async createTrainingJob(
+    projectId: string,
+    request: CreateTrainingRequest
+  ): Promise<CreateTrainingResponse> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/training`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async listTrainingStates(
+    projectId: string
+  ): Promise<ListTrainingStatesResponse> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/training`);
+  }
+
+  async getCurrentTrainingState(
+    projectId: string
+  ): Promise<CurrentTrainingResponse> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/training/current`);
+  }
+
+  async getTrainingState(
+    projectId: string,
+    jobId: string
+  ): Promise<GetTrainingStateResponse> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}`
+    );
+  }
+
+  async deleteTrainingJob(
+    projectId: string,
+    jobId: string
+  ): Promise<DeleteTrainingResponse> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
+  async batchDeleteTrainingJobs(
+    projectId: string,
+    jobIds: string[]
+  ): Promise<BatchDeleteTrainingResponse> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/training/batch-delete`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ job_ids: jobIds }),
+      }
+    );
+  }
+
+  /**
+   * Get training metrics from TensorBoard logs
+   */
+  async getTrainingMetrics(
+    projectId: string,
+    jobId: string,
+    options?: {
+      maxPoints?: number;
+      metrics?: 'all' | 'loss' | 'learning_rate' | 'timing' | string;
+    }
+  ): Promise<GetTrainingMetricsResponse> {
+    const params = new URLSearchParams();
+    if (options?.maxPoints) {
+      params.append('max_points', options.maxPoints.toString());
+    }
+    if (options?.metrics) {
+      params.append('metrics', options.metrics);
+    }
+
+    const queryString = params.toString();
+    const url = `/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}/metrics${queryString ? '?' + queryString : ''}`;
+
+    return this.fetch(url);
+  }
+
+  /**
+   * Download a LoRA file from a completed training job
+   */
+  downloadLoRAFile(projectId: string, jobId: string, filename: string): void {
+    const url = `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}/lora/${encodeURIComponent(filename)}`;
+
+    // Create a temporary anchor element to trigger download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 }
 

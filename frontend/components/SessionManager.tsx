@@ -8,7 +8,7 @@ import toast from "react-hot-toast";
 
 export default function SessionManager() {
   const router = useRouter();
-  const { sessions, currentSession, selectSession, createSession, deleteSession, updateSession, loading, error } = useSession();
+  const { sessions, currentSession, createSession, deleteSession, updateSession, loading, error } = useSession();
   const { t } = useLanguage();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
