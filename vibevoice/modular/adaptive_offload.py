@@ -12,7 +12,7 @@ Key Features:
 """
 
 import torch
-from typing import Tuple, Optional
+from typing import Optional
 from vibevoice.modular.custom_offloading_utils import OffloadConfig
 import logging
 
@@ -174,7 +174,7 @@ class AdaptiveOffloadManager:
 
         # Get total and currently allocated memory
         total = torch.cuda.get_device_properties(device_id).total_memory
-        allocated = torch.cuda.memory_allocated(device_id)
+        _ = torch.cuda.memory_allocated(device_id)
         reserved = torch.cuda.memory_reserved(device_id)
 
         # Available = total - reserved (conservative estimate)
@@ -328,7 +328,7 @@ class AdaptiveOffloadManager:
             )
 
         logger.info("="*85)
-        logger.info(f"Note: Estimates assume batch_size=1, max_seq_len=4096")
+        logger.info(f"Note: Estimates assume batch_size=1, max_seq_len=4096, {layer_gb:.2f} GB per layer weights")
         logger.info("")
 
     @staticmethod
