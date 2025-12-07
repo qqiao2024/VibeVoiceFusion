@@ -64,6 +64,8 @@ class InferenceBase(ABC):
         self.dialog_service = dialog_service
         self.model_file = current_app.config['MODEL_PATH']
         self.meta_file_path = meta_file_path
+        self.lora_model_path = generation.lora_model_path
+        self.lora_weight = generation.lora_weight
 
     @staticmethod
     def create(generation: Generation, speaker_service: SpeakerService,
@@ -118,10 +120,8 @@ class InferenceBase(ABC):
                 offload_config=offload_config_obj
             )
 
-        return InferenceEngine(
-            generation, speaker_service, dialog_service, meta_file_path,
-            offload_config=offload_config_obj
-        )
+        return InferenceEngine(generation, speaker_service, dialog_service, meta_file_path, 
+                               offload_config=offload_config_obj)
 
     @abstractmethod
     def _load_model(self, dtype: torch.dtype, config: str = None):
@@ -197,7 +197,7 @@ class InferenceBase(ABC):
 
 class InferenceEngine(InferenceBase):
     def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
-                 offload_config: Optional[OffloadConfig] = None):
+                 offload_config: Optional[OffloadConfig] = None): 
         """
         Initialize inference engine with optional layer offloading.
 
@@ -241,7 +241,9 @@ class InferenceEngine(InferenceBase):
             str(model_file.resolve()),
             config,
             device=self.device,
-            offload_config=self.offload_config
+            offload_config=self.offload_config,
+            lora_model_path=self.lora_model_path,
+            lora_weight=self.lora_weight
         )
 
         model.eval()

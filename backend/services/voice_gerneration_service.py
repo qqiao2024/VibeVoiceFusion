@@ -153,10 +153,15 @@ class VoiceGenerationService:
             'failed_ids': failed_ids
         }
 
-    def generation(self, dialog_session_id: str, request_id: str, seeds: int = 42,
-                   cfg_scale: float = 1.3, model_dtype: str = "float8_e4m3fn",
-                   attn_implementation: str = "sdpa", project_id: str = None,
-                   offloading_config: Optional[Dict[str, Any]] = None) -> Generation:
+    def generation(self, dialog_session_id: str, request_id: str,
+                   seeds: int = 42,
+                   cfg_scale: float = 1.3, 
+                   model_dtype: str = "float8_e4m3fn",
+                   attn_implementation: str = "sdpa",
+                   project_id: str = None,
+                   offloading_config: Optional[Dict[str, Any]] = None,
+                   lora_model_path: Optional[str] = None,
+                   lora_weight: float = 1.0) -> Generation:
         """
         Generate voices for a specific dialog session
 
@@ -178,7 +183,9 @@ class VoiceGenerationService:
                                        model_dtype=model_dtype,
                                        attn_implementation=attn_implementation,
                                        project_id=project_id,
-                                       project_dir=str(self.output_dir))
+                                       project_dir=str(self.output_dir),
+                                       lora_model_path=lora_model_path,
+                                       lora_weight=lora_weight)
 
         # Store offloading config in generation details for reference
         if offloading_config:

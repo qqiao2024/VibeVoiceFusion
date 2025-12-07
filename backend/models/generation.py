@@ -31,6 +31,8 @@ class Generation:
     project_id: Optional[str] = None  # Project identifier
     project_dir: Optional[str] = None  # Output audio directory
     details: Dict[str, Any] = None  # Additional details
+    lora_model_path: Optional[str] = None  # Path to LoRA model file
+    lora_weight: float = 1.0  # Weight for LoRA model
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert generation request to dictionary"""
@@ -48,7 +50,9 @@ class Generation:
                model_dtype: str = "float8_e4m3fn",
                attn_implementation: str = "sdpa",
                project_id: str = None,
-               project_dir: str = "output/audio") -> 'Generation':
+               project_dir: str = "output/audio",
+               lora_model_path: Optional[str] = None,
+               lora_weight: float = 1.0) -> 'Generation':
         """Create a new generation request with timestamps"""
         now = datetime.utcnow().isoformat()
         return cls(
@@ -66,6 +70,8 @@ class Generation:
             project_id=project_id,
             project_dir=project_dir,
             details={},
+            lora_model_path=lora_model_path,
+            lora_weight=lora_weight,
         )
 
     def update_status(self, phase: InferencePhase, *args, **kwargs) -> None:

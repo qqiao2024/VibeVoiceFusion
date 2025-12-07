@@ -121,6 +121,8 @@ def get_voice_generation_service(project_id: str):
         cfg_scale = data.get('cfg_scale', 1.3)
         model_dtype = data.get('model_dtype', 'float8_e4m3fn')
         attn_implementation = data.get('attn_implementation', 'sdpa')
+        lora_model_path = data.get('lora_model_path', None)
+        lora_weight = data.get('lora_weight', 1.0)
 
         # Parse and validate offloading configuration (NEW)
         offloading_config = data.get('offloading')
@@ -160,7 +162,9 @@ def get_voice_generation_service(project_id: str):
                                                     model_dtype=model_dtype,
                                                     attn_implementation=attn_implementation,
                                                     project_id=project_id,
-                                                    offloading_config=validated_offloading)
+                                                    offloading_config=validated_offloading,
+                                                    lora_model_path=lora_model_path,
+                                                    lora_weight=lora_weight)
         if not generation:
             return jsonify({
                 'error': t('errors.internal_error'),
