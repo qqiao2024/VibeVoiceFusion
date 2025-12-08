@@ -42,7 +42,7 @@ def parse_filename(filename: str) -> Tuple[str, str]:
     Parse audio filename to extract category and person ID.
 
     Args:
-        filename: Audio filename (e.g., "1000001_0b1a33a3")
+        filename: Audio filename (e.g., "1000001_0b1a33a3") 
 
     Returns:
         Tuple of (category, person_id)
@@ -58,14 +58,14 @@ def group_by_person_and_dialect(
     text_dict: Dict[str, str]
 ) -> Dict[str, Dict[str, List[str]]]:
     """
-    Group audio files by dialect and person ID.
+    Group audio files by dialect and voice ID.
 
     Args:
-        utt2dialect: Mapping of utterance ID to dialect, category plus person ID mapping to dialect
-        text_dict: Mapping of utterance ID to text, category plus person ID mapping to text
+        utt2dialect: Mapping of utterance ID to dialect, category plus voice ID mapping to dialect
+        text_dict: Mapping of utterance ID to text, category plus voice ID mapping to text
 
     Returns:
-        Nested dictionary: {dialect: {person_id: [utterance_ids]}}, file_name in Audio/1029757/phase1/is utt_id
+        Nested dictionary: {dialect: {category: [utterance_ids]}}, file_name in Audio/1029757/phase1/is utt_id
     """
     grouped = {}
 
@@ -74,14 +74,14 @@ def group_by_person_and_dialect(
             continue
 
         dialect = utt2dialect[utt_id]
-        category, person_id = parse_filename(utt_id)
+        category, voice_id = parse_filename(utt_id)
 
         if dialect not in grouped:
             grouped[dialect] = {}
-        if person_id not in grouped[dialect]:
-            grouped[dialect][person_id] = []
+        if category not in grouped[dialect]:
+            grouped[dialect][category] = []
 
-        grouped[dialect][person_id].append(utt_id)
+        grouped[dialect][category].append(utt_id)
 
     return grouped
 
@@ -89,7 +89,7 @@ def group_by_person_and_dialect(
 def select_voice_prompts(
     audio_utt_id: str,
     dialect: str,
-    person_id: str,
+    category_id: str,
     grouped_data: Dict[str, Dict[str, List[str]]],
     num_prompts: int
 ) -> List[str]:
@@ -99,7 +99,7 @@ def select_voice_prompts(
     Args:
         audio_utt_id: The audio utterance ID
         dialect: The dialect of the audio
-        person_id: The person ID of the audio
+        voice_id: The voice ID of the audio
         grouped_data: Grouped audio data
         num_prompts: Number of voice prompts to select
 
@@ -108,15 +108,18 @@ def select_voice_prompts(
     """
     if dialect not in grouped_data:
         return []
-
+    
     # Collect all utterances with same dialect
     candidates = []
-    for pid, utts in grouped_data[dialect].items():
+    for cate_id, utts in grouped_data[dialect].items():
+        if cate_id != category_id:
+            continue
         for utt in utts:
-            if utt != audio_utt_id:  # Exclude the audio itself
+            if utt != audio_utt_id:  # Chose same person voice
                 candidates.append(utt)
 
     if not candidates:
+        print(f"Warning: No candidates found for dialect '{dialect}' and person '{category_id}', audio_utt_id '{audio_utt_id}'")
         return []
 
     # Randomly select voice prompts
@@ -170,23 +173,20 @@ def generate_dataset(
     else:
         dialects_to_process = list(grouped_data.keys())
 
-    print(f"Processing dialects: {dialects_to_process}")
+    print(f"Processing dialects: {dialects_to_process}, total {len(grouped_data[selected_dialect])} dialects")
 
     # Collect all valid utterances
     valid_utterances = []
     for dialect in dialects_to_process:
-        for person_id, utts in grouped_data[dialect].items():
+        for category_id, utts in grouped_data[dialect].items():
             for utt_id in utts:
                 if utt_id in text_dict:
-                    valid_utterances.append((utt_id, dialect, person_id))
+                    valid_utterances.append((utt_id, dialect, category_id))
 
     print(f"Found {len(valid_utterances)} valid utterances")
 
     # Limit number of files if specified
-    if max_files > 0:
-        random.shuffle(valid_utterances)
-        valid_utterances = valid_utterances[:max_files]
-        print(f"Limited to {len(valid_utterances)} utterances")
+    random.shuffle(valid_utterances)
 
     # Generate dataset entries
     dataset = []
@@ -195,20 +195,22 @@ def generate_dataset(
     total_utterances = len(valid_utterances)
     print("\nProcessing audio files...")
 
-    for idx, (utt_id, dialect, person_id) in enumerate(valid_utterances, 1):
+    rec_num = 0
+
+    for idx, (utt_id, dialect, category_id) in enumerate(valid_utterances, 1):
         # Display progress every 100 files or at the last file
         if idx % 100 == 0 or idx == total_utterances:
             print(f"Progress: {idx}/{total_utterances} ({idx*100//total_utterances}%) - Generated {len(dataset)} entries", end='\r')
 
         # Select voice prompts
         voice_prompts = select_voice_prompts(
-            utt_id, dialect, person_id, grouped_data, num_voice_prompts
+            utt_id, dialect, category_id, grouped_data, num_voice_prompts
         )
 
         if not voice_prompts:
             if idx % 100 == 0 or idx == total_utterances:
                 print()  # New line before warning
-            print(f"Warning: No voice prompts found for {utt_id}, skipping")
+            # print(f"Warning: No voice prompts found for {utt_id}, skipping")
             continue
 
         # Parse category from filename
@@ -232,6 +234,13 @@ def generate_dataset(
             vp_category, _ = parse_filename(vp)
             all_audio_files.add((vp, vp_category, phase, 'voice_prompts'))
 
+        rec_num += 1
+        if max_files is not None and rec_num >= max_files:
+            break
+
+    if max_files > 0:
+        dataset = dataset[:max_files]
+        print(f"Limited to {len(dataset)} utterances")
     print()  # New line after progress
     print(f"Generated {len(dataset)} dataset entries")
     return dataset, all_audio_files

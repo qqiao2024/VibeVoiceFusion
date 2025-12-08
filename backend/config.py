@@ -19,7 +19,7 @@ class Config:
     PROJECTS_META_FILE = 'projects.json'
 
     # Upload settings
-    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB max file size
+    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 500 * 1024 * 1024))  # 500MB max file size
     UPLOAD_FOLDER = Path(os.environ.get('UPLOAD_FOLDER', './uploads'))
     ALLOWED_AUDIO_EXTENSIONS = {'.wav', '.mp3', '.m4a', '.flac'}
 
