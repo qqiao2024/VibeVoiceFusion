@@ -39,6 +39,8 @@ export interface Generation {
   updated_at: string;
   project_id?: string | null;
   project_dir?: string | null;
+  lora_model_path?: string | null;  // Path to LoRA model file
+  lora_weight?: number;              // Weight for LoRA model (0, 1]
 }
 
 /**
@@ -144,4 +146,27 @@ export function getOffloadingConfig(generation: Generation): OffloadingConfig | 
  */
 export function getOffloadingMetrics(generation: Generation): OffloadingMetrics | null {
   return generation.details?.offloading_metrics || null;
+}
+
+/**
+ * Helper function to extract LoRA display name from full path
+ * Converts: /workspace/.../lora_output/abc/model_final.safetensors -> abc/model_final.safetensors
+ */
+export function getLoraDisplayName(loraPath: string | null | undefined): string | null {
+  if (!loraPath) return null;
+
+  // Find lora_output in the path and extract everything after it
+  const loraOutputIndex = loraPath.indexOf('lora_output/');
+  if (loraOutputIndex !== -1) {
+    return loraPath.substring(loraOutputIndex + 'lora_output/'.length);
+  }
+
+  // Fallback: get last two path components (lora_name/filename)
+  const parts = loraPath.split('/').filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[parts.length - 2]}/${parts[parts.length - 1]}`;
+  }
+
+  // Last fallback: just return the filename
+  return parts[parts.length - 1] || loraPath;
 }

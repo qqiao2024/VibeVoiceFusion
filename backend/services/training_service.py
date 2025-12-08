@@ -362,27 +362,26 @@ class TrainingService:
             if not lora_dir.is_dir():
                 continue
 
-            # Find safetensors files in the directory
+            # Find all safetensors files in the directory
             safetensors_files = list(lora_dir.glob("*.safetensors"))
             if not safetensors_files:
                 continue
 
-            # Prefer *_final.safetensors if available
-            final_files = [f for f in safetensors_files if f.name.endswith("_final.safetensors")]
-            target_file = final_files[0] if final_files else safetensors_files[0]
+            # Add ALL safetensors files, sorted with _final files first
+            for target_file in sorted(safetensors_files,
+                                       key=lambda f: (0 if f.name.endswith("_final.safetensors") else 1, f.name)):
+                # Create display name: lora_name/filename.safetensors
+                display_name = f"{lora_dir.name}/{target_file.name}"
 
-            # Create display name: lora_name/filename.safetensors
-            display_name = f"{lora_dir.name}/{target_file.name}"
+                lora_files.append({
+                    'display_name': display_name,
+                    'full_path': str(target_file),
+                    'lora_name': lora_dir.name,
+                    'filename': target_file.name
+                })
 
-            lora_files.append({
-                'display_name': display_name,
-                'full_path': str(target_file),
-                'lora_name': lora_dir.name,
-                'filename': target_file.name
-            })
-
-        # Sort by lora_name
-        lora_files.sort(key=lambda x: x['lora_name'])
+        # Sort by lora_name, then by filename (with _final first)
+        lora_files.sort(key=lambda x: (x['lora_name'], 0 if x['filename'].endswith("_final.safetensors") else 1, x['filename']))
 
         return lora_files
 
