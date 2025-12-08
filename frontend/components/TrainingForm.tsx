@@ -56,7 +56,7 @@ export default function TrainingForm() {
   const [gradientAccumulationSteps, setGradientAccumulationSteps] = useState(DEFAULT_TRAIN_CONFIG.gradient_accumulation_steps || 16);
   const [saveModelPerEpoch, setSaveModelPerEpoch] = useState(DEFAULT_TRAIN_CONFIG.save_model_per_num_epoch || 10);
   const [datasetRepeats, setDatasetRepeats] = useState(DEFAULT_TRAIN_CONFIG.dataset_repeats || 1);
-  const [seeds, setSeeds] = useState(DEFAULT_TRAIN_CONFIG.seeds || 42);
+  const [seeds, setSeeds] = useState(Math.floor(Math.random() * (2**64)));
 
   // Offloading configuration
   const [offloadingEnabled, setOffloadingEnabled] = useState(false);

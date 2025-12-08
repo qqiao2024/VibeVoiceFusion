@@ -394,7 +394,7 @@ function CurrentGeneration() {
               <p className="opacity-75 font-mono text-xs break-all">
                 {getLoraDisplayName(currentGeneration.lora_model_path)}
               </p>
-              <p className="opacity-75">
+              <p className="opacity-75 text-xs">
                 {t('generation.loraWeight')}: {currentGeneration.lora_weight?.toFixed(2) ?? '1.00'}
               </p>
             </div>

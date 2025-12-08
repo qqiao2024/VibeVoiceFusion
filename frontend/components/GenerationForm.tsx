@@ -36,13 +36,13 @@ export default function GenerationForm() {
   const { currentProject } = useProject();
   const { t } = useLanguage();
 
-  const [formData, setFormData] = useState<CreateGenerationRequest>({
+  const [formData, setFormData] = useState<CreateGenerationRequest>(() => ({
     dialog_session_id: '',
-    seeds: 42,
+    seeds: Math.floor(Math.random() * (2**64)),
     cfg_scale: 1.3,
     model_dtype: 'float8_e4m3fn',
     attn_implementation: 'sdpa'
-  });
+  }));
 
   // Offloading configuration state
   const [offloadingEnabled, setOffloadingEnabled] = useState(false);

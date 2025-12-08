@@ -230,7 +230,7 @@ export const DEFAULT_TRAIN_CONFIG: Partial<TrainConfig> = {
   dtype: 'bfloat16',
   optimizer_type: 'AdamW8bit',
   optimizer_args: null,
-  seeds: 42,
+  //seeds: 42,
   dataset_repeats: 1,
   speech_compress_ratio: 3200,
   semantic_dim: 128,

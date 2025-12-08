@@ -268,12 +268,17 @@ function GenerationHistory() {
               <svg className="w-5 h-5 text-purple-700" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M15.98 1.804a1 1 0 00-1.96 0l-.24 1.192a1 1 0 01-.784.785l-1.192.238a1 1 0 000 1.962l1.192.238a1 1 0 01.785.785l.238 1.192a1 1 0 001.962 0l.238-1.192a1 1 0 01.785-.785l1.192-.238a1 1 0 000-1.962l-1.192-.238a1 1 0 01-.785-.785l-.238-1.192zM6.949 5.684a1 1 0 00-1.898 0l-.683 2.051a1 1 0 01-.633.633l-2.051.683a1 1 0 000 1.898l2.051.684a1 1 0 01.633.632l.683 2.051a1 1 0 001.898 0l.683-2.051a1 1 0 01.633-.633l2.051-.683a1 1 0 000-1.898l-2.051-.683a1 1 0 01-.633-.633L6.95 5.684z" />
               </svg>
-              <p className="text-sm font-semibold text-purple-800">{t('generation.loraConfiguration')}</p>
+              <p className="text-xs font-semibold text-purple-800">{t('generation.loraConfiguration')}</p>
             </div>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-700">{t('generation.loraFile')}:</span>
-                <span className="font-mono text-purple-900 text-xs">{getLoraDisplayName(generation.lora_model_path)}</span>
+              <div className="flex justify-between text-sm items-center gap-2">
+                <span className="text-gray-700 shrink-0">{t('generation.loraFile')}:</span>
+                <span
+                  className="font-mono text-purple-900 text-xs truncate max-w-[180px]"
+                  title={getLoraDisplayName(generation.lora_model_path) ?? ''}
+                >
+                  {getLoraDisplayName(generation.lora_model_path)}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-700">{t('generation.loraWeight')}:</span>
