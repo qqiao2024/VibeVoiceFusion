@@ -62,6 +62,13 @@ export interface Dataset {
   updated_at: string;
 }
 
+export interface LoRAFile {
+  display_name: string;
+  full_path: string;
+  lora_name: string;
+  filename: string;
+}
+
 export interface DatasetItem {
   text: string;
   audio: string;
@@ -739,6 +746,13 @@ class ApiClient {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  /**
+   * List available LoRA files for a project
+   */
+  async listLoRAFiles(projectId: string): Promise<{ lora_files: LoRAFile[]; count: number }> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/training/lora-files`);
   }
 }
 

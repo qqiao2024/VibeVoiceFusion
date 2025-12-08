@@ -325,7 +325,17 @@
     "updated": "Updated",
     "session": "Session",
     "sessionName": "Session Name",
-    "hide": "Hide"
+    "hide": "Hide",
+    "loraConfiguration": "LoRA Fine-Tuning",
+    "enableLora": "Use LoRA Model",
+    "loraFile": "LoRA Model File",
+    "selectLoraFile": "Select a LoRA model",
+    "noLoraFilesAvailable": "No LoRA models available. Train one first in Fine-Tuning.",
+    "noLoraFilesHint": "No LoRA models available. Complete training in Fine-Tuning to enable this feature.",
+    "loraWeight": "LoRA Weight",
+    "loraWeakEffect": "Weak effect",
+    "loraFullEffect": "Full effect",
+    "loraWeightDescription": "Controls how much the LoRA model affects generation. Higher values apply stronger style transfer."
   },
   "errors": {
     "network": "Network error. Please check your connection.",

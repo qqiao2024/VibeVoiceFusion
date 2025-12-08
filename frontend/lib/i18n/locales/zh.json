@@ -325,7 +325,17 @@
     "updated": "更新时间",
     "session": "会话",
     "sessionName": "会话名称",
-    "hide": "隐藏"
+    "hide": "隐藏",
+    "loraConfiguration": "LoRA 微调模型",
+    "enableLora": "使用 LoRA 模型",
+    "loraFile": "LoRA 模型文件",
+    "selectLoraFile": "选择 LoRA 模型",
+    "noLoraFilesAvailable": "没有可用的 LoRA 模型。请先在微调训练中完成训练。",
+    "noLoraFilesHint": "没有可用的 LoRA 模型。在微调训练中完成训练后即可启用此功能。",
+    "loraWeight": "LoRA 权重",
+    "loraWeakEffect": "弱效果",
+    "loraFullEffect": "完全效果",
+    "loraWeightDescription": "控制 LoRA 模型对生成的影响程度。较高的值会产生更强的风格迁移效果。"
   },
   "errors": {
     "network": "网络错误，请检查您的连接。",

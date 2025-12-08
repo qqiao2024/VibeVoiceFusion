@@ -94,7 +94,9 @@ export interface CreateGenerationRequest {
   cfg_scale?: number;
   model_dtype?: ModelDtype;
   attn_implementation?: string;
-  offloading?: OffloadingConfig;  // NEW: Optional offloading configuration
+  offloading?: OffloadingConfig;  // Optional offloading configuration
+  lora_model_path?: string;       // Optional LoRA model file path (full path)
+  lora_weight?: number;           // Optional LoRA weight (0, 1], default 1.0
 }
 
 /**

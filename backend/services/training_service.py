@@ -343,6 +343,49 @@ class TrainingService:
 
         return True
 
+    def list_available_lora_files(self) -> List[dict]:
+        """
+        List all available LoRA files in the project's lora_output directory
+
+        Returns:
+            List of dictionaries with display_name (relative path) and full_path (absolute path)
+        """
+        lora_output_dir = self.output_dir / "lora_output"
+
+        if not lora_output_dir.exists():
+            return []
+
+        lora_files = []
+
+        # Iterate through subdirectories in lora_output
+        for lora_dir in lora_output_dir.iterdir():
+            if not lora_dir.is_dir():
+                continue
+
+            # Find safetensors files in the directory
+            safetensors_files = list(lora_dir.glob("*.safetensors"))
+            if not safetensors_files:
+                continue
+
+            # Prefer *_final.safetensors if available
+            final_files = [f for f in safetensors_files if f.name.endswith("_final.safetensors")]
+            target_file = final_files[0] if final_files else safetensors_files[0]
+
+            # Create display name: lora_name/filename.safetensors
+            display_name = f"{lora_dir.name}/{target_file.name}"
+
+            lora_files.append({
+                'display_name': display_name,
+                'full_path': str(target_file),
+                'lora_name': lora_dir.name,
+                'filename': target_file.name
+            })
+
+        # Sort by lora_name
+        lora_files.sort(key=lambda x: x['lora_name'])
+
+        return lora_files
+
     def delete_jobs_batch(self, job_ids: List[str]) -> dict:
         """
         Delete multiple training jobs in batch

@@ -418,6 +418,41 @@ def download_lora_file(project_id: str, job_id: str, filename: str):
         }), 500
 
 
+@api_bp.route('/projects/<project_id>/training/lora-files', methods=['GET'])
+def list_lora_files(project_id: str):
+    """
+    List all LoRA files (directories) available in the project's lora_output directory
+
+    Returns:
+        200: List of LoRA file objects with display_name and full_path
+        404: Project not found
+        500: Internal error
+    """
+    try:
+        # Get training service
+        result = _get_training_service(project_id)
+        if isinstance(result[0], TrainingService):
+            service = result[0]
+        else:
+            return result
+
+        # Get LoRA files list
+        lora_files = service.list_available_lora_files()
+
+        return jsonify({
+            'message': 'LoRA files retrieved successfully',
+            'lora_files': lora_files,
+            'count': len(lora_files)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error listing LoRA files: {e}")
+        return jsonify({
+            'error': t('errors.internal_error'),
+            'message': str(e)
+        }), 500
+
+
 @api_bp.route('/projects/<project_id>/training/<job_id>/metrics', methods=['GET'])
 def get_training_metrics(project_id: str, job_id: str):
     """
