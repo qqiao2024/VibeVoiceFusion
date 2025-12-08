@@ -79,8 +79,9 @@ def merge_lora_weights(model: nn.Module, lora_path: str, lora_weight: float = 1.
             # Try to read multiplier from metadata, fallback to parameter value
             if metadata and "multiplier" in metadata:
                 try:
-                    lora_weight = float(metadata["multiplier"])
-                    logger.info(f"Using multiplier from metadata: {lora_weight}")
+                    if lora_weight is None:
+                        lora_weight = float(metadata["multiplier"])
+                        logger.info(f"Using multiplier from metadata: {lora_weight}")
                 except (ValueError, TypeError):
                     logger.warning(f"Invalid multiplier in metadata: {metadata['multiplier']}, using default: {lora_weight}")
     except Exception as e:
@@ -187,7 +188,7 @@ def merge_lora_weights(model: nn.Module, lora_path: str, lora_weight: float = 1.
             missing_count += 1
             continue
 
-    logger.info(f"Successfully merged {merged_count} LoRA layers")
+    logger.info(f"Successfully merged {merged_count} LoRA layers, with weight {lora_weight}, scale {scale} applied.")
     if missing_count > 0:
         logger.warning(f"Failed to merge {missing_count} LoRA layers (keys not found in model)")
 
