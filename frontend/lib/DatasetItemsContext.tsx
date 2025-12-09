@@ -1,14 +1,45 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api, DatasetItem } from "@/lib/api";
+
+const ITEMS_PER_PAGE_KEY_PREFIX = "vibevoice-dataset-items-per-page-";
+const DEFAULT_ITEMS_PER_PAGE = 20;
+
+const MIN_ITEMS_PER_PAGE = 1;
+const MAX_ITEMS_PER_PAGE = 500;
+
+// Get saved items per page from localStorage for a specific dataset
+function getSavedItemsPerPage(datasetId: string): number {
+  if (typeof window === "undefined") return DEFAULT_ITEMS_PER_PAGE;
+  const saved = localStorage.getItem(ITEMS_PER_PAGE_KEY_PREFIX + datasetId);
+  if (saved) {
+    const parsed = parseInt(saved, 10);
+    if (!isNaN(parsed) && parsed >= MIN_ITEMS_PER_PAGE && parsed <= MAX_ITEMS_PER_PAGE) {
+      return parsed;
+    }
+  }
+  return DEFAULT_ITEMS_PER_PAGE;
+}
+
+// Save items per page to localStorage for a specific dataset
+function saveItemsPerPage(datasetId: string, count: number): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ITEMS_PER_PAGE_KEY_PREFIX + datasetId, count.toString());
+}
 
 interface DatasetItemsContextType {
   items: DatasetItem[];
   totalCount: number;
   loading: boolean;
   error: string | null;
-  loadItems: (offset: number, limit: number) => Promise<void>;
+  // Pagination
+  currentPage: number;
+  itemsPerPage: number;
+  totalPages: number;
+  setCurrentPage: (page: number) => void;
+  setItemsPerPage: (count: number) => void;
+  // Actions
   refreshItems: () => Promise<void>;
   createItem: (text: string, audioFile: File, voicePromptFiles: File[]) => Promise<DatasetItem>;
   updateItem: (index: number, text?: string, audioFile?: File, voicePromptFiles?: File[]) => Promise<DatasetItem>;
@@ -31,64 +62,26 @@ export function DatasetItemsProvider({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Track loaded ranges to avoid duplicate fetches
-  const loadedRangesRef = useRef<Map<string, DatasetItem[]>>(new Map());
+  // Pagination state - initialize from localStorage per dataset
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(() => getSavedItemsPerPage(datasetId));
 
-  // Load items with pagination
-  const loadItems = useCallback(async (offset: number, limit: number) => {
+  const totalPages = Math.max(1, Math.ceil(totalCount / itemsPerPage));
+
+  // Load items for current page
+  const loadCurrentPage = useCallback(async () => {
     if (!projectId || !datasetId) return;
-
-    const rangeKey = `${offset}-${limit}`;
-
-    // Check if this range is already loaded
-    if (loadedRangesRef.current.has(rangeKey)) {
-      return;
-    }
 
     setLoading(true);
     setError(null);
 
     try {
+      const offset = (currentPage - 1) * itemsPerPage;
       const response = await api.listDatasetItems(projectId, datasetId, {
         offset,
-        limit,
+        limit: itemsPerPage,
       });
 
-      // Cache the loaded range
-      loadedRangesRef.current.set(rangeKey, response.items);
-
-      // Update items - merge with existing items
-      setItems((prevItems) => {
-        const newItems = [...prevItems];
-        response.items.forEach((item, idx) => {
-          newItems[offset + idx] = item;
-        });
-        return newItems;
-      });
-
-      setTotalCount(response.total);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to load items";
-      setError(errorMessage);
-      console.error("Error loading items:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, datasetId]);
-
-  // Refresh all items (clear cache and reload)
-  const refreshItems = useCallback(async () => {
-    if (!projectId || !datasetId) return;
-
-    // Clear cache
-    loadedRangesRef.current.clear();
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Load all items to get accurate count
-      const response = await api.listDatasetItems(projectId, datasetId);
       setItems(response.items);
       setTotalCount(response.total);
     } catch (err) {
@@ -98,12 +91,30 @@ export function DatasetItemsProvider({
     } finally {
       setLoading(false);
     }
-  }, [projectId, datasetId]);
+  }, [projectId, datasetId, currentPage, itemsPerPage]);
 
-  // Load initial items on mount
+  // Load items when page or pageSize changes
   useEffect(() => {
-    refreshItems();
-  }, [refreshItems]);
+    loadCurrentPage();
+  }, [loadCurrentPage]);
+
+  // Refresh items (reload current page)
+  const refreshItems = useCallback(async () => {
+    await loadCurrentPage();
+  }, [loadCurrentPage]);
+
+  // Handle page change with bounds checking
+  const handleSetCurrentPage = useCallback((page: number) => {
+    const validPage = Math.max(1, Math.min(page, totalPages));
+    setCurrentPage(validPage);
+  }, [totalPages]);
+
+  // Handle items per page change - save to localStorage per dataset
+  const handleSetItemsPerPage = useCallback((count: number) => {
+    setItemsPerPage(count);
+    setCurrentPage(1); // Reset to first page when changing page size
+    saveItemsPerPage(datasetId, count); // Persist to localStorage
+  }, [datasetId]);
 
   const createItem = async (
     text: string,
@@ -119,9 +130,8 @@ export function DatasetItemsProvider({
         voice_prompt_files: voicePromptFiles,
       });
 
-      // Clear cache and refresh to get updated list with correct indices
-      loadedRangesRef.current.clear();
-      await refreshItems();
+      // Refresh to get updated list
+      await loadCurrentPage();
 
       return item;
     } catch (err) {
@@ -146,15 +156,16 @@ export function DatasetItemsProvider({
         voice_prompt_files: voicePromptFiles,
       });
 
-      // Update item in place
+      // Update item in local state
       setItems((prevItems) => {
-        const newItems = [...prevItems];
-        newItems[index] = updatedItem;
-        return newItems;
+        const localIndex = index - (currentPage - 1) * itemsPerPage;
+        if (localIndex >= 0 && localIndex < prevItems.length) {
+          const newItems = [...prevItems];
+          newItems[localIndex] = updatedItem;
+          return newItems;
+        }
+        return prevItems;
       });
-
-      // Clear cache for affected ranges
-      loadedRangesRef.current.clear();
 
       return updatedItem;
     } catch (err) {
@@ -170,9 +181,8 @@ export function DatasetItemsProvider({
     try {
       await api.deleteDatasetItem(projectId, datasetId, index);
 
-      // Clear cache and refresh to get updated list with correct indices
-      loadedRangesRef.current.clear();
-      await refreshItems();
+      // Refresh to get updated list with correct indices
+      await loadCurrentPage();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to delete item";
       setError(errorMessage);
@@ -185,7 +195,11 @@ export function DatasetItemsProvider({
     totalCount,
     loading,
     error,
-    loadItems,
+    currentPage,
+    itemsPerPage,
+    totalPages,
+    setCurrentPage: handleSetCurrentPage,
+    setItemsPerPage: handleSetItemsPerPage,
     refreshItems,
     createItem,
     updateItem,

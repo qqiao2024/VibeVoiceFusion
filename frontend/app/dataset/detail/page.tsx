@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, Suspense } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useProject } from "@/lib/ProjectContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
@@ -15,15 +15,23 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
   const router = useRouter();
   const { currentProject } = useProject();
   const { t } = useLanguage();
-  const { items, totalCount, loading, createItem, updateItem, deleteItem } = useDatasetItems();
+  const {
+    items,
+    totalCount,
+    loading,
+    currentPage,
+    itemsPerPage,
+    totalPages,
+    setCurrentPage,
+    setItemsPerPage,
+    createItem,
+    updateItem,
+    deleteItem,
+  } = useDatasetItems();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [datasetLoading, setDatasetLoading] = useState(true);
-
-  // Virtual scrolling state
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Load dataset metadata
   const loadDataset = useCallback(async () => {
@@ -44,19 +52,6 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
   useEffect(() => {
     loadDataset();
   }, [loadDataset]);
-
-  // Handle scroll for virtual scrolling
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    const scrollTop = target.scrollTop;
-    const itemHeight = 150; // Approximate row height
-    const containerHeight = target.clientHeight;
-
-    const start = Math.max(0, Math.floor(scrollTop / itemHeight) - 5);
-    const end = Math.min(totalCount, Math.ceil((scrollTop + containerHeight) / itemHeight) + 5);
-
-    setVisibleRange({ start, end });
-  };
 
   const handleCreateItem = async (text: string, audioFile: File, voicePromptFiles: File[]) => {
     try {
@@ -96,7 +91,6 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
 
   // Helper to extract filename from relative path
   const extractFilename = (path: string) => {
-    // Extract filename from relative path (e.g., "./audio/file.wav" -> "file.wav")
     return path.split('/').pop() || path;
   };
 
@@ -104,9 +98,6 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
   const getAudioUrl = (path: string) => {
     if (!currentProject || !datasetId) return '';
     const filename = extractFilename(path);
-    // The audio files are stored in workspace/{project_id}/datasets/{dataset_id}/audio/{filename}
-    // We'll need to add a backend endpoint to serve these files, or use a direct path
-    // For now, returning a placeholder that should work when backend serves files
     return `/api/v1/projects/${currentProject.id}/datasets/${datasetId}/audio/${filename}`;
   };
 
@@ -115,6 +106,15 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
     const filename = extractFilename(path);
     return `/api/v1/projects/${currentProject.id}/datasets/${datasetId}/voice-prompts/${filename}`;
   };
+
+  // Calculate the actual index in the full dataset
+  const getActualIndex = (localIndex: number) => {
+    return (currentPage - 1) * itemsPerPage + localIndex;
+  };
+
+  // Calculate display range
+  const startIndex = (currentPage - 1) * itemsPerPage + 1;
+  const endIndex = Math.min(currentPage * itemsPerPage, totalCount);
 
   return (
     <div className="h-full flex flex-col">
@@ -181,11 +181,7 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
       </div>
 
       {/* Content */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-y-auto bg-gray-50"
-        onScroll={handleScroll}
-      >
+      <div className="flex-1 overflow-y-auto bg-gray-50">
         {loading && items.length === 0 ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -207,7 +203,7 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
           <div className="p-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
                       #
@@ -227,12 +223,8 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Virtual scrolling: only render visible items */}
-                  {items.slice(visibleRange.start, visibleRange.end).map((item, idx) => {
-                    const actualIndex = visibleRange.start + idx;
-
-                    // Only render if item exists (handle sparse array from pagination)
-                    if (!item) return null;
+                  {items.map((item, localIndex) => {
+                    const actualIndex = getActualIndex(localIndex);
 
                     return (
                       <DatasetItemRow
@@ -250,6 +242,99 @@ function DatasetDetailContent({ datasetId }: { datasetId: string }) {
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Pagination Controls */}
+            <div className="mt-4 flex items-center justify-between bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-700">{t('dataset.itemsPerPage')}:</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value, 10);
+                      if (!isNaN(value) && value >= 1 && value <= 500) {
+                        setItemsPerPage(value);
+                      }
+                    }}
+                    className="w-20 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-1">
+                    {[5, 10, 20, 50, 100].map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => setItemsPerPage(preset)}
+                        className={`px-2 py-1 text-xs rounded transition-colors ${
+                          itemsPerPage === preset
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <span className="text-sm text-gray-600">
+                  {t('dataset.showingItems')
+                    .replace('{start}', startIndex.toString())
+                    .replace('{end}', endIndex.toString())
+                    .replace('{total}', totalCount.toString())}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-gray-700">{t('dataset.page')}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value, 10);
+                      if (!isNaN(value) && value >= 1 && value <= totalPages) {
+                        setCurrentPage(value);
+                      }
+                    }}
+                    className="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">/ {totalPages}</span>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    ««
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    ›
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                  >
+                    »»
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

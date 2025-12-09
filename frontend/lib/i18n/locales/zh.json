@@ -550,6 +550,9 @@
     "importToDataset": "导入数据到：{name}",
     "importWarning": "警告：此操作将替换该数据集中的所有现有项目。",
     "invalidFileFormat": "无效的文件格式。请选择ZIP文件。",
-    "supportedFormatsZip": "支持的格式：ZIP"
+    "supportedFormatsZip": "支持的格式：ZIP",
+    "itemsPerPage": "每页显示",
+    "showingItems": "显示 {start}-{end}，共 {total} 条",
+    "page": "第"
   }
 }

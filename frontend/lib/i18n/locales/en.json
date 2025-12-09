@@ -550,6 +550,9 @@
     "importToDataset": "Import data to: {name}",
     "importWarning": "Warning: This will replace all existing items in this dataset.",
     "invalidFileFormat": "Invalid file format. Please select a ZIP file.",
-    "supportedFormatsZip": "Supported format: ZIP"
+    "supportedFormatsZip": "Supported format: ZIP",
+    "itemsPerPage": "Items per page",
+    "showingItems": "Showing {start}-{end} of {total}",
+    "page": "Page"
   }
 }
