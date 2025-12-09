@@ -85,9 +85,12 @@ class BaseTrainingEngine(TrainerVisitor):
         self.state.average_epoch_diffusion_loss = avg_diffusion_loss
         self.state.average_epoch_ce_loss = avg_ce_loss
         self.state.current_epoch = epoch
-        self.state.estimated_total_elpase = (self.state.current_timestamp - self.state.start_time).total_seconds() / (epoch + 1) * self.state.total_epochs
+        self.state.estimated_total_elpase = (self.state.current_timestamp - self.state.start_time).total_seconds() + (self.state.total_epochs - epoch + 1) * self.state.latest_epoch_elapsed
         self.state_writer.update_state(self.state)
         self.state.steps_per_epoch = steps_in_epoch
+        self.state.estimated_total_steps = self.state.total_epochs * steps_in_epoch
+        self.state.lr = lr
+        self.state_writer.update_state(self.state)
 
     def visit_training_failed(self, timestamp, error_msg):
         self.state.status = "Failed"

@@ -65,8 +65,10 @@ function CurrentTraining() {
     ? (new Date(currentState.current_timestamp).getTime() - new Date(currentState.start_time).getTime()) / 1000
     : 0;
 
-  const estimatedRemaining = currentState.estimated_total_elpase && currentState.start_time && currentState.current_timestamp
-    ? currentState.estimated_total_elpase - elapsedSeconds
+  // Calculate estimated remaining time
+  // Formula: estimated_total_elpase - (current_timestamp - start_time)
+  const estimatedRemaining = currentState.estimated_total_elpase && currentState.start_time
+    ? Math.max(0, currentState.estimated_total_elpase - (Date.now() - new Date(currentState.start_time).getTime()) / 1000)
     : null;
 
   // Render status-specific details
@@ -234,7 +236,7 @@ function CurrentTraining() {
               {currentState.latest_epoch_elapsed !== null && (
                 <div className="text-center">
                   <p className="text-xl font-bold">{formatDuration(currentState.latest_epoch_elapsed)}</p>
-                  <p className="text-xs opacity-75 mt-1">{t('training.avgEpochTime')}</p>
+                  <p className="text-xs opacity-75 mt-1">{t('training.latestEpochTime')}</p>
                 </div>
               )}
             </div>

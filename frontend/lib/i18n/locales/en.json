@@ -461,7 +461,7 @@
     "elapsed": "Elapsed",
     "remaining": "Est. Remaining",
     "avgStepTime": "Avg Step Time",
-    "avgEpochTime": "Avg Epoch Time",
+    "latestEpochTime": "Latest Epoch Time",
     "tensorboardMetrics": "TensorBoard Metrics",
     "finalLossValues": "Final Loss Values",
     "trainingSummary": "Training Summary",

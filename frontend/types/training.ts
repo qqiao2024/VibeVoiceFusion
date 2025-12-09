@@ -219,7 +219,7 @@ export interface GetTrainingMetricsResponse {
 export const DEFAULT_TRAIN_CONFIG: Partial<TrainConfig> = {
   lora_name: 'vibevoice_lora',
   epochs: 10,
-  batch_size: 1,
+  batch_size: 4,
   learning_rate: 1e-4,
   output_dir: './lora_output',
   multiplier: 1.0,

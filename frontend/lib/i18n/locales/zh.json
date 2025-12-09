@@ -461,7 +461,7 @@
     "elapsed": "已用时",
     "remaining": "预计剩余",
     "avgStepTime": "平均步时间",
-    "avgEpochTime": "平均轮时间",
+    "latestEpochTime": "最近轮时间",
     "tensorboardMetrics": "TensorBoard指标",
     "finalLossValues": "最终损失值",
     "trainingSummary": "训练摘要",
