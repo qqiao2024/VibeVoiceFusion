@@ -174,7 +174,7 @@ export interface MetricDataPoint {
 }
 
 /**
- * Loss metrics from TensorBoard
+ * Loss metrics from TensorBoard (includes both step-level and epoch-level)
  */
 export interface LossMetrics {
   train_loss: MetricDataPoint[];
@@ -223,7 +223,7 @@ export const DEFAULT_TRAIN_CONFIG: Partial<TrainConfig> = {
   learning_rate: 1e-4,
   output_dir: './lora_output',
   multiplier: 1.0,
-  lora_dim: 4,
+  lora_dim: 16,
   lora_alpha: null,
   lora_dropout: null,
   number_of_layers: 0,

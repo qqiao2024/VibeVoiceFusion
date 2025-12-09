@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import { useProject } from "@/lib/ProjectContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+
+// Invalid characters for project names (same as backend validation)
+const INVALID_CHARS = '<>:"/\\|?*';
 
 export default function ProjectSelector() {
   const { projects, selectProject, createProject, deleteProject } = useProject();
@@ -15,13 +18,27 @@ export default function ProjectSelector() {
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
 
+  // Validate project name and return error message if invalid
+  const projectNameError = useMemo(() => {
+    const trimmed = newProjectName.trim();
+    if (!trimmed) return null; // Don't show error for empty input
+
+    // Check for invalid characters
+    const foundInvalidChars = INVALID_CHARS.split('').filter(char => trimmed.includes(char));
+    if (foundInvalidChars.length > 0) {
+      return t('project.invalidCharsError').replace('{chars}', foundInvalidChars.join(' '));
+    }
+
+    return null;
+  }, [newProjectName, t]);
+
   const handleSelectProject = (projectId: string) => {
     selectProject(projectId);
     router.push("/speaker-role");
   };
 
   const handleCreateProject = async () => {
-    if (newProjectName.trim()) {
+    if (newProjectName.trim() && !projectNameError) {
       try {
         await createProject(newProjectName.trim(), newProjectDescription.trim());
         setNewProjectName("");
@@ -163,9 +180,18 @@ export default function ProjectSelector() {
                     value={newProjectName}
                     onChange={(e) => setNewProjectName(e.target.value)}
                     placeholder={t('project.enterProjectName')}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                      projectNameError
+                        ? 'border-red-300 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
                     autoFocus
                   />
+                  {projectNameError ? (
+                    <p className="text-xs text-red-600 mt-1">{projectNameError}</p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">{t('project.validNameHint')}</p>
+                  )}
                 </div>
 
                 <div>
@@ -195,7 +221,7 @@ export default function ProjectSelector() {
                 </button>
                 <button
                   onClick={handleCreateProject}
-                  disabled={!newProjectName.trim()}
+                  disabled={!newProjectName.trim() || !!projectNameError}
                   className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {t('project.createProject')}

@@ -710,6 +710,7 @@ class ApiClient {
 
   /**
    * Get training metrics from TensorBoard logs
+   * Returns null if metrics are not yet available (404 during prepare phase)
    */
   async getTrainingMetrics(
     projectId: string,
@@ -718,7 +719,7 @@ class ApiClient {
       maxPoints?: number;
       metrics?: 'all' | 'loss' | 'learning_rate' | 'timing' | string;
     }
-  ): Promise<GetTrainingMetricsResponse> {
+  ): Promise<GetTrainingMetricsResponse | null> {
     const params = new URLSearchParams();
     if (options?.maxPoints) {
       params.append('max_points', options.maxPoints.toString());
@@ -728,9 +729,35 @@ class ApiClient {
     }
 
     const queryString = params.toString();
-    const url = `/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}/metrics${queryString ? '?' + queryString : ''}`;
+    const endpoint = `/projects/${encodeURIComponent(projectId)}/training/${encodeURIComponent(jobId)}/metrics${queryString ? '?' + queryString : ''}`;
+    const url = `${this.baseUrl}${endpoint}`;
 
-    return this.fetch(url);
+    // Get current language from localStorage
+    const locale = typeof window !== 'undefined'
+      ? localStorage.getItem('vibevoice-locale') || 'en'
+      : 'en';
+
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Language': locale,
+      },
+    });
+
+    // Return null for 404 - metrics not yet available during prepare phase
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: response.statusText
+      }));
+      throw new Error(error.message || error.error || response.statusText);
+    }
+
+    return await response.json();
   }
 
   /**

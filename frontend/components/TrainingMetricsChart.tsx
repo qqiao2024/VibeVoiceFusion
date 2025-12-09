@@ -23,13 +23,20 @@ export default function TrainingMetricsChart({
   const [metrics, setMetrics] = useState<TrainingMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedChart, setSelectedChart] = useState<'loss' | 'learning_rate' | 'timing'>('loss');
+  const [selectedChart, setSelectedChart] = useState<'loss' | 'epoch_loss' | 'learning_rate' | 'timing'>('loss');
 
   // State for toggling loss lines visibility
   const [visibleLossLines, setVisibleLossLines] = useState({
     total_loss: true,
     diffusion_loss: true,
     ce_loss: true,
+  });
+
+  // State for toggling epoch loss lines visibility
+  const [visibleEpochLossLines, setVisibleEpochLossLines] = useState({
+    epoch_total_loss: true,
+    epoch_diffusion_loss: true,
+    epoch_ce_loss: true,
   });
 
   // State for toggling timing lines visibility
@@ -46,7 +53,11 @@ export default function TrainingMetricsChart({
         maxPoints: 500,
         metrics: 'all',
       });
-      setMetrics(response.metrics);
+      // response is null when metrics are not yet available (404 during prepare phase)
+      if (response) {
+        setMetrics(response.metrics);
+      }
+      // Keep metrics as null if response is null - will show "waiting" state
     } catch (err) {
       console.error('Error fetching training metrics:', err);
       setError(err instanceof Error ? err.message : 'Failed to load metrics');
@@ -125,6 +136,35 @@ export default function TrainingMetricsChart({
     return Array.from(stepMap.values()).sort((a, b) => a.step - b.step);
   };
 
+  const prepareEpochLossData = () => {
+    if (!metrics?.loss) return [];
+
+    // Combine all epoch-based loss metrics from loss field (using step as epoch number)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const epochMap = new Map<number, any>();
+
+    metrics.loss.epoch_loss.forEach(point => {
+      epochMap.set(point.step, {
+        epoch: point.step,
+        epoch_total_loss: point.value,
+      });
+    });
+
+    metrics.loss.epoch_diffusion_loss.forEach(point => {
+      const existing = epochMap.get(point.step) || { epoch: point.step };
+      existing.epoch_diffusion_loss = point.value;
+      epochMap.set(point.step, existing);
+    });
+
+    metrics.loss.epoch_ce_loss.forEach(point => {
+      const existing = epochMap.get(point.step) || { epoch: point.step };
+      existing.epoch_ce_loss = point.value;
+      epochMap.set(point.step, existing);
+    });
+
+    return Array.from(epochMap.values()).sort((a, b) => a.epoch - b.epoch);
+  };
+
   if (loading && !metrics) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -144,7 +184,13 @@ export default function TrainingMetricsChart({
   }
 
   if (!metrics) {
-    return null;
+    // Metrics not yet available - show waiting state (during prepare phase)
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="text-sm text-gray-500">{t('training.waitingForMetrics')}</p>
+      </div>
+    );
   }
 
   // Handler for legend click to toggle line visibility
@@ -157,6 +203,11 @@ export default function TrainingMetricsChart({
       setVisibleLossLines(prev => ({
         ...prev,
         [dataKey]: !prev[dataKey as keyof typeof visibleLossLines],
+      }));
+    } else if (selectedChart === 'epoch_loss') {
+      setVisibleEpochLossLines(prev => ({
+        ...prev,
+        [dataKey]: !prev[dataKey as keyof typeof visibleEpochLossLines],
       }));
     } else if (selectedChart === 'timing') {
       setVisibleTimingLines(prev => ({
@@ -173,6 +224,7 @@ export default function TrainingMetricsChart({
     if (!payload) return null;
 
     const visibleLines = selectedChart === 'loss' ? visibleLossLines :
+                        selectedChart === 'epoch_loss' ? visibleEpochLossLines :
                         selectedChart === 'timing' ? visibleTimingLines : null;
 
     return (
@@ -213,7 +265,7 @@ export default function TrainingMetricsChart({
   return (
     <div className="space-y-4">
       {/* Chart Type Selector */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setSelectedChart('loss')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -223,6 +275,16 @@ export default function TrainingMetricsChart({
           }`}
         >
           {t('training.lossMetrics')}
+        </button>
+        <button
+          onClick={() => setSelectedChart('epoch_loss')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            selectedChart === 'epoch_loss'
+              ? 'bg-blue-500 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          {t('training.epochLossMetrics')}
         </button>
         <button
           onClick={() => setSelectedChart('learning_rate')}
@@ -289,6 +351,53 @@ export default function TrainingMetricsChart({
                   dot={false}
                   strokeWidth={2}
                   hide={!visibleLossLines.ce_loss}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </>
+        )}
+
+        {selectedChart === 'epoch_loss' && (
+          <>
+            <div className="mb-3 text-xs text-gray-500 italic">
+              {t('training.clickLegendToToggle')}
+            </div>
+            <ResponsiveContainer width="100%" height={350}>
+              <LineChart data={prepareEpochLossData()} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="epoch"
+                  label={{ value: 'Epoch', position: 'insideBottomRight', offset: 0 }}
+                />
+                <YAxis label={{ value: 'Loss', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Legend content={renderLegend} />
+                <Line
+                  type="monotone"
+                  dataKey="epoch_total_loss"
+                  stroke="#8884d8"
+                  name={t('training.avgTotalLoss')}
+                  dot={true}
+                  strokeWidth={2}
+                  hide={!visibleEpochLossLines.epoch_total_loss}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="epoch_diffusion_loss"
+                  stroke="#82ca9d"
+                  name={t('training.avgDiffusionLoss')}
+                  dot={true}
+                  strokeWidth={2}
+                  hide={!visibleEpochLossLines.epoch_diffusion_loss}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="epoch_ce_loss"
+                  stroke="#ffc658"
+                  name={t('training.avgCELoss')}
+                  dot={true}
+                  strokeWidth={2}
+                  hide={!visibleEpochLossLines.epoch_ce_loss}
                 />
               </LineChart>
             </ResponsiveContainer>

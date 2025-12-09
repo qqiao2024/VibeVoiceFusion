@@ -356,6 +356,11 @@ export default function TrainingForm() {
                 <option value="bfloat16">bfloat16 ({t('training.recommended')})</option>
                 <option value="float8_e4m3fn">float8_e4m3fn</option>
               </select>
+              {dtype === 'float8_e4m3fn' && (
+                <p className="text-xs text-amber-600 mt-1">
+                  {t('training.float8Warning')}
+                </p>
+              )}
             </div>
 
             {/* Gradient Accumulation Steps */}
