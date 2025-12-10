@@ -40,7 +40,7 @@ export default function GenerationForm() {
     dialog_session_id: '',
     seeds: Math.floor(Math.random() * (2**64)),
     cfg_scale: 1.3,
-    model_dtype: 'float8_e4m3fn',
+    model_dtype: 'bf16',
     attn_implementation: 'sdpa'
   }));
 
@@ -202,11 +202,16 @@ export default function GenerationForm() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           >
-            <option value="float8_e4m3fn">{t('generation.float8Recommended')}</option>
-            <option value="bf16">bf16</option>
+            <option value="bf16">{t('generation.bf16Recommended')}</option>
+            <option value="float8_e4m3fn">float8_e4m3fn</option>
           </select>
+          {formData.model_dtype === 'float8_e4m3fn' && (
+            <p className="text-xs text-amber-600 mt-1">
+              {t('generation.float8Warning')}
+            </p>
+          )}
           <p className="text-xs text-gray-500 mt-1">
-            {t('generation.float8Description')}
+            {t('generation.modelTypeDescription')}
           </p>
         </div>
 
