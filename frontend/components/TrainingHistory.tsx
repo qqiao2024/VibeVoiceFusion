@@ -4,15 +4,25 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useTraining } from '@/lib/TrainingContext';
 import { useProject } from '@/lib/ProjectContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { useDataset } from '@/lib/DatasetContext';
 import TrainingMetricsChart from '@/components/TrainingMetricsChart';
 import { api } from '@/lib/api';
 import type { TrainingState, TrainingStatus } from '@/types/training';
 import toast from 'react-hot-toast';
 
+// Helper function to extract dataset ID from dataset_path
+// Format: workspace/{project_id}/datasets/{dataset_id}/datasets.jsonl
+function extractDatasetIdFromPath(datasetPath: string | null): string | null {
+  if (!datasetPath) return null;
+  const match = datasetPath.match(/datasets\/([^/]+)\/datasets\.jsonl$/);
+  return match ? match[1] : null;
+}
+
 function TrainingHistory() {
   const { states, loading, deleteJob, batchDeleteJobs } = useTraining();
   const { currentProject } = useProject();
   const { t } = useLanguage();
+  const { datasets } = useDataset();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Pagination state
@@ -445,7 +455,6 @@ function TrainingHistory() {
             {paginatedStates.map((state) => {
               const isExpanded = expandedId === state.task_id;
               const isSelected = selectedIds.has(state.task_id);
-              const isTraining = state.status === 'Training';
 
               return (
                 <div
@@ -486,6 +495,39 @@ function TrainingHistory() {
                           {t('training.created')}: {formatDate(state.created_at)}
                         </p>
 
+                        {/* Dataset Information */}
+                        {(() => {
+                          const datasetId = extractDatasetIdFromPath(state.config.dataset_path);
+                          const dataset = datasetId ? datasets.find(d => d.id === datasetId) : null;
+                          if (dataset) {
+                            return (
+                              <div className="bg-purple-50 rounded p-2 mb-2 text-xs">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-purple-700 font-medium">{t('training.dataset')}:</span>
+                                  <a
+                                    href={`/dataset/detail?id=${dataset.id}`}
+                                    className="text-purple-900 font-semibold hover:underline cursor-pointer"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {dataset.name}
+                                  </a>
+                                  {dataset.description && (
+                                    <span className="text-purple-600 text-xs mt-0.5">&nbsp;-&nbsp;{dataset.description}</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          } else if (datasetId) {
+                            return (
+                              <div className="bg-gray-100 rounded p-2 mb-2 text-xs">
+                                <span className="text-gray-600">{t('training.dataset')}: </span>
+                                <span className="font-mono text-gray-700">{datasetId}</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
                         {/* Configuration Summary */}
                         <div className="bg-gray-50 rounded p-2 space-y-1 text-xs">
                           <div className="grid grid-cols-2 gap-2">
@@ -508,25 +550,6 @@ function TrainingHistory() {
                           </div>
                         </div>
 
-                        {/* Live metrics display (if training) */}
-                        {isTraining && state.current_step !== null && state.current_epoch !== null && (
-                          <div className="mt-2 bg-blue-50 rounded p-2 space-y-1">
-                            <div className="flex justify-between text-xs">
-                              <span>{t('training.currentEpoch')}:</span>
-                              <span className="font-semibold">{state.current_epoch} / {state.total_epochs || '?'}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                              <span>{t('training.currentStep')}:</span>
-                              <span className="font-semibold">{state.current_step.toLocaleString()}</span>
-                            </div>
-                            {state.current_loss !== null && (
-                              <div className="flex justify-between text-xs">
-                                <span>{t('training.currentLoss')}:</span>
-                                <span className="font-semibold">{state.current_loss.toFixed(4)}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
 
                       {/* Action buttons */}

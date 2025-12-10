@@ -4,13 +4,23 @@ import React from 'react';
 import { useTraining } from '@/lib/TrainingContext';
 import { useProject } from '@/lib/ProjectContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { useDataset } from '@/lib/DatasetContext';
 import TrainingMetricsChart from '@/components/TrainingMetricsChart';
 import type { TrainingStatus } from '@/types/training';
+
+// Helper function to extract dataset ID from dataset_path
+// Format: workspace/{project_id}/datasets/{dataset_id}/datasets.jsonl
+function extractDatasetIdFromPath(datasetPath: string | null): string | null {
+  if (!datasetPath) return null;
+  const match = datasetPath.match(/datasets\/([^/]+)\/datasets\.jsonl$/);
+  return match ? match[1] : null;
+}
 
 function CurrentTraining() {
   const { currentState, clearCurrentState } = useTraining();
   const { currentProject } = useProject();
   const { t } = useLanguage();
+  const { datasets } = useDataset();
 
   if (!currentState || !currentProject) {
     return null;
@@ -221,24 +231,28 @@ function CurrentTraining() {
                 <p className="text-xl font-bold">{formatDuration(elapsedSeconds)}</p>
                 <p className="text-xs opacity-75 mt-1">{t('training.elapsed')}</p>
               </div>
-              {estimatedRemaining !== null && estimatedRemaining > 0 && (
-                <div className="text-center">
-                  <p className="text-xl font-bold">{formatDuration(estimatedRemaining)}</p>
-                  <p className="text-xs opacity-75 mt-1">{t('training.remaining')}</p>
-                </div>
-              )}
+              <div className="text-center">
+                <p className="text-xl font-bold">
+                  {estimatedRemaining !== null && estimatedRemaining > 0
+                    ? formatDuration(estimatedRemaining)
+                    : t('training.estimating')}
+                </p>
+                <p className="text-xs opacity-75 mt-1">{t('training.remaining')}</p>
+              </div>
               {currentState.average_step_time !== null && (
                 <div className="text-center">
                   <p className="text-xl font-bold">{currentState.average_step_time.toFixed(2)}s</p>
                   <p className="text-xs opacity-75 mt-1">{t('training.avgStepTime')}</p>
                 </div>
               )}
-              {currentState.latest_epoch_elapsed !== null && (
-                <div className="text-center">
-                  <p className="text-xl font-bold">{formatDuration(currentState.latest_epoch_elapsed)}</p>
-                  <p className="text-xs opacity-75 mt-1">{t('training.latestEpochTime')}</p>
-                </div>
-              )}
+              <div className="text-center">
+                <p className="text-xl font-bold">
+                  {currentState.latest_epoch_elapsed !== null
+                    ? formatDuration(currentState.latest_epoch_elapsed)
+                    : t('training.estimating')}
+                </p>
+                <p className="text-xs opacity-75 mt-1">{t('training.latestEpochTime')}</p>
+              </div>
             </div>
           </div>
 
@@ -445,6 +459,36 @@ function CurrentTraining() {
             <span className="text-sm font-semibold">{t('training.jobId')}:</span>
             <span className="text-xs font-mono">{currentState.task_id}</span>
           </div>
+          {/* Dataset Information */}
+          {(() => {
+            const datasetId = extractDatasetIdFromPath(currentState.config.dataset_path);
+            const dataset = datasetId ? datasets.find(d => d.id === datasetId) : null;
+            if (dataset) {
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">{t('training.dataset')}:</span>
+                  <a
+                    href={`/dataset/detail?id=${dataset.id}`}
+                    className="text-sm hover:underline cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {dataset.name}
+                  </a>
+                  {dataset.description && (
+                    <span className="text-xs opacity-75">({dataset.description})</span>
+                  )}
+                </div>
+              );
+            } else if (datasetId) {
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">{t('training.dataset')}:</span>
+                  <span className="text-xs font-mono opacity-75">{datasetId}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
 

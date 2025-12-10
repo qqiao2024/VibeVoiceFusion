@@ -6,7 +6,9 @@ from vibevoice.training.summary_visitor import SummaryVisitor
 from vibevoice.training.trainer import TrainConfig, VibeVoiceTrainer, Trainer
 from vibevoice.training.fake_trainer import FakeTrainer
 from vibevoice.training.trainer_visitor import TrainerVisitor, VisitorManager
+from util.logger import get_logger
 
+logger = get_logger(__name__)
 
 class BaseTrainingEngine(TrainerVisitor):
 
@@ -20,6 +22,7 @@ class BaseTrainingEngine(TrainerVisitor):
         self.state_writer = state_writer
         self.update_step_interval = update_step_interval
         self.task_id = task_id
+        self.estimated_time_by_epoch = 0.0
 
     def train(self):
         self.trainer.train()
@@ -70,6 +73,12 @@ class BaseTrainingEngine(TrainerVisitor):
         self.state.steps_per_second = global_step / (self.state.current_timestamp - self.state.start_time).total_seconds()
         self.state.steps_in_epoch = step_in_epoch
 
+        if epoch > 1:
+            estimated_total_elpase_by_epoch = (self.state.current_timestamp - self.state.start_time).total_seconds() + self.estimated_time_by_epoch
+            remaining_steps_in_epoch = self.state.steps_per_epoch - step_in_epoch
+            self.state.estimated_total_elpase = estimated_total_elpase_by_epoch + remaining_steps_in_epoch * self.state.average_step_time
+
+
         if global_step % self.update_step_interval == 0:
             self.state_writer.update_state(self.state)
 
@@ -85,12 +94,16 @@ class BaseTrainingEngine(TrainerVisitor):
         self.state.average_epoch_diffusion_loss = avg_diffusion_loss
         self.state.average_epoch_ce_loss = avg_ce_loss
         self.state.current_epoch = epoch
-        self.state.estimated_total_elpase = (self.state.current_timestamp - self.state.start_time).total_seconds() + (self.state.total_epochs - epoch + 1) * self.state.latest_epoch_elapsed
         self.state_writer.update_state(self.state)
         self.state.steps_per_epoch = steps_in_epoch
         self.state.estimated_total_steps = self.state.total_epochs * steps_in_epoch
         self.state.lr = lr
         self.state_writer.update_state(self.state)
+        remaining_epochs = self.state.total_epochs - epoch - 1
+        if remaining_epochs > 0:
+            self.estimated_time_by_epoch = remaining_epochs * self.state.latest_epoch_elapsed
+        else:
+            self.estimated_time_by_epoch = 0.0
 
     def visit_training_failed(self, timestamp, error_msg):
         self.state.status = "Failed"
