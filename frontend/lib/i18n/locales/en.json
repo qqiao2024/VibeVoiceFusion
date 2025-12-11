@@ -487,6 +487,8 @@
     "metricsNotAvailable": "Metrics not available",
     "waitingForMetrics": "Waiting for training metrics...",
     "autoRefreshingEvery": "Auto-refreshing every",
+    "refreshInterval": "Refresh",
+    "stateRefreshInterval": "Status refresh",
     "clickLegendToToggle": "💡 Click legend items to show/hide specific metrics",
     "downloadStarted": "Download started",
     "downloadFailed": "Failed to download file",

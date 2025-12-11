@@ -487,6 +487,8 @@
     "metricsNotAvailable": "指标不可用",
     "waitingForMetrics": "等待训练指标...",
     "autoRefreshingEvery": "每隔",
+    "refreshInterval": "刷新间隔",
+    "stateRefreshInterval": "状态刷新",
     "clickLegendToToggle": "💡 点击图例项以显示/隐藏特定指标",
     "downloadStarted": "开始下载",
     "downloadFailed": "下载文件失败",

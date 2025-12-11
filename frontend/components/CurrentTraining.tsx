@@ -1,12 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useTraining } from '@/lib/TrainingContext';
 import { useProject } from '@/lib/ProjectContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { useDataset } from '@/lib/DatasetContext';
 import TrainingMetricsChart from '@/components/TrainingMetricsChart';
 import type { TrainingStatus } from '@/types/training';
+
+// Available refresh interval options (in seconds)
+const METRICS_REFRESH_INTERVAL_OPTIONS = [5, 10, 15, 30, 60, 120];
+const STATE_REFRESH_INTERVAL_OPTIONS = [2, 3, 5, 10, 15, 30];
 
 // Helper function to extract dataset ID from dataset_path
 // Format: workspace/{project_id}/datasets/{dataset_id}/datasets.jsonl
@@ -17,10 +21,11 @@ function extractDatasetIdFromPath(datasetPath: string | null): string | null {
 }
 
 function CurrentTraining() {
-  const { currentState, clearCurrentState } = useTraining();
+  const { currentState, clearCurrentState, stateRefreshInterval, setStateRefreshInterval } = useTraining();
   const { currentProject } = useProject();
   const { t } = useLanguage();
   const { datasets } = useDataset();
+  const [metricsRefreshInterval, setMetricsRefreshInterval] = useState(30); // Default 30 seconds
 
   if (!currentState || !currentProject) {
     return null;
@@ -269,12 +274,28 @@ function CurrentTraining() {
           {/* Metrics Charts */}
           {currentState.tensorboard_logdir && (
             <div className="bg-white bg-opacity-90 rounded p-4">
-              <p className="text-xs font-medium mb-3 opacity-75">📊 {t('training.trainingMetrics')}</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium opacity-75">📊 {t('training.trainingMetrics')}</p>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs opacity-75">{t('training.refreshInterval')}:</label>
+                  <select
+                    value={metricsRefreshInterval}
+                    onChange={(e) => setMetricsRefreshInterval(Number(e.target.value))}
+                    className="text-xs px-2 py-1 rounded border border-gray-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    {METRICS_REFRESH_INTERVAL_OPTIONS.map((seconds) => (
+                      <option key={seconds} value={seconds}>
+                        {seconds}s
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <TrainingMetricsChart
                 projectId={currentProject.id}
                 jobId={currentState.task_id}
                 autoRefresh={true}
-                refreshInterval={5000}
+                refreshInterval={metricsRefreshInterval * 1000}
               />
             </div>
           )}
@@ -445,9 +466,28 @@ function CurrentTraining() {
             )}
             {t(titleKey)}
           </h2>
-          <span className="px-3 py-1 rounded-full text-xs font-semibold border-2">
-            {getStatusLabel(currentState.status)}
-          </span>
+          <div className="flex items-center gap-3">
+            {/* State Refresh Interval Selector - only show when active */}
+            {isActive && (
+              <div className="flex items-center gap-1">
+                <label className="text-xs opacity-75">{t('training.stateRefreshInterval')}:</label>
+                <select
+                  value={stateRefreshInterval}
+                  onChange={(e) => setStateRefreshInterval(Number(e.target.value))}
+                  className="text-xs px-2 py-1 rounded border border-current border-opacity-30 bg-white bg-opacity-50 focus:outline-none focus:ring-1 focus:ring-current"
+                >
+                  {STATE_REFRESH_INTERVAL_OPTIONS.map((seconds) => (
+                    <option key={seconds} value={seconds}>
+                      {seconds}s
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <span className="px-3 py-1 rounded-full text-xs font-semibold border-2">
+              {getStatusLabel(currentState.status)}
+            </span>
+          </div>
         </div>
 
         <div className="space-y-1">

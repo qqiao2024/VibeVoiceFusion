@@ -10,6 +10,7 @@ interface TrainingContextType {
   currentState: TrainingState | null;
   loading: boolean;
   error: string | null;
+  stateRefreshInterval: number; // in seconds
 
   // Actions
   fetchStates: () => Promise<void>;
@@ -20,6 +21,7 @@ interface TrainingContextType {
   cancelJob: (jobId: string) => Promise<void>;
   refreshAll: () => Promise<void>;
   clearCurrentState: () => void;
+  setStateRefreshInterval: (interval: number) => void;
 }
 
 const TrainingContext = createContext<TrainingContextType | undefined>(undefined);
@@ -34,6 +36,7 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
   const [currentState, setCurrentState] = useState<TrainingState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stateRefreshInterval, setStateRefreshInterval] = useState(5); // Default 5 seconds
 
   // Track previous status to detect transitions
   const previousStatusRef = useRef<string | null>(null);
@@ -268,7 +271,7 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
     }
   }, [projectId, refreshAll]);
 
-  // Poll for current state updates (every 2 seconds when there's an active job)
+  // Poll for current state updates (configurable interval when there's an active job)
   // Continue polling for 5 seconds after completion to ensure frontend catches the final state
   useEffect(() => {
     // Only poll if there's an active state
@@ -285,10 +288,10 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
       return;
     }
 
-    // Active job - set up polling interval
+    // Active job - set up polling interval (convert seconds to milliseconds)
     const interval = setInterval(() => {
       fetchCurrentState();
-    }, 2000);
+    }, stateRefreshInterval * 1000);
 
     // If completed/failed, stop polling after 5 seconds
     let completionTimeout: NodeJS.Timeout | null = null;
@@ -304,13 +307,14 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
         clearTimeout(completionTimeout);
       }
     };
-  }, [currentState, fetchCurrentState]);
+  }, [currentState, fetchCurrentState, stateRefreshInterval]);
 
   const value: TrainingContextType = {
     states,
     currentState,
     loading,
     error,
+    stateRefreshInterval,
     fetchStates,
     fetchCurrentState,
     startTraining,
@@ -318,7 +322,8 @@ export function TrainingProvider({ children, projectId }: TrainingProviderProps)
     batchDeleteJobs,
     cancelJob,
     refreshAll,
-    clearCurrentState
+    clearCurrentState,
+    setStateRefreshInterval
   };
 
   return (
