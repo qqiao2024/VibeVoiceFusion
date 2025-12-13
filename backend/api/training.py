@@ -47,7 +47,7 @@ def _get_training_service(project_id: str) -> tuple:
         return service, 200
 
     except Exception as e:
-        logger.error(f"Error creating training service: {e}")
+        logger.error("Error creating training service", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)
@@ -180,7 +180,7 @@ def list_training_jobs(project_id: str):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error listing training jobs: {e}")
+        logger.error("Error listing training jobs: ", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)
@@ -222,7 +222,7 @@ def get_current_training_job(project_id: str):
             }), 200
 
     except Exception as e:
-        logger.error(f"Error getting current training job: {e}")
+        logger.error("Error getting current training job: ", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)
@@ -261,7 +261,7 @@ def get_training_job(project_id: str, job_id: str):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error getting training job: {e}")
+        logger.error("Error getting training job:", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)
@@ -367,7 +367,7 @@ def batch_delete_training_jobs(project_id: str):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error batch deleting training jobs: {e}")
+        logger.error("Error batch deleting training jobs:", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)
@@ -411,7 +411,7 @@ def download_lora_file(project_id: str, job_id: str, filename: str):
         )
 
     except Exception as e:
-        logger.error(f"Error downloading LoRA file: {e}")
+        logger.error("Error downloading LoRA file: ", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)
@@ -446,7 +446,7 @@ def list_lora_files(project_id: str):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error listing LoRA files: {e}")
+        logger.error("Error listing LoRA files: ", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)
@@ -519,7 +519,7 @@ def get_training_metrics(project_id: str, job_id: str):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error getting training metrics: {e}")
+        logger.error("Error getting training metrics: ", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)

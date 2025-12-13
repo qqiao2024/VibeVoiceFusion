@@ -3,8 +3,18 @@ File and directory handling utilities
 """
 import json
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime objects"""
+
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 class FileHandler:
@@ -52,7 +62,7 @@ class FileHandler:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=indent, ensure_ascii=False)
+            json.dump(data, f, indent=indent, ensure_ascii=False, cls=DateTimeEncoder)
 
     @staticmethod
     def write_json_atomic(file_path: Path, data: Dict[str, Any], indent: int = 2) -> None:
@@ -82,7 +92,7 @@ class FileHandler:
         try:
             # Write JSON to temp file
             with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=indent, ensure_ascii=False)
+                json.dump(data, f, indent=indent, ensure_ascii=False, cls=DateTimeEncoder)
 
             # Atomically replace the original file
             os.replace(temp_path, file_path)
