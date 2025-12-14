@@ -7,9 +7,12 @@ from flask_cors import CORS
 from pathlib import Path
 
 from backend.config import get_config
+from util.logger import get_logger
+
+logger = get_logger(__name__)
 
 
-def create_app(config_name=None):
+def create_app(config_name='production') -> Flask:
     """
     Application factory pattern for creating Flask app
 
@@ -29,11 +32,8 @@ def create_app(config_name=None):
                 static_folder=str(static_folder),
                 static_url_path=None)  # Disable Flask's built-in static serving
 
-    # Load configuration
-    if config_name is None:
-        config_name = os.environ.get('FLASK_ENV', 'development')
-
     config_class = get_config(config_name)
+    logger.info(f"Using configuration: {config_class}")
     app.config.from_object(config_class)
 
     # Initialize CORS
@@ -128,7 +128,6 @@ def register_error_handlers(app):
             'error': t('errors.file_too_large'),
             'message': t('errors.max_file_size', size=max_size)
         }), 413
-
 
 def register_blueprints(app):
     """Register API blueprints"""

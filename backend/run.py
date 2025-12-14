@@ -20,21 +20,27 @@ from backend.app import create_app  # noqa: E402
 def main():
     """Run the development server"""
     # Set environment for development
-    os.environ.setdefault('FLASK_ENV', 'development')
+    if 'FLASK_ENV' not in os.environ:
+        os.environ['FLASK_ENV'] = 'development'
+    
+    env = os.environ.get('FLASK_ENV')
 
     # Create application
-    app = create_app('development')
+    app = create_app(env)
 
     # Get configuration
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', 9527))
-    debug = os.environ.get('FLASK_DEBUG', 'true').lower() == 'true'
+    # Debug mode defaults based on environment: enabled for development, disabled for production
+    debug_default = 'true' if env == 'development' else 'false'
+    debug = os.environ.get('FLASK_DEBUG', debug_default).lower() == 'true'
+
 
     print(f"""
     TPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPW
     Q       VibeVoice Backend Server             Q
     `PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPc
-    Q  Environment: Development                  Q
+    Q  Environment: {env.capitalize():<24}  Q
     Q  Server:      http://{host}:{port:<15}  Q
     Q  Debug mode:  {'Enabled' if debug else 'Disabled':<24}  Q
     ZPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP]
@@ -45,7 +51,7 @@ def main():
         host=host,
         port=port,
         debug=debug,
-        use_reloader=True
+        use_reloader=debug
     )
 
 

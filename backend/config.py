@@ -3,8 +3,10 @@ Configuration management for VibeVoice backend
 """
 import os
 from pathlib import Path
+from dataclasses import dataclass, asdict
 
 
+@dataclass
 class Config:
     """Base configuration"""
 
@@ -36,23 +38,25 @@ class Config:
 
     FAKE_MODEL = os.environ.get('FAKE_MODEL', 'false').lower() == 'true'
 
-
+@dataclass
 class DevelopmentConfig(Config):
     """Development configuration"""
-    DEBUG = True
-    TESTING = False
+    FLASK_DEBUG = True
+    FLASK_TESTING = False
 
 
+@dataclass
 class ProductionConfig(Config):
     """Production configuration"""
-    DEBUG = False
-    TESTING = False
+    FLASK_DEBUG = False
+    FLASK_TESTING = False
 
 
+@dataclass
 class TestingConfig(Config):
     """Testing configuration"""
-    DEBUG = True
-    TESTING = True
+    FLASK_DEBUG = True
+    FLASK_TESTING = True
 
 
 # Configuration dictionary
