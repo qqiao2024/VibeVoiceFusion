@@ -23,18 +23,20 @@ class TrainingService:
 
     TRAINING_META_FILE = 'training_history.json'
 
-    def __init__(self, project_training_dir: Path, fake_engine: bool = False):
+    def __init__(self, project_training_dir: Path, project_id: str = None, fake_engine: bool = False):
         """
         Initialize training service for a specific project
 
         Args:
             project_training_dir: Path to project's training directory
+            project_id: Project identifier (used to filter current job)
             fake_engine: Use FakeTrainingEngine for development
         """
         self.output_dir = Path(project_training_dir)
         self.meta_file_path = self.output_dir / self.TRAINING_META_FILE
         self.file_handler = FileHandler()
         self.fake_engine = fake_engine
+        self.project_id = project_id
 
         # Ensure output directory exists
         self.file_handler.ensure_directory(self.output_dir)
@@ -224,7 +226,9 @@ class TrainingService:
     def get_current_job(self) -> Optional[TrainingState]:
         """
         Get the currently running training job from task manager, or the most recent
-        completed/failed job if it finished within the last 10 seconds
+        completed/failed job if it finished within the last 10 seconds.
+
+        Only returns jobs that belong to this service's project_id.
 
         Returns:
             TrainingState with live metrics if training is active,
@@ -232,11 +236,15 @@ class TrainingService:
         """
         task = gm.get_current_task()
 
-        # If there's an active task, return its live state
+        # If there's an active task, return its live state (if it belongs to this project)
         if task:
             engine = task.unwrap()
             if isinstance(engine, BaseTrainingEngine):
                 live_state = engine.get_state()
+                # Only return if the task belongs to this project
+                if self.project_id and live_state.project_id != self.project_id:
+                    # Task is running but for a different project
+                    return None
                 return live_state
             elif engine is not None:
                 # current is inference task, ignored for training
@@ -248,7 +256,7 @@ class TrainingService:
         if not states_meta:
             return None
 
-        # Find the most recent completed or failed job
+        # Find the most recent completed or failed job (for this project)
         recent_jobs = []
         for state_dict in states_meta.values():
             try:

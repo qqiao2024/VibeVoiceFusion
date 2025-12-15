@@ -185,10 +185,9 @@ def get_voice_generation_service(project_id: str):
 @api_bp.route('/projects/generations/current', methods=['GET'])
 def get_current_generation():
     """
-    Get the current generation status for a project
+    Get the current generation status globally (for any project).
+    Used by the navigation task indicator.
 
-    Args:
-        project_id: Project identifier
     Returns:
         JSON response with current generation status (200 with null if none active)
     """
@@ -218,6 +217,58 @@ def get_current_generation():
         else:
             gen_dict = generation.to_dict()
             gen_dict['session_name'] = t('session.unknown')
+    except Exception as e:
+        logger.warning(f"Failed to enrich current generation with session name: {e}")
+        gen_dict = generation.to_dict()
+        gen_dict['session_name'] = t('session.unknown')
+
+    return jsonify({
+        'message': 'Current generation status retrieved successfully',
+        'generation': gen_dict
+    }), 200
+
+
+@api_bp.route('/projects/<project_id>/generations/current', methods=['GET'])
+def get_current_generation_for_project(project_id: str):
+    """
+    Get the current generation status for a specific project.
+    Only returns the generation if it belongs to the specified project.
+
+    Args:
+        project_id: Project identifier
+    Returns:
+        JSON response with current generation status (200 with null if none active for this project)
+    """
+    task: Task = gm.get_current_task()
+    if not task or not isinstance(task.unwrap(), InferenceBase):
+        return jsonify({
+            'message': 'No active generation task at the moment',
+            'generation': None
+        }), 200
+
+    inference: InferenceBase = task.unwrap()
+    generation: Generation = inference.generation
+
+    # Check if the generation belongs to the requested project
+    if generation.project_id != project_id:
+        return jsonify({
+            'message': 'No active generation task for this project',
+            'generation': None
+        }), 200
+
+    # Enrich with session name
+    try:
+        project_service = ProjectService(workspace_dir=current_app.config['WORKSPACE_DIR'],
+                                         meta_file_name=current_app.config['PROJECTS_META_FILE'])
+        project_path = project_service.get_project_path(project_id)
+
+        if project_path:
+            speaker_service = SpeakerService(project_path / 'voices')
+            dialog_service = DialogSessionService(project_path / 'scripts', speaker_service=speaker_service)
+            gen_dict = _enrich_generation_with_session_name(generation, dialog_service)
+        else:
+            gen_dict = generation.to_dict()
+            gen_dict['session_name'] = t('session.deleted')
     except Exception as e:
         logger.warning(f"Failed to enrich current generation with session name: {e}")
         gen_dict = generation.to_dict()

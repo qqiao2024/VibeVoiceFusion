@@ -62,10 +62,13 @@ export function GenerationProvider({ children, projectId }: GenerationProviderPr
     }
   }, [projectId]);
 
-  // Fetch current generation status
+  // Fetch current generation status for this project
   const fetchCurrentGeneration = useCallback(async () => {
+    if (!projectId) return;
+
     try {
-      const response = await api.getCurrentGeneration();
+      // Use project-specific endpoint to only get generations for this project
+      const response = await api.getCurrentGenerationForProject(projectId);
       const newCurrentGeneration = response.generation;
 
       // Check if we had an active generation that just completed (became null)

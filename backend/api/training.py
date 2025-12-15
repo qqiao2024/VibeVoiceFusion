@@ -41,6 +41,7 @@ def _get_training_service(project_id: str) -> tuple:
         training_dir = project_path / 'training'
         service = TrainingService(
             project_training_dir=training_dir,
+            project_id=project_id,
             fake_engine=current_app.config.get('FAKE_MODEL', False)
         )
 

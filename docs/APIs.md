@@ -13,9 +13,10 @@ http://localhost:9527/api/v1
 1. [Projects API](#projects-api)
 2. [Speakers API](#speakers-api)
 3. [Dialog Sessions API](#dialog-sessions-api)
-4. [Generation API](#generation-api)
-5. [Dataset Management API](#dataset-management-api)
-6. [Training Management API](#training-management-api)
+4. [Tasks API (Unified)](#tasks-api-unified)
+5. [Generation API](#generation-api)
+6. [Dataset Management API](#dataset-management-api)
+7. [Training Management API](#training-management-api)
 
 ---
 
@@ -332,6 +333,93 @@ Delete a dialog session.
 
 ---
 
+# Tasks API (Unified)
+
+## Overview
+
+The Tasks API provides a unified endpoint to check all running tasks (both inference/generation and training). This is used by the navigation task indicator to show when any task is running across all projects.
+
+## Endpoints
+
+### 1. Get Current Task
+
+**GET** `/api/v1/tasks/current`
+
+Get the currently running task (either inference or training) regardless of project.
+
+**Response (200 OK, inference task running):**
+```json
+{
+  "message": "Current inference task retrieved successfully",
+  "task": {
+    "type": "inference",
+    "project_id": "project-id",
+    "data": {
+      "request_id": "generation-request-id",
+      "session_id": "session-id",
+      "session_name": "My Dialog",
+      "status": "inferencing",
+      "details": {
+        "current": 45,
+        "total_step": 100,
+        "percentage": 45.0
+      },
+      "created_at": "2025-12-02T10:00:00Z"
+    }
+  }
+}
+```
+
+**Response (200 OK, training task running):**
+```json
+{
+  "message": "Current training task retrieved successfully",
+  "task": {
+    "type": "training",
+    "project_id": "project-id",
+    "data": {
+      "task_id": "abc123",
+      "job_name": "My LoRA Training",
+      "status": "Training",
+      "current_step": 150,
+      "estimated_total_steps": 1000,
+      "current_epoch": 5,
+      "total_epochs": 10,
+      "current_loss": 0.245
+    }
+  }
+}
+```
+
+**Response (200 OK, no active task):**
+```json
+{
+  "message": "No active task at the moment",
+  "task": {
+    "type": null,
+    "project_id": null,
+    "data": null
+  }
+}
+```
+
+## Task Types
+
+| Type | Description |
+|------|-------------|
+| `inference` | Voice generation task is running |
+| `training` | LoRA training task is running |
+| `null` | No active task |
+
+## Use Case
+
+The unified Tasks API is primarily used for:
+- **Navigation task indicator**: Shows a badge when any task is running
+- **Cross-project task awareness**: Know if a task is running even when viewing a different project
+- **Task type routing**: Navigate to the correct page (generation or training) based on task type
+
+---
+
 # Generation API
 
 ## Overview
@@ -342,66 +430,122 @@ The Generation API handles voice generation requests. It uses a shared task mana
 
 ### 1. Start Generation
 
-**POST** `/api/v1/projects/{project_id}/generate`
+**POST** `/api/v1/projects/{project_id}/generations`
 
 Start a new voice generation task.
 
 **Request Body:**
 ```json
 {
-  "session_id": "session-id",
-  "number_of_layers": 12,
-  "temperature": 0.7,
-  "top_k": 50,
-  "top_p": 0.95
+  "dialog_session_id": "session-id",
+  "seeds": 42,
+  "cfg_scale": 1.3,
+  "model_dtype": "float8_e4m3fn",
+  "attn_implementation": "sdpa",
+  "lora_model_path": "path/to/lora.safetensors",
+  "lora_weight": 1.0,
+  "offloading": {
+    "enabled": true,
+    "mode": "preset",
+    "preset": "balanced"
+  }
 }
 ```
 
-**Response (201 Created):**
+**Response (200 OK):**
 ```json
 {
   "message": "Generation started successfully",
   "request_id": "generation-request-id",
-  "status": "pending"
+  "generation": {
+    "request_id": "abc123",
+    "session_id": "session-id",
+    "session_name": "My Dialog",
+    "status": "pending",
+    "created_at": "2025-12-02T10:00:00Z"
+  }
 }
 ```
 
-**Response (409 Conflict):**
+**Response (500 Error - Task Manager Busy):**
 ```json
 {
-  "error": "Conflict",
-  "message": "Task manager is busy"
+  "error": "Internal Server Error",
+  "message": "A generation task is already running"
 }
 ```
 
-### 2. Get Generation Status
+### 2. Get Current Generation (Global)
 
-**GET** `/api/v1/projects/{project_id}/generate/current`
+**GET** `/api/v1/projects/generations/current`
 
-Get current generation task status with live progress.
+Get current generation task status globally (for any project). Used by the navigation task indicator.
 
 **Response (200 OK, generation in progress):**
 ```json
 {
-  "request_id": "generation-request-id",
-  "status": "processing",
-  "progress": 45.5,
-  "session_name": "My Dialog",
-  "created_at": "2025-12-02T10:00:00Z"
+  "message": "Current generation status retrieved successfully",
+  "generation": {
+    "request_id": "generation-request-id",
+    "project_id": "project-id",
+    "session_id": "session-id",
+    "session_name": "My Dialog",
+    "status": "inferencing",
+    "details": {
+      "current": 45,
+      "total_step": 100,
+      "percentage": 45.0
+    },
+    "created_at": "2025-12-02T10:00:00Z"
+  }
 }
 ```
 
 **Response (200 OK, no active generation):**
 ```json
 {
-  "message": "No active generation",
-  "status": null
+  "message": "No active generation task at the moment",
+  "generation": null
 }
 ```
 
-### 3. List Generation History
+### 3. Get Current Generation (Project-Specific)
 
-**GET** `/api/v1/projects/{project_id}/generate/history`
+**GET** `/api/v1/projects/{project_id}/generations/current`
+
+Get current generation task status for a specific project only. Returns null if the running generation belongs to a different project.
+
+**Response (200 OK, generation in progress for this project):**
+```json
+{
+  "message": "Current generation status retrieved successfully",
+  "generation": {
+    "request_id": "generation-request-id",
+    "project_id": "project-id",
+    "session_id": "session-id",
+    "session_name": "My Dialog",
+    "status": "inferencing",
+    "details": {
+      "current": 45,
+      "total_step": 100,
+      "percentage": 45.0
+    },
+    "created_at": "2025-12-02T10:00:00Z"
+  }
+}
+```
+
+**Response (200 OK, no active generation for this project):**
+```json
+{
+  "message": "No active generation task for this project",
+  "generation": null
+}
+```
+
+### 4. List Generations
+
+**GET** `/api/v1/projects/{project_id}/generations`
 
 Get all generation requests for a project.
 
@@ -412,43 +556,92 @@ Get all generation requests for a project.
     {
       "request_id": "generation-request-id",
       "session_id": "session-id",
+      "session_name": "My Dialog",
       "status": "completed",
-      "output_file": "uuid.wav",
-      "created_at": "2025-12-02T10:00:00Z",
-      "completed_at": "2025-12-02T10:05:00Z"
+      "output_filename": "uuid.wav",
+      "created_at": "2025-12-02T10:00:00Z"
     }
-  ]
+  ],
+  "count": 1
 }
 ```
 
-### 4. Download Generated Audio
+### 5. Get Specific Generation
 
-**GET** `/api/v1/projects/{project_id}/generate/{request_id}/audio`
+**GET** `/api/v1/projects/{project_id}/generations/{request_id}`
 
-Download the generated audio file.
+Get details of a specific generation request.
+
+**Response (200 OK):**
+```json
+{
+  "generation": {
+    "request_id": "generation-request-id",
+    "session_id": "session-id",
+    "session_name": "My Dialog",
+    "status": "completed",
+    "output_filename": "uuid.wav",
+    "created_at": "2025-12-02T10:00:00Z"
+  }
+}
+```
+
+### 6. Download Generated Audio
+
+**GET** `/api/v1/projects/{project_id}/generations/{request_id}/download`
+
+Download or stream the generated audio file.
+
+**Query Parameters:**
+- `download` (optional): If `true`, force download as attachment. Otherwise, serve inline for playback.
 
 **Response (200 OK):**
 - Content-Type: `audio/wav`
 - Binary audio data
 
-**Response (404 Not Found):**
+**Response (400 Bad Request):**
 ```json
 {
   "error": "Not Found",
-  "message": "Generation not found or not completed"
+  "message": "Generation not found"
 }
 ```
 
-### 5. Delete Generation
+### 7. Delete Generation
 
-**DELETE** `/api/v1/projects/{project_id}/generate/{request_id}`
+**DELETE** `/api/v1/projects/{project_id}/generations/{request_id}`
 
 Delete a generation request and its output file.
 
 **Response (200 OK):**
 ```json
 {
-  "message": "Generation deleted successfully"
+  "message": "Generation deleted successfully",
+  "request_id": "generation-request-id"
+}
+```
+
+### 8. Batch Delete Generations
+
+**POST** `/api/v1/projects/{project_id}/generations/batch-delete`
+
+Delete multiple generation requests at once.
+
+**Request Body:**
+```json
+{
+  "request_ids": ["id1", "id2", "id3"]
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "message": "Generations deleted successfully",
+  "deleted_count": 2,
+  "failed_count": 1,
+  "deleted_ids": ["id1", "id2"],
+  "failed_ids": ["id3"]
 }
 ```
 
@@ -457,7 +650,9 @@ Delete a generation request and its output file.
 | Status | Description |
 |--------|-------------|
 | `pending` | Task created, waiting to start |
-| `processing` | Generation in progress |
+| `preprocessing` | Preparing dialog and speakers |
+| `inferencing` | Voice generation in progress |
+| `saving_audio` | Saving generated audio to file |
 | `completed` | Generation finished successfully |
 | `failed` | Generation failed with error |
 
@@ -844,13 +1039,13 @@ curl "http://localhost:9527/api/v1/projects/my-project/training"
 
 ---
 
-### 3. Get Current Training Job
+### 3. Get Current Training Job (Project-Specific)
 
 **GET** `/api/v1/projects/{project_id}/training/current`
 
-Get the currently running training job with live metrics from task manager.
+Get the currently running training job with live metrics from task manager. **Only returns the training job if it belongs to the specified project.**
 
-**Response (200 OK):**
+**Response (200 OK, training in progress for this project):**
 ```json
 {
   "message": "Current training job retrieved successfully",
@@ -858,7 +1053,7 @@ Get the currently running training job with live metrics from task manager.
 }
 ```
 
-**Response (200 OK, no active training):**
+**Response (200 OK, no active training for this project):**
 ```json
 {
   "message": "No active training job at the moment",
@@ -867,7 +1062,7 @@ Get the currently running training job with live metrics from task manager.
 ```
 
 **Status Codes:**
-- `200 OK` - Success (state may be null if no active training)
+- `200 OK` - Success (state may be null if no active training for this project)
 - `404 Not Found` - Project not found
 - `500 Internal Server Error` - Server error
 
@@ -876,7 +1071,9 @@ Get the currently running training job with live metrics from task manager.
 curl "http://localhost:9527/api/v1/projects/my-project/training/current"
 ```
 
-**Note:** This endpoint reads live state from the training engine in memory, providing real-time metrics updates.
+**Notes:**
+- This endpoint reads live state from the training engine in memory, providing real-time metrics updates.
+- **Project Filtering**: If a training job is running for a different project, this endpoint returns `null`. Use the unified [Tasks API](#tasks-api-unified) to check if any task is running globally.
 
 ---
 

@@ -361,6 +361,10 @@ class ApiClient {
     return this.fetch('/projects/generations/current');
   }
 
+  async getCurrentGenerationForProject(projectId: string): Promise<CurrentGenerationResponse> {
+    return this.fetch(`/projects/${encodeURIComponent(projectId)}/generations/current`);
+  }
+
   async listGenerations(projectId: string): Promise<ListGenerationsResponse> {
     return this.fetch(`/projects/${encodeURIComponent(projectId)}/generations`);
   }
