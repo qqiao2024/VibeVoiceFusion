@@ -2,25 +2,25 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { api } from './api';
-import type { Generation } from '@/types/generation';
+import type { CurrentTask } from '@/types/task';
 
 interface GlobalTaskContextType {
-  currentTask: Generation | null;
+  currentTask: CurrentTask | null;
   refreshTask: () => Promise<void>;
 }
 
 const GlobalTaskContext = createContext<GlobalTaskContextType | undefined>(undefined);
 
 export function GlobalTaskProvider({ children }: { children: React.ReactNode }) {
-  const [currentTask, setCurrentTask] = useState<Generation | null>(null);
+  const [currentTask, setCurrentTask] = useState<CurrentTask | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const refreshTask = useCallback(async () => {
     try {
-      const response = await api.getCurrentGeneration();
-      setCurrentTask(response.generation);
+      const response = await api.getCurrentTask();
+      setCurrentTask(response.task);
     } catch (error) {
-      console.error('Error checking running generation:', error);
+      console.error('Error checking running task:', error);
       setCurrentTask(null);
     }
   }, []);
@@ -32,7 +32,7 @@ export function GlobalTaskProvider({ children }: { children: React.ReactNode }) 
 
   // Poll every 60 seconds
   useEffect(() => {
-    pollingIntervalRef.current = setInterval(refreshTask, 60000);
+    pollingIntervalRef.current = setInterval(refreshTask, 5000);
 
     return () => {
       if (pollingIntervalRef.current) {

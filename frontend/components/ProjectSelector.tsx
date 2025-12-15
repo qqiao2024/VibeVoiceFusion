@@ -7,8 +7,35 @@ import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
-// Invalid characters for project names (same as backend validation)
-const INVALID_CHARS = '<>:"/\\|?*';
+/**
+ * Validate project name according to backend rules:
+ * - Must start with an alphabet character (a-z, A-Z)
+ * - Can include: alphabet, numbers, underscore (_), hyphen (-), and space
+ * - Spaces can only appear in the middle (not at start or end)
+ * - Pattern: ^[a-zA-Z][a-zA-Z0-9_\- ]*$
+ */
+function validateProjectName(name: string, t: (key: string) => string): string | null {
+  // Don't show error for empty input (let the required check handle it)
+  if (!name) return null;
+
+  // Check if name starts or ends with space
+  if (name.startsWith(' ') || name.endsWith(' ')) {
+    return t('project.nameNoSpacesAtEnds');
+  }
+
+  // Check if first character is an alphabet
+  if (!/^[a-zA-Z]/.test(name)) {
+    return t('project.nameMustStartWithLetter');
+  }
+
+  // Check if all characters are valid (alphabet, number, _, -, or space)
+  const validPattern = /^[a-zA-Z][a-zA-Z0-9_\- ]*$/;
+  if (!validPattern.test(name)) {
+    return t('project.invalidCharsError');
+  }
+
+  return null;
+}
 
 export default function ProjectSelector() {
   const { projects, selectProject, createProject, deleteProject } = useProject();
@@ -20,16 +47,7 @@ export default function ProjectSelector() {
 
   // Validate project name and return error message if invalid
   const projectNameError = useMemo(() => {
-    const trimmed = newProjectName.trim();
-    if (!trimmed) return null; // Don't show error for empty input
-
-    // Check for invalid characters
-    const foundInvalidChars = INVALID_CHARS.split('').filter(char => trimmed.includes(char));
-    if (foundInvalidChars.length > 0) {
-      return t('project.invalidCharsError').replace('{chars}', foundInvalidChars.join(' '));
-    }
-
-    return null;
+    return validateProjectName(newProjectName, t);
   }, [newProjectName, t]);
 
   const handleSelectProject = (projectId: string) => {

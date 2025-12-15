@@ -21,6 +21,8 @@ import type {
   GetTrainingMetricsResponse
 } from '@/types/training';
 
+import type { CurrentTaskResponse } from '@/types/task';
+
 // API base URL configuration
 // Development: Full URL to backend server (different origin)
 // Production: Relative path (same origin, backend serves frontend)
@@ -335,6 +337,12 @@ class ApiClient {
 
   getSessionDownloadUrl(projectId: string, sessionId: string): string {
     return `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionId)}/download`;
+  }
+
+  // ============ Tasks API (Unified) ============
+
+  async getCurrentTask(): Promise<CurrentTaskResponse> {
+    return this.fetch('/tasks/current');
   }
 
   // ============ Generations API ============

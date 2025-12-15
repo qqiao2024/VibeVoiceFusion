@@ -20,3 +20,4 @@ from backend.api import dialog_sessions  # noqa: F401, E402
 from backend.api import generation  # noqa: F401, E402
 from backend.api import datasets  # noqa: F401, E402
 from backend.api import training  # noqa: F401, E402
+from backend.api import tasks  # noqa: F401, E402
