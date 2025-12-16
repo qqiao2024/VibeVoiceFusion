@@ -131,11 +131,7 @@ class Trainer(ABC):
         self.visitor = visitor if visitor is not None else VisitorManager()
 
     def train(self):
-        try:
-            self._train()
-        except Exception as e:
-            self.visitor.visit_training_failed(datetime.now().timestamp(), str(e))
-            raise e
+        self._train()
 
     @abstractmethod
     def _train(self):
@@ -555,4 +551,3 @@ class VibeVoiceTrainer(Trainer):
         if self.network is not None:
             del self.network
         torch.cuda.empty_cache()
-

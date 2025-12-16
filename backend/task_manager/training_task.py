@@ -1,5 +1,6 @@
 
-from backend.task_manager.task import Task
+from datetime import datetime
+from backend.task_manager.task import FAILURE_TYPE_GENERAL, Task
 from backend.training.engine import BaseTrainingEngine
 from util.logger import get_logger
 
@@ -18,9 +19,9 @@ class TrainingTask(Task):
     def run(self):
         self.training_engine.train()
 
-    def task_failure(self, error_msg: str):
-        # Handle training failure logic here
-        pass
+    def task_failure(self, error_msg: str, failure_type: str = FAILURE_TYPE_GENERAL):
+        # let trainer object handle failure
+        self.training_engine.visit_training_failed(datetime.now().timestamp(), error_msg, failure_type=failure_type)
 
     def task_success(self, message: str):
         # Handle training success logic here

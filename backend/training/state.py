@@ -48,6 +48,7 @@ class TrainingState:
     # Training status
     status: str = "Prepare"  # Prepare, Training, Completed, Failed
     error_message: str = ""
+    is_oom_failure: bool = False
 
     # TensorBoard
     tensorboard_logdir: str = ""

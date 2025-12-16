@@ -1,4 +1,4 @@
-from backend.task_manager.task import Task
+from backend.task_manager.task import FAILURE_TYPE_GENERAL, Task
 from typing import Any, Dict, List
 from backend.inference.inference import InferenceBase
 from config.configuration_vibevoice import InferencePhase
@@ -24,11 +24,11 @@ class InferenceTask(Task):
     def run(self):
         logger.info(f"generation id{self.inference.generation.request_id} is created, "
                     "now running")
-        self.inference.run_inference(status_update=self.inference.generation.update_status)
+        self.inference.run_inference()
 
-    def task_failure(self, error_msg: str):
+    def task_failure(self, error_msg: str, failure_type: str = FAILURE_TYPE_GENERAL):
         logger.error(f"generation id{self.inference.generation.request_id} running failed, error: {error_msg}")
-        self.inference.generation.status = InferencePhase.FAILED
+        self.inference.failure(error_msg, failure_type)
 
     def task_success(self, message: str):
         logger.info(f"Inference task completed successfully: {message}")

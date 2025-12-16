@@ -1,4 +1,6 @@
 import base64
+from datetime import datetime
+import random
 from typing import Union
 import time
 import torch
@@ -6,10 +8,11 @@ import torch
 from abc import ABC, abstractmethod
 from flask import current_app
 from pathlib import Path
+from vibevoice.generation.visitor import GenerationVisitor
 from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalInference, VibeVoiceGenerationOutput
 from vibevoice.modular.custom_offloading_utils import OffloadConfig
 from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
-from config.configuration_vibevoice import DEFAULT_CONFIG, VibeVoiceConfig, InferencePhase
+from config.configuration_vibevoice import DEFAULT_CONFIG, VibeVoiceConfig
 from backend.models.generation import Generation, UpdateStatusCallable
 from backend.services.speaker_service import SpeakerService
 from backend.services.dialog_session_service import DialogSessionService
@@ -49,16 +52,19 @@ class FakeModel:
         pass
 
     def generate(self, **kwargs) -> Union[torch.LongTensor, VibeVoiceGenerationOutput]:
+        visitor: GenerationVisitor = kwargs.get("generation_visitor", None)
         for i in range(100):
+            if visitor is not None:
+                visitor.visit_inference_step_start(current_step=i+1, total_steps=100)
             time.sleep(0.5)  # Simulate some processing time
-            kwargs.get("status_update", lambda phase, **kwargs: None)(InferencePhase.INFERENCING, current=i + 1, total_step=100)
-
+            if visitor is not None:
+                visitor.visit_inference_step_end(current_step=i+1, total_steps=100)
         return torch.randn(1, 16000 * 5)  # Simulate 5 seconds of audio at 16kHz
 
 class InferenceBase(ABC):
     def __init__(self, generation: Generation, speaker_service: SpeakerService,
                  dialog_service: DialogSessionService, meta_file_path: str):
-        self.generation = generation
+        self.visitor: GenerationVisitor = generation
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.speaker_service = speaker_service
         self.dialog_service = dialog_service
@@ -66,6 +72,10 @@ class InferenceBase(ABC):
         self.meta_file_path = meta_file_path
         self.lora_model_path = generation.lora_model_path
         self.lora_weight = generation.lora_weight
+        self.model_type = generation.model_dtype
+        self.atten_implementation = generation.attn_implementation
+        self.batch_size = generation.batch_size if generation.is_multi_generation else 1
+        self.seeds = generation.seeds
 
     @staticmethod
     def create(generation: Generation, speaker_service: SpeakerService,
@@ -127,16 +137,18 @@ class InferenceBase(ABC):
     def _load_model(self, dtype: torch.dtype, config: str = None):
         pass
 
+    def failure(self, message: str, failure_type: str):
+        self.visitor.visit_failed(message, failure_type)
+
     @abstractmethod
     def _save_audio(self, outputs: Union[torch.LongTensor, VibeVoiceGenerationOutput],
                     processor: VibeVoiceProcessor, update_status: UpdateStatusCallable,
                     generation_time: float, input_tokens: int, **kwargs) -> None:
         pass
 
-    def run_inference(self, status_update: UpdateStatusCallable = lambda phase, *args, **kwargs: None):
+    def run_inference(self):
 
-        get_generator(self.generation.seeds)
-
+        self.visitor.visit_preprocessing(datetime.now().timestamp())
         txt_content, scripts, unique_speaker_names, max_speaker_id = self.dialog_service.parse_session_txt_script(self.generation.session_id)
         if not scripts or not unique_speaker_names:
             raise RuntimeError("No scripts, speaker_numbers found for the specified dialog session.")
@@ -153,51 +165,59 @@ class InferenceBase(ABC):
         full_script = '\n'.join(scripts)
         full_script = full_script.replace("’", "'")
 
-        status_update(InferencePhase.PREPROCESSING, scripts=scripts,
-                      unique_speaker_names=unique_speaker_names,
-                      voice_sample=voice_sample,
-                      max_speaker_id=max_speaker_id)
-
-        processor = VibeVoiceProcessor.from_pretrained(None)
-        inputs = processor(text=[full_script],
-                           voice_samples=[voice_sample],
-                           padding=True,
-                           return_tensors="pt",
-                           return_attention_mask=True)
-
-        for k, v in inputs.items():
-            if torch.is_tensor(v):
-                inputs[k] = v.to(self.device)
 
         load_dtype = torch.bfloat16
-        if self.generation.model_dtype == "float8_e4m3fn":
+        if self.model_dtype == "float8_e4m3fn":
             load_dtype = torch.float8_e4m3fn
+
         logger.info(f"Loading model with dtype: {load_dtype}, "
-                    f"attn_implementation: {self.generation.attn_implementation}")
+                    f"attn_implementation: {self.attn_implementation}")
 
         # only for testing purpose, load a fake model
         model = self._load_model(dtype=load_dtype)
 
-        start_time = time.time()
+        self.visitor.visit_inference_start(scripts=scripts,
+                                           unique_speaker_names=unique_speaker_names,
+                                           voice_sample=voice_sample,
+                                           max_speaker_id=max_speaker_id)
+        for batch_idx in range(self.batch_size):
+            get_generator(self.seeds)
+            self.visitor.visit_inference_batch_start(batch_index=batch_idx, seeds=self.seeds)
+            processor = VibeVoiceProcessor.from_pretrained(None)
+            inputs = processor(text=[full_script],
+                               voice_samples=[voice_sample],
+                               padding=True,
+                               return_tensors="pt",
+                               return_attention_mask=True)
 
-        outputs = model.generate(**inputs,
-                                 max_new_tokens=None,
-                                 cfg_scale=self.generation.cfg_scale,
-                                 tokenizer=processor.tokenizer,
-                                 generation_config={'do_sample': False},
-                                 verbose=False,
-                                 status_update=status_update)
+            for k, v in inputs.items():
+                if torch.is_tensor(v):
+                    inputs[k] = v.to(self.device)
 
-        generation_time = time.time() - start_time
-        self._save_audio(outputs, processor, status_update, generation_time,
-                         inputs['input_ids'].shape[1],
-                         unique_speaker_names=unique_speaker_names,
-                         number_of_segments=len(scripts))
+            start_time = time.time()
+            outputs = model.generate(**inputs,
+                                     max_new_tokens=None,
+                                     cfg_scale=self.generation.cfg_scale,
+                                     tokenizer=processor.tokenizer,
+                                     generation_config={'do_sample': False},
+                                     verbose=False,
+                                     generation_visitor=self.visitor)
 
+            generation_time = time.time() - start_time
+            self._save_audio(outputs, processor, generation_time,
+                             inputs['input_ids'].shape[1],
+                             unique_speaker_names=unique_speaker_names,
+                             number_of_segments=len(scripts))
+
+            self.visitor.visit_inference_batch_end(batch_index=batch_idx)
+
+            self.seeds = random.randint(0, 2**64 - 1)
+
+        self.visitor.visit_completed()
 
 class InferenceEngine(InferenceBase):
     def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
-                 offload_config: Optional[OffloadConfig] = None): 
+                 offload_config: Optional[OffloadConfig] = None):
         """
         Initialize inference engine with optional layer offloading.
 
@@ -227,7 +247,7 @@ class InferenceEngine(InferenceBase):
         config = VibeVoiceConfig.from_dict(config_dict,
                                            torch_dtype=dtype,
                                            device_map="cuda",
-                                           attn_implementation=self.generation.attn_implementation)
+                                           attn_implementation=self.attn_implementation)
 
         # Use offload config if provided
         if self.offload_config and self.offload_config.enabled:
@@ -289,8 +309,10 @@ class InferenceEngine(InferenceBase):
         }
 
     def _save_audio(self, outputs: Union[torch.LongTensor, VibeVoiceGenerationOutput],
-                    processor: VibeVoiceProcessor, status_update: UpdateStatusCallable,
-                    generation_time: float, input_tokens: int, **kwargs) -> None:
+                    processor: VibeVoiceProcessor,
+                    generation_time: float,
+                    input_tokens: int,
+                    **kwargs) -> None:
         if outputs.speech_outputs is None or len(outputs.speech_outputs) == 0:
             raise RuntimeError("No audio output generated.")
 
@@ -320,15 +342,16 @@ class InferenceEngine(InferenceBase):
         output_audio_path = Path(self.generation.project_dir) / output_filename
         processor.save_audio(outputs.speech_outputs[0], output_path=output_audio_path)
 
-        status_update(InferencePhase.SAVING_AUDIO,
-                      output_audio_path=str(output_audio_path),
-                      generation_time=generation_time,
-                      prefilling_tokens=input_tokens,
-                      total_tokens=output_tokens,
-                      generated_tokens=generated_tokens,
-                      audio_duration_seconds=audio_duration,
-                      real_time_factor=rtf,
-                      **kwargs)
+        self.visitor.visit_inference_save_audio_file(
+            output_audio_path=str(output_audio_path),
+            generation_time=generation_time,
+            prefilling_tokens=input_tokens,
+            total_tokens=output_tokens,
+            generated_tokens=generated_tokens,
+            audio_duration_seconds=audio_duration,
+            real_time_factor=rtf,
+            **kwargs)
+
         logger.info(f"Saving generated audio to {output_audio_path}")
         return
 
@@ -427,8 +450,10 @@ class FakeInferenceEngine(InferenceBase):
         }
 
     def _save_audio(self, outputs: Union[torch.LongTensor, VibeVoiceGenerationOutput],
-                    processor: VibeVoiceProcessor, status_update: UpdateStatusCallable,
-                    generation_time: float, input_tokens: int, **kwargs) -> None:
+                    processor: VibeVoiceProcessor,
+                    generation_time: float, 
+                    input_tokens: int,
+                    **kwargs) -> None:
         base64_wav_audio = "UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA"  # Fake short audio for test
         audio_data = base64.b64decode(base64_wav_audio)
 
@@ -452,15 +477,17 @@ class FakeInferenceEngine(InferenceBase):
         output_audio_path = Path(self.generation.project_dir) / output_filename
         with open(output_audio_path, 'wb') as f:
             f.write(audio_data)
-        status_update(InferencePhase.SAVING_AUDIO,
-                      output_audio_path=str(output_audio_path),
-                      prefilling_tokens=input_tokens,
-                      generation_time=generation_time,
-                      total_tokens=fake_total_tokens,
-                      generated_tokens=fake_generated_tokens,
-                      audio_duration_seconds=5.0,               # fake value
-                      real_time_factor=1.0,                     # fake value
-                      **kwargs
-                      )
+
+        self.visitor.visit_inference_save_audio_file(
+            output_audio_path=str(output_audio_path),
+            prefilling_tokens=input_tokens,
+            generation_time=generation_time,
+            total_tokens=fake_total_tokens,
+            generated_tokens=fake_generated_tokens,
+            audio_duration_seconds=5.0,               # fake value
+            real_time_factor=1.0,                     # fake value
+            **kwargs
+        )
+
         logger.info(f"Saving generated audio to {output_audio_path}")
         return

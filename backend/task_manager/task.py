@@ -4,9 +4,14 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
 from time import sleep
+
+import torch
 from util.logger import get_logger
 
 logger = get_logger(__name__)
+
+FAILURE_TYPE_GENERAL = "general"
+FAILURE_TYPE_OOM = "out_of_memory"
 
 class Task(ABC):
 
@@ -21,7 +26,7 @@ class Task(ABC):
         pass
 
     @abstractmethod
-    def task_failure(self, error_msg: str):
+    def task_failure(self, error_msg: str, failure_type: str = FAILURE_TYPE_GENERAL):
         pass
 
     @abstractmethod
@@ -62,6 +67,10 @@ class Manager:
                 logger.error("TaskManager task_run_loop error:", exc_info=e)
                 if self.task is not None:
                     self.task.task_failure(str(e))
+            except torch.cuda.OutOfMemoryError as e:
+                logger.error("TaskManager task_run_loop CUDA OOM error:", exc_info=e)
+                if self.task is not None:
+                    self.task.task_failure("CUDA Out of Memory Error", failure_type=FAILURE_TYPE_OOM)
             finally:
                 if self.task is not None:
                     self.task._task_finalize()

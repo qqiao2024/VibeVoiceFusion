@@ -14,8 +14,9 @@ from transformers.cache_utils import Cache, DynamicCache
 from transformers import modeling_utils
 from transformers.modeling_utils import PreTrainedModel
 
+from vibevoice.generation.visitor import GenerationVisitor
 from vibevoice.modular.modular_vibevoice_tokenizer import VibeVoiceTokenizerStreamingCache, VibeVoiceTokenizerEncoderOutput
-from config.configuration_vibevoice import InferencePhase, VibeVoiceConfig
+from config.configuration_vibevoice import VibeVoiceConfig
 from vibevoice.modular.modeling_vibevoice import VibeVoiceModel
 from vibevoice.modular.streamer import AudioStreamer, AsyncAudioStreamer
 from util.rand_init import get_generator
@@ -386,7 +387,7 @@ class VibeVoiceForConditionalInference(nn.Module):
         Returns:
             Generated token sequences and optionally speech outputs
         """
-        status_update = kwargs.pop("status_update", lambda phase, **kwargs: None)  # Get status update callable
+        generation_visitor: GenerationVisitor = kwargs.pop("generation_visitor", None)  # Get status update callable
 
         # 1. Handle `generation_config` and kwargs that might update it, and validate the `.generate()` call
         tokenizer = kwargs.pop("tokenizer", None)  # Pull this out first, we only use it for stopping criteria
@@ -463,7 +464,6 @@ class VibeVoiceForConditionalInference(nn.Module):
         max_step_per_sample = torch.min(generation_config.max_length - initial_length_per_sample, (max_length_times * initial_length_per_sample).long())
         reach_max_step_sample = torch.zeros(batch_size, dtype=torch.bool, device=device)
 
-        status_update(InferencePhase.INFERENCING, current=0, total_step=max_steps)
 
         # Create progress iterator if verbose
         if kwargs.get("show_progress_bar", True):
@@ -472,6 +472,8 @@ class VibeVoiceForConditionalInference(nn.Module):
             progress_bar = range(max_steps)
 
         for step in progress_bar:
+            if generation_visitor is not None:
+                generation_visitor.visit_inference_step_start(current_step=step, total_steps=max_steps)
             # Check for external stop signal
             if stop_check_fn is not None and stop_check_fn():
                 if verbose:
@@ -748,7 +750,8 @@ class VibeVoiceForConditionalInference(nn.Module):
 
                 # Update embeddings for diffusion indices
                 next_inputs_embeds[diffusion_indices] = diffusion_embeds
-                status_update(InferencePhase.INFERENCING, current=step, total_step=max_steps)
+                if generation_visitor is not None:
+                    generation_visitor.visit_inference_step_end(current_step=step, total_steps=max_steps)
 
             # Set inputs_embeds for next iteration
             inputs_embeds = next_inputs_embeds

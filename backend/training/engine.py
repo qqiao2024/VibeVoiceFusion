@@ -105,8 +105,10 @@ class BaseTrainingEngine(TrainerVisitor):
         else:
             self.estimated_time_by_epoch = 0.0
 
-    def visit_training_failed(self, timestamp, error_msg):
+    def visit_training_failed(self, timestamp, error_msg: str, failure_type: str = "general"):
         self.state.status = "Failed"
+        if failure_type == "out_of_memory":
+            self.state.is_oom_failure = True
         self.state_writer.update_state(self.state)
 
     def get_state(self) -> TrainingState:
