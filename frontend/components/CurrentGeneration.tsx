@@ -1,16 +1,25 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useGeneration } from '@/lib/GenerationContext';
 import { useProject } from '@/lib/ProjectContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { api } from '@/lib/api';
-import { InferencePhase, getOffloadingConfig, getOffloadingMetrics, getLoraDisplayName } from '@/types/generation';
+import {
+  InferencePhase,
+  getOffloadingConfig,
+  getOffloadingMetrics,
+  getLoraDisplayName,
+  isMultiGeneration,
+  getGenerationItems,
+  getAudioFilename
+} from '@/types/generation';
 
 function CurrentGeneration() {
   const { currentGeneration } = useGeneration();
   const { currentProject } = useProject();
   const { t } = useLanguage();
+  const [expandedItems, setExpandedItems] = useState(true);
 
   if (!currentGeneration) {
     return null;
@@ -261,10 +270,182 @@ function CurrentGeneration() {
     return null;
   };
 
+  // Render multi-generation progress
+  const renderMultiGenProgress = () => {
+    if (!currentGeneration || !isMultiGeneration(currentGeneration)) {
+      return null;
+    }
+
+    const items = getGenerationItems(currentGeneration);
+    const batchSize = currentGeneration.batch_size || items.length || 1;
+    const currentBatchIndex = currentGeneration.current_batch_index ?? 0;
+    const completedCount = items.filter(item => item.audio_path && item.audio_path.length > 0).length;
+
+    // Calculate overall progress
+    const overallProgress = ((currentBatchIndex + (progressPercentage ? progressPercentage / 100 : 0)) / batchSize) * 100;
+
+    return (
+      <div className="space-y-4">
+        {/* Overall Progress */}
+        <div className="border border-current border-opacity-20 rounded-lg p-4 bg-white bg-opacity-30">
+          <div className="flex items-center gap-2 mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
+            </svg>
+            <span className="text-sm font-medium">{t('generation.overallProgress')}</span>
+          </div>
+
+          <p className="text-sm mb-2">
+            {t('generation.generationXOfY')
+              .replace('{current}', String(currentBatchIndex + 1))
+              .replace('{total}', String(batchSize))}
+          </p>
+
+          <div className="w-full bg-white bg-opacity-50 rounded-full h-3">
+            <div
+              className="bg-indigo-500 h-3 rounded-full transition-all duration-300"
+              style={{ width: `${Math.min(100, Math.max(0, overallProgress))}%` }}
+            />
+          </div>
+          <p className="text-xs mt-1 opacity-75">{overallProgress.toFixed(1)}%</p>
+        </div>
+
+        {/* Generated Items List */}
+        <div className="border border-current border-opacity-20 rounded-lg bg-white bg-opacity-30 overflow-hidden">
+          <button
+            onClick={() => setExpandedItems(!expandedItems)}
+            className="w-full px-4 py-3 flex items-center justify-between hover:bg-white hover:bg-opacity-20 transition-colors"
+          >
+            <span className="text-sm font-medium flex items-center gap-2">
+              {t('generation.generatedItems')}
+              <span className="px-2 py-0.5 bg-current bg-opacity-20 rounded text-xs">
+                {completedCount}/{batchSize}
+              </span>
+            </span>
+            <svg
+              className={`w-5 h-5 transition-transform ${expandedItems ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {expandedItems && (
+            <div className="border-t border-current border-opacity-20 max-h-80 overflow-y-auto">
+              {Array.from({ length: batchSize }, (_, idx) => {
+                const item = items[idx];
+                const isCompleted = item && item.audio_path && item.audio_path.length > 0;
+                const isCurrent = idx === currentBatchIndex && !isCompleted;
+                const isPending = idx > currentBatchIndex || (!item && idx <= currentBatchIndex);
+
+                return (
+                  <div
+                    key={idx}
+                    className={`px-4 py-3 border-b border-current border-opacity-10 last:border-b-0 ${
+                      isCurrent ? 'bg-blue-50 bg-opacity-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium">#{idx + 1}</span>
+                        {item && (
+                          <span className="text-xs opacity-75">
+                            {t('generation.seedLabel').replace('{seed}', String(item.seeds))}
+                          </span>
+                        )}
+                      </div>
+
+                      {isCompleted && (
+                        <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-medium">
+                          {t('generation.statusCompleted')}
+                        </span>
+                      )}
+                      {isCurrent && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium flex items-center gap-1">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-800"></div>
+                          {t('generation.generating')}
+                        </span>
+                      )}
+                      {isPending && !isCurrent && (
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                          {t('generation.pending')}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Current item progress */}
+                    {isCurrent && item && item.current_step !== undefined && item.total_steps !== undefined && (
+                      <div className="mt-2">
+                        <div className="w-full bg-white bg-opacity-50 rounded-full h-2">
+                          <div
+                            className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${(item.current_step / item.total_steps) * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs mt-1 opacity-75">
+                          Step {item.current_step}/{item.total_steps}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Completed item details */}
+                    {isCompleted && item && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center gap-4 text-xs opacity-75">
+                          {item.audio_duration_seconds !== undefined && (
+                            <span>{t('generation.duration')}: {item.audio_duration_seconds.toFixed(2)}s</span>
+                          )}
+                          {item.real_time_factor !== undefined && (
+                            <span>RTF: {item.real_time_factor.toFixed(2)}x</span>
+                          )}
+                          {item.generation_time !== undefined && (
+                            <span>{t('generation.generationTime')}: {item.generation_time.toFixed(2)}s</span>
+                          )}
+                        </div>
+
+                        {/* Audio player for completed items */}
+                        {currentProject && item.audio_path && (
+                          <div className="bg-white bg-opacity-50 rounded p-2">
+                            <audio
+                              controls
+                              className="w-full h-8"
+                              preload="metadata"
+                            >
+                              <source
+                                src={api.getGenerationItemDownloadUrl(currentProject.id, currentGeneration.request_id, idx)}
+                                type="audio/wav"
+                              />
+                            </audio>
+                            <p className="text-xs opacity-75 mt-1 font-mono truncate">
+                              {getAudioFilename(item.audio_path)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className={`border-2 rounded-lg p-6 ${getStatusColor(currentGeneration.status)}`}>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">{t('generation.currentGeneration')}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold">{t('generation.currentGeneration')}</h2>
+          {isMultiGeneration(currentGeneration) && (
+            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">
+              {t('generation.multiGenerationBadge').replace('{count}', String(currentGeneration.batch_size || 1))}
+            </span>
+          )}
+        </div>
         {isActive && (
           <div className="flex items-center gap-2">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
@@ -302,8 +483,11 @@ function CurrentGeneration() {
           <p className="text-sm font-mono">{currentGeneration.request_id}</p>
         </div>
 
-        {/* Progress Bar (if inferencing) */}
-        {isActive && progressPercentage !== null && (
+        {/* Multi-Generation Progress (if multi-gen) */}
+        {isMultiGeneration(currentGeneration) && renderMultiGenProgress()}
+
+        {/* Single Generation Progress Bar (if inferencing and NOT multi-gen) */}
+        {isActive && progressPercentage !== null && !isMultiGeneration(currentGeneration) && (
           <div>
             <label className="text-sm font-medium opacity-75 mb-2 block">{t('generation.progress')}</label>
             <div className="w-full bg-white bg-opacity-50 rounded-full h-4">

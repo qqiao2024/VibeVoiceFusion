@@ -21,6 +21,50 @@ export enum InferencePhase {
 export type ModelDtype = 'bf16' | 'float8_e4m3fn';
 
 /**
+ * Individual generation item for multi-generation
+ * Each item represents one audio file generated in a batch
+ */
+export interface GenerationItem {
+  epoch_idx: number;                    // Batch index (0, 1, 2, ...)
+  audio_path: string;                   // Path to generated audio file
+  seeds: number;                        // Random seed used for this item
+  generation_time: number;              // Time taken for generation in seconds
+  prefilling_tokens?: number;           // Number of prefilling tokens
+  total_tokens?: number;                // Total number of tokens generated
+  generated_tokens?: number;            // Number of tokens generated
+  audio_duration_seconds?: number;      // Duration of generated audio
+  real_time_factor?: number;            // Real-time factor for generation speed
+  current_step?: number;                // Current step in generation process
+  total_steps?: number;                 // Total steps in generation process
+}
+
+/**
+ * Generation details including multi-generation items
+ */
+export interface GenerationDetails {
+  scripts?: string[];
+  unique_speaker_names?: string[];
+  voice_sample?: string[];
+  max_speaker_id?: number;
+  preprocessing_duration?: number;
+  generation_items?: GenerationItem[];  // List of all generation items for multi-gen
+  // Legacy single-generation fields (for backward compatibility)
+  generation_time?: number;
+  audio_duration_seconds?: number;
+  real_time_factor?: number;
+  prefilling_tokens?: number;
+  generated_tokens?: number;
+  total_tokens?: number;
+  output_audio_path?: string;
+  number_of_segments?: number;
+  error?: string;
+  current?: number;
+  total_step?: number;
+  offloading_config?: OffloadingConfig;
+  offloading_metrics?: OffloadingMetrics;
+}
+
+/**
  * Generation metadata from backend
  */
 export interface Generation {
@@ -34,13 +78,18 @@ export interface Generation {
   cfg_scale: number | null;
   attn_implementation: string | null;
   seeds: number;
-  details: Record<string, any>;
+  details: GenerationDetails;
   created_at: string;
   updated_at: string;
   project_id?: string | null;
   project_dir?: string | null;
-  lora_model_path?: string | null;  // Path to LoRA model file
-  lora_weight?: number;              // Weight for LoRA model (0, 1]
+  lora_model_path?: string | null;      // Path to LoRA model file
+  lora_weight?: number;                 // Weight for LoRA model (0, 1]
+  // Multi-generation fields
+  is_multi_generation?: boolean;        // Flag for multi-generation
+  fix_seed?: boolean;                   // Flag to fix the random seed (reserved for future)
+  current_batch_index?: number | null;  // Current batch index (0-based)
+  batch_size?: number | null;           // Total number of batches
 }
 
 /**
@@ -99,6 +148,7 @@ export interface CreateGenerationRequest {
   offloading?: OffloadingConfig;  // Optional offloading configuration
   lora_model_path?: string;       // Optional LoRA model file path (full path)
   lora_weight?: number;           // Optional LoRA weight (0, 1], default 1.0
+  batch_size?: number;            // Number of generations for multi-gen (1-20, default 1)
 }
 
 /**
@@ -169,4 +219,78 @@ export function getLoraDisplayName(loraPath: string | null | undefined): string 
 
   // Last fallback: just return the filename
   return parts[parts.length - 1] || loraPath;
+}
+
+/**
+ * Check if a generation is a multi-generation request
+ */
+export function isMultiGeneration(generation: Generation): boolean {
+  return generation.is_multi_generation === true ||
+         (generation.batch_size !== null && generation.batch_size !== undefined && generation.batch_size > 1);
+}
+
+/**
+ * Get generation items from a generation (handles both multi and single generation)
+ */
+export function getGenerationItems(generation: Generation): GenerationItem[] {
+  return generation.details?.generation_items || [];
+}
+
+/**
+ * Get completed generation items count
+ */
+export function getCompletedItemsCount(generation: Generation): number {
+  const items = getGenerationItems(generation);
+  return items.filter(item => item.audio_path && item.audio_path.length > 0).length;
+}
+
+/**
+ * Calculate aggregate statistics for multi-generation
+ */
+export function getMultiGenerationStats(generation: Generation): {
+  totalAudioDuration: number;
+  totalGenerationTime: number;
+  averageRTF: number;
+  averageDuration: number;
+  completedCount: number;
+  totalCount: number;
+} | null {
+  if (!isMultiGeneration(generation)) return null;
+
+  const items = getGenerationItems(generation);
+  if (items.length === 0) return null;
+
+  const completedItems = items.filter(item => item.audio_path && item.audio_path.length > 0);
+
+  const totalAudioDuration = completedItems.reduce(
+    (sum, item) => sum + (item.audio_duration_seconds || 0), 0
+  );
+  const totalGenerationTime = completedItems.reduce(
+    (sum, item) => sum + (item.generation_time || 0), 0
+  );
+
+  const averageRTF = completedItems.length > 0 && totalGenerationTime > 0
+    ? totalAudioDuration / totalGenerationTime
+    : 0;
+  const averageDuration = completedItems.length > 0
+    ? totalAudioDuration / completedItems.length
+    : 0;
+
+  return {
+    totalAudioDuration,
+    totalGenerationTime,
+    averageRTF,
+    averageDuration,
+    completedCount: completedItems.length,
+    totalCount: generation.batch_size || items.length
+  };
+}
+
+/**
+ * Get the filename from an audio path
+ */
+export function getAudioFilename(audioPath: string): string {
+  if (!audioPath) return '';
+  const parts = audioPath.split('/');
+  return parts[parts.length - 1] || audioPath;
 }

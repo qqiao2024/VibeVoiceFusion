@@ -6,7 +6,14 @@ import { useGeneration } from '@/lib/GenerationContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { api } from '@/lib/api';
 import type { Generation } from '@/types/generation';
-import { InferencePhase, getOffloadingMetrics, getLoraDisplayName } from '@/types/generation';
+import {
+  InferencePhase,
+  getOffloadingMetrics,
+  getLoraDisplayName,
+  isMultiGeneration,
+  getGenerationItems,
+  getMultiGenerationStats
+} from '@/types/generation';
 import toast from 'react-hot-toast';
 
 function GenerationHistory() {
@@ -174,8 +181,8 @@ function GenerationHistory() {
 
     return (
       <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
-        {/* Audio Player (for completed generations) */}
-        {generation.status === InferencePhase.COMPLETED && audioUrl && (
+        {/* Audio Player (for single completed generations) */}
+        {generation.status === InferencePhase.COMPLETED && audioUrl && !isMultiGeneration(generation) && (
           <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-4 border border-green-200">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -213,6 +220,100 @@ function GenerationHistory() {
             </div>
           </div>
         )}
+
+        {/* Multi-Generation Items (for multi-gen completed generations) */}
+        {generation.status === InferencePhase.COMPLETED && isMultiGeneration(generation) && (() => {
+          const items = getGenerationItems(generation);
+          const stats = getMultiGenerationStats(generation);
+
+          if (items.length === 0) return null;
+
+          return (
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-4 border border-indigo-200">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
+                  </svg>
+                  <label className="text-sm font-semibold text-gray-800">
+                    {t('generation.generatedItems')} ({items.length})
+                  </label>
+                </div>
+              </div>
+
+              {/* Aggregate Statistics */}
+              {stats && (
+                <div className="grid grid-cols-4 gap-3 mb-4 bg-white rounded-lg p-3 border border-indigo-200">
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-indigo-700">{stats.totalAudioDuration.toFixed(1)}s</p>
+                    <p className="text-xs text-gray-600">{t('generation.totalAudioDuration')}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-green-700">{stats.totalGenerationTime.toFixed(1)}s</p>
+                    <p className="text-xs text-gray-600">{t('generation.totalGenerationTime')}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-purple-700">{stats.averageRTF.toFixed(2)}x</p>
+                    <p className="text-xs text-gray-600">{t('generation.averageRTF')}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-blue-700">{stats.averageDuration.toFixed(2)}s</p>
+                    <p className="text-xs text-gray-600">{t('generation.averageDuration')}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Individual Items */}
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {items.map((item, idx) => (
+                  <div key={idx} className="bg-white rounded-lg p-3 border border-indigo-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-indigo-700">#{idx + 1}</span>
+                        <span className="text-xs text-gray-600">
+                          {t('generation.seedLabel').replace('{seed}', String(item.seeds))}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-600">
+                        {item.audio_duration_seconds !== undefined && (
+                          <span>{t('generation.duration')}: {item.audio_duration_seconds.toFixed(2)}s</span>
+                        )}
+                        {item.real_time_factor !== undefined && (
+                          <span>RTF: {item.real_time_factor.toFixed(2)}x</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Audio Player */}
+                    {currentProject && item.audio_path && (
+                      <div className="flex items-center gap-2">
+                        <audio
+                          controls
+                          className="flex-1 h-8"
+                          preload="metadata"
+                        >
+                          <source
+                            src={api.getGenerationItemDownloadUrl(currentProject.id, generation.request_id, idx)}
+                            type="audio/wav"
+                          />
+                        </audio>
+                        <a
+                          href={api.getGenerationItemDownloadUrl(currentProject.id, generation.request_id, idx) + '?download=true'}
+                          className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                          download
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Basic Information */}
         <div className="grid grid-cols-2 gap-4">
@@ -617,6 +718,14 @@ function GenerationHistory() {
                               LoRA
                             </span>
                           )}
+                          {isMultiGeneration(generation) && (
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-800 flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
+                              </svg>
+                              {t('generation.multiGenerationBadge').replace('{count}', String(generation.batch_size || 1))}
+                            </span>
+                          )}
                         </div>
 
                         <p className="text-sm text-gray-600 mb-1">
@@ -626,6 +735,21 @@ function GenerationHistory() {
                         <p className="text-xs text-gray-500">
                           {t('generation.created')}: {formatDate(generation.created_at)}
                         </p>
+
+                        {/* Multi-generation summary stats */}
+                        {isMultiGeneration(generation) && generation.status === InferencePhase.COMPLETED && (() => {
+                          const stats = getMultiGenerationStats(generation);
+                          if (stats) {
+                            return (
+                              <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-600">
+                                <span>{t('generation.totalAudioDuration')}: <span className="font-medium">{stats.totalAudioDuration.toFixed(1)}s</span></span>
+                                <span>{t('generation.averageRTF')}: <span className="font-medium">{stats.averageRTF.toFixed(2)}x</span></span>
+                                <span>{t('generation.totalGenerationTime')}: <span className="font-medium">{stats.totalGenerationTime.toFixed(1)}s</span></span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
 
                         {generation.percentage !== null && (
                           <div className="mt-2">

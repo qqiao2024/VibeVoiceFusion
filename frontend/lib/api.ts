@@ -408,6 +408,10 @@ class ApiClient {
     return `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/generations/${encodeURIComponent(requestId)}/download`;
   }
 
+  getGenerationItemDownloadUrl(projectId: string, requestId: string, itemIndex: number): string {
+    return `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/generations/${encodeURIComponent(requestId)}/items/${itemIndex}/download`;
+  }
+
   // ============ Datasets API ============
 
   async listDatasets(projectId: string): Promise<{ datasets: Dataset[]; count: number }> {
