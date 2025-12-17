@@ -31,7 +31,7 @@ from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 
 # Default configuration - Convention over Configuration
 DEFAULT_LOG_LEVEL = logging.INFO
-DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] %(funcName)s - %(message)s'
 DEFAULT_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 DEFAULT_LOG_DIR = Path('./logs')
 DEFAULT_MAX_BYTES = 10 * 1024 * 1024  # 10MB
@@ -50,10 +50,10 @@ _default_handlers_configured = False
 def _get_log_level(level: Optional[Union[int, str]] = None) -> int:
     """
     Convert log level to integer format.
-    
+
     Args:
         level: Log level as string or int
-        
+
     Returns:
         Integer log level
     """
@@ -63,7 +63,7 @@ def _get_log_level(level: Optional[Union[int, str]] = None) -> int:
             level = LOG_LEVEL_ENV
         else:
             return DEFAULT_LOG_LEVEL
-    
+
     if isinstance(level, str):
         level_map = {
             'DEBUG': logging.DEBUG,
@@ -73,7 +73,7 @@ def _get_log_level(level: Optional[Union[int, str]] = None) -> int:
             'CRITICAL': logging.CRITICAL,
         }
         return level_map.get(level.upper(), DEFAULT_LOG_LEVEL)
-    
+
     return level
 
 
@@ -84,12 +84,12 @@ def _create_console_handler(
 ) -> logging.StreamHandler:
     """
     Create a console handler with the specified configuration.
-    
+
     Args:
         level: Log level
         formatter: Log formatter
         stream: Output stream (default: sys.stdout)
-        
+
     Returns:
         Configured console handler
     """
@@ -110,7 +110,7 @@ def _create_file_handler(
 ) -> Union[RotatingFileHandler, TimedRotatingFileHandler]:
     """
     Create a file handler with rotation.
-    
+
     Args:
         name: Logger name (used for filename)
         level: Log level
@@ -119,16 +119,16 @@ def _create_file_handler(
         max_bytes: Max size before rotation (for size-based rotation)
         backup_count: Number of backup files to keep
         rotation_type: 'size' or 'time' based rotation
-        
+
     Returns:
         Configured file handler
     """
     log_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Sanitize logger name for filename
     safe_name = name.replace('.', '_').replace('/', '_')
     log_file = log_dir / f"{safe_name}.log"
-    
+
     if rotation_type == 'time':
         handler = TimedRotatingFileHandler(
             log_file,
@@ -144,7 +144,7 @@ def _create_file_handler(
             backupCount=backup_count,
             encoding='utf-8'
         )
-    
+
     handler.setLevel(level)
     handler.setFormatter(formatter)
     return handler
@@ -166,16 +166,16 @@ def get_logger(
 ) -> logging.Logger:
     """
     Get or create a logger with flexible configuration.
-    
+
     This function follows Convention over Configuration principle:
     - By default, creates a console logger with INFO level
     - Environment variables can override defaults globally
     - Individual parameters can override for specific use cases
-    
+
     Open-Closed Principle:
     - Extend behavior through configuration parameters
     - Custom handlers can be injected without modifying this function
-    
+
     Args:
         name: Logger name (typically __name__)
         level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -189,23 +189,23 @@ def get_logger(
         max_bytes: Max file size before rotation (size-based only)
         backup_count: Number of backup files to keep
         force_reconfigure: Force reconfiguration even if logger exists
-        
+
     Returns:
         Configured logger instance
-        
+
     Examples:
         # Basic usage (convention over configuration)
         logger = get_logger(__name__)
-        
+
         # Debug logging for development
         logger = get_logger(__name__, level='DEBUG')
-        
+
         # Custom format
         logger = get_logger(__name__, format='[%(levelname)s] %(message)s')
-        
+
         # File logging
         logger = get_logger(__name__, log_to_file=True)
-        
+
         # Custom handlers (open for extension)
         custom_handler = MyCustomHandler()
         logger = get_logger(__name__, handlers=[custom_handler])
@@ -213,29 +213,29 @@ def get_logger(
     # Return existing logger if already configured (avoid duplication)
     if name in _logger_registry and not force_reconfigure:
         return _logger_registry[name]
-    
+
     # Get logger instance
     logger = logging.getLogger(name)
-    
+
     # Avoid adding duplicate handlers
     if logger.handlers and not force_reconfigure:
         _logger_registry[name] = logger
         return logger
-    
+
     # Clear existing handlers if force reconfiguring
     if force_reconfigure:
         logger.handlers.clear()
-    
+
     # Set log level
     log_level = _get_log_level(level)
     logger.setLevel(log_level)
     logger.propagate = propagate
-    
+
     # Create formatter
     log_format = format or DEFAULT_FORMAT
     log_date_format = date_format or DEFAULT_DATE_FORMAT
     formatter = logging.Formatter(log_format, log_date_format)
-    
+
     # Configure handlers
     if handlers is not None:
         # Use custom handlers (Open-Closed Principle: open for extension)
@@ -246,7 +246,7 @@ def get_logger(
         # Console handler (always added by default)
         console_handler = _create_console_handler(log_level, formatter)
         logger.addHandler(console_handler)
-        
+
         # File handler (optional, based on configuration)
         should_log_to_file = log_to_file if log_to_file is not None else LOG_TO_FILE_ENV
         if should_log_to_file:
@@ -261,10 +261,10 @@ def get_logger(
                 rotation_type=file_rotation
             )
             logger.addHandler(file_handler)
-    
+
     # Register logger
     _logger_registry[name] = logger
-    
+
     return logger
 
 
@@ -275,9 +275,9 @@ def configure_root_logger(
 ) -> None:
     """
     Configure the root logger for application-wide settings.
-    
+
     Call this once at application startup to set global defaults.
-    
+
     Args:
         level: Global log level
         format: Global log format
@@ -290,7 +290,7 @@ def configure_root_logger(
         log_to_file=log_to_file,
         force_reconfigure=True
     )
-    
+
     # Set as root logger
     logging.root = root_logger
 
@@ -298,7 +298,7 @@ def configure_root_logger(
 def reset_logger(name: str) -> None:
     """
     Reset a logger configuration.
-    
+
     Args:
         name: Logger name to reset
     """

@@ -12,6 +12,7 @@
     "speaker_not_found": "Speaker not found",
     "session_not_found": "Session not found",
     "generation_not_found": "Generation not found",
+    "generation_item_not_found": "Generation item not found",
     "dataset_not_found": "Dataset not found",
     "item_not_found": "Item not found",
     "training_job_not_found": "Training job not found",

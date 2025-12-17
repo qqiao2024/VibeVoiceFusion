@@ -12,6 +12,7 @@
     "speaker_not_found": "说话人未找到",
     "session_not_found": "会话未找到",
     "generation_not_found": "生成记录未找到",
+    "generation_item_not_found": "生成项未找到",
     "dataset_not_found": "数据集未找到",
     "item_not_found": "数据项未找到",
     "training_job_not_found": "训练任务未找到",

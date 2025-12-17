@@ -123,6 +123,7 @@ def get_voice_generation_service(project_id: str):
         attn_implementation = data.get('attn_implementation', 'sdpa')
         lora_model_path = data.get('lora_model_path', None)
         lora_weight = data.get('lora_weight', 1.0)
+        batch_size = data.get('batch_size', 1)
 
         # Parse and validate offloading configuration (NEW)
         offloading_config = data.get('offloading')
@@ -164,7 +165,8 @@ def get_voice_generation_service(project_id: str):
                                                     project_id=project_id,
                                                     offloading_config=validated_offloading,
                                                     lora_model_path=lora_model_path,
-                                                    lora_weight=lora_weight)
+                                                    lora_weight=lora_weight,
+                                                    batch_size=batch_size)
         if not generation:
             return jsonify({
                 'error': t('errors.internal_error'),
@@ -176,7 +178,7 @@ def get_voice_generation_service(project_id: str):
             'generation': _enrich_generation_with_session_name(generation, dialog_service)
         }), 200
     except Exception as e:
-        logger.error(f"Error occurred while starting voice generation: {e}")
+        logger.error("Error occurred while starting voice generation:", exc_info=e)
         return jsonify({
             'error': t('errors.internal_error'),
             'message': str(e)
@@ -390,6 +392,92 @@ def download_generation_audio(project_id: str, request_id: str):
             'error': t('errors.internal_error'),
             'message': str(e)
         }), 500
+
+@api_bp.route('/projects/<project_id>/generations/<request_id>/items/<int:item_index>/download', methods=['GET'])
+def download_generation_item_audio(project_id: str, request_id: str, item_index: int):
+    """
+    Download or stream an individual audio file from a multi-generation batch
+
+    Query parameters:
+        - download: If set to 'true', force download. Otherwise, serve inline for playback.
+
+    Args:
+        project_id: Project identifier
+        request_id: Generation request identifier
+        item_index: Index of the generation item (0-based)
+    Returns:
+        Audio file (inline or as attachment) or error message
+    """
+    try:
+        # Get project service to find project directory
+        project_service = ProjectService(workspace_dir=current_app.config['WORKSPACE_DIR'],
+                                         meta_file_name=current_app.config['PROJECTS_META_FILE'])
+
+        # Get project path
+        project_path = project_service.get_project_path(project_id)
+        if not project_path:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.project_not_found')
+            }), 404
+
+        # Get speaker service for validation
+        speaker_service = SpeakerService(project_path / 'voices')
+        dialog_service = DialogSessionService(project_path / 'scripts', speaker_service=speaker_service)
+        service = VoiceGenerationService(project_path / 'output', speaker_service=speaker_service, dialog_service=dialog_service)
+
+        generations = service.list_generations()
+        generation = next((g for g in generations if g.request_id == request_id), None)
+        if not generation:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.generation_not_found')
+            }), 404
+
+        # Check if this is a multi-generation with items
+        generation_items = generation.details.generation_items if generation.details else []
+        if not generation_items:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.generation_item_not_found')
+            }), 404
+
+        # Validate item index
+        if item_index < 0 or item_index >= len(generation_items):
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.generation_item_not_found')
+            }), 404
+
+        item = generation_items[item_index]
+        audio_file_path = project_path / 'output' / item.audio_path
+        if not audio_file_path.exists():
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.generation_item_not_found')
+            }), 404
+
+        # Check if download parameter is set to true
+        force_download = request.args.get('download', 'false').lower() == 'true'
+
+        # Get the filename from the path
+        filename = audio_file_path.name
+
+        # Serve inline by default (for playback), or as attachment if requested
+        return send_file(
+            str(audio_file_path),
+            mimetype='audio/wav',
+            as_attachment=force_download,
+            download_name=filename if force_download else None
+        )
+
+    except Exception as e:
+        logger.error(f"Error occurred while downloading generation item audio: {e}")
+        return jsonify({
+            'error': t('errors.internal_error'),
+            'message': str(e)
+        }), 500
+
 
 @api_bp.route('/projects/<project_id>/generations/<request_id>', methods=['GET'])
 def get_generation(project_id: str, request_id: str):

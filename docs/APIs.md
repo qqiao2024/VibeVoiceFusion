@@ -607,7 +607,50 @@ Download or stream the generated audio file.
 }
 ```
 
-### 7. Delete Generation
+### 7. Download Generation Item Audio (Multi-Generation)
+
+**GET** `/api/v1/projects/{project_id}/generations/{request_id}/items/{item_index}/download`
+
+Download or stream an individual audio file from a multi-generation batch.
+
+**Path Parameters:**
+- `project_id`: Project identifier
+- `request_id`: Generation request identifier
+- `item_index`: Index of the generation item (0-based)
+
+**Query Parameters:**
+- `download` (optional): If `true`, force download as attachment. Otherwise, serve inline for playback.
+
+**Response (200 OK):**
+- Content-Type: `audio/wav`
+- Binary audio data
+
+**Response (404 Not Found):**
+```json
+{
+  "error": "Not Found",
+  "message": "Generation item not found"
+}
+```
+
+**Example:**
+```bash
+# Stream audio for playback (item 0 from a multi-generation batch)
+curl "http://localhost:9527/api/v1/projects/my-project/generations/abc123/items/0/download"
+
+# Force download as attachment
+curl -O "http://localhost:9527/api/v1/projects/my-project/generations/abc123/items/2/download?download=true"
+```
+
+**Notes:**
+- This endpoint is specifically for multi-generation batches where `details.generation_items` contains multiple audio files
+- Item index is 0-based (first item is index 0)
+- Returns 404 if the generation has no items or the index is out of range
+- Each item's audio path is stored in `GenerationItem.audio_path`
+
+---
+
+### 8. Delete Generation
 
 **DELETE** `/api/v1/projects/{project_id}/generations/{request_id}`
 
@@ -621,7 +664,7 @@ Delete a generation request and its output file.
 }
 ```
 
-### 8. Batch Delete Generations
+### 9. Batch Delete Generations
 
 **POST** `/api/v1/projects/{project_id}/generations/batch-delete`
 

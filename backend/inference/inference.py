@@ -1,4 +1,5 @@
 import base64
+import copy
 from datetime import datetime
 import random
 from typing import Union
@@ -13,7 +14,7 @@ from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForCondition
 from vibevoice.modular.custom_offloading_utils import OffloadConfig
 from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
 from config.configuration_vibevoice import DEFAULT_CONFIG, VibeVoiceConfig
-from backend.models.generation import Generation, UpdateStatusCallable
+from backend.models.generation import Generation
 from backend.services.speaker_service import SpeakerService
 from backend.services.dialog_session_service import DialogSessionService
 from util.rand_init import get_generator
@@ -72,10 +73,18 @@ class InferenceBase(ABC):
         self.meta_file_path = meta_file_path
         self.lora_model_path = generation.lora_model_path
         self.lora_weight = generation.lora_weight
-        self.model_type = generation.model_dtype
-        self.atten_implementation = generation.attn_implementation
+        self.model_dtype = generation.model_dtype
+        self.attn_implementation = generation.attn_implementation
         self.batch_size = generation.batch_size if generation.is_multi_generation else 1
         self.seeds = generation.seeds
+        self.project_dir = generation.project_dir
+        self.request_id = generation.request_id
+        self.session_id = generation.session_id
+        self.cfg_scale = generation.cfg_scale
+        self._generation = generation
+        
+    def get_generation(self) -> Generation:
+        return copy.deepcopy(self._generation)
 
     @staticmethod
     def create(generation: Generation, speaker_service: SpeakerService,
@@ -142,14 +151,16 @@ class InferenceBase(ABC):
 
     @abstractmethod
     def _save_audio(self, outputs: Union[torch.LongTensor, VibeVoiceGenerationOutput],
-                    processor: VibeVoiceProcessor, update_status: UpdateStatusCallable,
-                    generation_time: float, input_tokens: int, **kwargs) -> None:
+                    processor: VibeVoiceProcessor,
+                    generation_time: float,
+                    input_tokens: int,
+                    **kwargs) -> None:
         pass
 
     def run_inference(self):
 
         self.visitor.visit_preprocessing(datetime.now().timestamp())
-        txt_content, scripts, unique_speaker_names, max_speaker_id = self.dialog_service.parse_session_txt_script(self.generation.session_id)
+        txt_content, scripts, unique_speaker_names, max_speaker_id = self.dialog_service.parse_session_txt_script(self.session_id)
         if not scripts or not unique_speaker_names:
             raise RuntimeError("No scripts, speaker_numbers found for the specified dialog session.")
 
@@ -197,7 +208,7 @@ class InferenceBase(ABC):
             start_time = time.time()
             outputs = model.generate(**inputs,
                                      max_new_tokens=None,
-                                     cfg_scale=self.generation.cfg_scale,
+                                     cfg_scale=self.cfg_scale,
                                      tokenizer=processor.tokenizer,
                                      generation_config={'do_sample': False},
                                      verbose=False,
@@ -214,6 +225,12 @@ class InferenceBase(ABC):
             self.seeds = random.randint(0, 2**64 - 1)
 
         self.visitor.visit_completed()
+
+    def success(self, message: str):
+        self.visitor.visit_completed(message)
+
+    def generation_info(self) -> Dict[str, Any]:
+        return self.get_generation().to_dict()
 
 class InferenceEngine(InferenceBase):
     def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
@@ -328,18 +345,16 @@ class InferenceEngine(InferenceBase):
         # Collect offloading metrics if enabled
         offloading_metrics = self._collect_offloading_metrics(generation_time)
         if offloading_metrics:
-            self.generation.details['offloading_metrics'] = offloading_metrics
             logger.info(
                 f"Offloading metrics collected: {offloading_metrics['gpu_layers']} GPU layers, "
                 f"{offloading_metrics['overhead_percentage']:.1f}% overhead"
             )
 
         # Generate output filename and set it in the generation object
-        output_filename = f"{self.generation.request_id}.wav"
-        self.generation.output_filename = output_filename
+        output_filename = f"{self.request_id}.wav"
 
         # Save output (processor handles device internally)
-        output_audio_path = Path(self.generation.project_dir) / output_filename
+        output_audio_path = Path(self.project_dir) / output_filename
         processor.save_audio(outputs.speech_outputs[0], output_path=output_audio_path)
 
         self.visitor.visit_inference_save_audio_file(
@@ -464,17 +479,15 @@ class FakeInferenceEngine(InferenceBase):
         # Generate fake offloading metrics if enabled
         offloading_metrics = self._generate_fake_offloading_metrics(generation_time, fake_generated_tokens)
         if offloading_metrics:
-            self.generation.details['offloading_metrics'] = offloading_metrics
             logger.info(
                 f"[FAKE] Offloading metrics generated: {offloading_metrics['gpu_layers']} GPU layers, "
                 f"{offloading_metrics['overhead_percentage']:.1f}% overhead"
             )
 
         # Generate output filename and set it in the generation object
-        output_filename = f"{self.generation.request_id}.wav"
-        self.generation.output_filename = output_filename
+        output_filename = f"{self.request_id}.wav"
 
-        output_audio_path = Path(self.generation.project_dir) / output_filename
+        output_audio_path = Path(self.project_dir) / output_filename
         with open(output_audio_path, 'wb') as f:
             f.write(audio_data)
 

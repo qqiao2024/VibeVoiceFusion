@@ -2,7 +2,6 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-@ABC
 class GenerationVisitor(ABC):
 
     @abstractmethod
@@ -31,7 +30,8 @@ class GenerationVisitor(ABC):
                                         total_tokens: int = None,
                                         generated_tokens: int = None,
                                         audio_duration_seconds: float = None,
-                                        real_time_factor: float = None):
+                                        real_time_factor: float = None,
+                                        **kwargs):
         pass
 
     @abstractmethod
@@ -43,7 +43,7 @@ class GenerationVisitor(ABC):
         pass
 
     @abstractmethod
-    def visit_completed(self):
+    def visit_completed(self, message: str = None):
         pass
 
     @abstractmethod

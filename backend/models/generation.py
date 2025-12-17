@@ -16,10 +16,10 @@ def time_duration_in_sec(begin: datetime, end: datetime) -> float:
 
 @dataclass
 class GenerationItem:
-    epoch_idx: int  # Epoch index
     audio_path: str  # Path to generated audio file
     seeds: int  # Random seed used for this item
     generation_time: float  # Time taken for generation in seconds
+    batch_index: int = 0  # Batch index
     prefilling_tokens: Optional[int] = None  # Number of prefilling tokens
     total_tokens: Optional[int] = None  # Total number of tokens generated
     generated_tokens: Optional[int] = None  # Number of tokens generated
@@ -62,6 +62,7 @@ class Generation(GenerationVisitor):
     current_batch_index: Optional[int] = None  # Current batch index for multi-generation
     batch_size: Optional[int] = None  # Total number of batches for multi-generation
     is_oom_failure: bool = False  # Flag for out-of-memory failure
+    batch_start_at: datetime = None  # Timestamp when the current batch started
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert generation request to dictionary"""
@@ -105,6 +106,8 @@ class Generation(GenerationVisitor):
             lora_weight=lora_weight,
             current_batch_index=current_batch_index,
             batch_size=batch_size,
+            is_multi_generation=batch_size is not None and batch_size > 1,
+            batch_start_at=None,
         )
 
     def visit_preprocessing(self, timestamp: float = None):
@@ -128,17 +131,18 @@ class Generation(GenerationVisitor):
         self.current_batch_index = batch_index
         self.details.generation_items.append(
             GenerationItem(
-                epoch_idx=batch_index,
+                batch_index=batch_index,
                 audio_path="",
                 seeds=seeds,
                 generation_time=datetime.utcnow(),
             )
         )
         self.seeds = seeds
+        self.batch_start_at = datetime.utcnow()
         self.updated_at = datetime.utcnow().isoformat()
 
     def visit_inference_batch_end(self, batch_index: int):
-        begin = self.details.generation_items[batch_index].generation_time
+        begin = self.batch_start_at
         duration = time_duration_in_sec(begin, datetime.utcnow())
         self.details.generation_items[batch_index].generation_time = duration
         self.updated_at = datetime.utcnow().isoformat()
@@ -149,7 +153,8 @@ class Generation(GenerationVisitor):
                                         total_tokens: int = None,
                                         generated_tokens: int = None,
                                         audio_duration_seconds: float = None,
-                                        real_time_factor: float = None):
+                                        real_time_factor: float = None,
+                                        **kwargs):
         current_item = self.details.generation_items[self.current_batch_index]
         current_item.audio_path = output_audio_path
         current_item.generation_time = generation_time
@@ -172,7 +177,7 @@ class Generation(GenerationVisitor):
         current_item.total_steps = total_steps
         self.updated_at = datetime.utcnow().isoformat()
 
-    def visit_completed(self):
+    def visit_completed(self, message: str = None):
         self.status = InferencePhase.COMPLETED
         self.percentage = 100.0
         self.updated_at = datetime.utcnow().isoformat()
@@ -182,4 +187,3 @@ class Generation(GenerationVisitor):
         if failure_type == "oom":
             self.is_oom_failure = True
         self.updated_at = datetime.utcnow().isoformat()
-

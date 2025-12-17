@@ -68,7 +68,7 @@ def get_current_task():
     # Check if it's an inference task
     if isinstance(unwrapped, InferenceBase):
         inference: InferenceBase = unwrapped
-        generation = inference.generation
+        generation = inference.get_generation()
         project_id = generation.project_id
 
         # Try to enrich with session name

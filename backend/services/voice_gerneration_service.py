@@ -155,13 +155,14 @@ class VoiceGenerationService:
 
     def generation(self, dialog_session_id: str, request_id: str,
                    seeds: int = 42,
-                   cfg_scale: float = 1.3, 
+                   cfg_scale: float = 1.3,
                    model_dtype: str = "float8_e4m3fn",
                    attn_implementation: str = "sdpa",
                    project_id: str = None,
                    offloading_config: Optional[Dict[str, Any]] = None,
                    lora_model_path: Optional[str] = None,
-                   lora_weight: float = 1.0) -> Generation:
+                   lora_weight: float = 1.0,
+                   batch_size: int = 1) -> Generation:
         """
         Generate voices for a specific dialog session
 
@@ -170,6 +171,7 @@ class VoiceGenerationService:
             request_id: Request identifier
             project_id: Project identifier
             offloading_config: Offloading configuration dict (optional)
+            batch_size: Number of generations to produce (default: 1)
         """
 
         dialog_session = self.dialog_service.get_session(dialog_session_id)
@@ -185,7 +187,8 @@ class VoiceGenerationService:
                                        project_id=project_id,
                                        project_dir=str(self.output_dir),
                                        lora_model_path=lora_model_path,
-                                       lora_weight=lora_weight)
+                                       lora_weight=lora_weight,
+                                       batch_size=batch_size)
 
         # Store offloading config in generation details for reference
         if offloading_config:
