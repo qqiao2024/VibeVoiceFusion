@@ -155,6 +155,7 @@ class InferenceBase(ABC):
                     processor: VibeVoiceProcessor,
                     generation_time: float,
                     input_tokens: int,
+                    batch_index: int,
                     **kwargs) -> None:
         pass
 
@@ -219,7 +220,8 @@ class InferenceBase(ABC):
             self._save_audio(outputs, processor, generation_time,
                              inputs['input_ids'].shape[1],
                              unique_speaker_names=unique_speaker_names,
-                             number_of_segments=len(scripts))
+                             number_of_segments=len(scripts),
+                             batch_index=batch_idx)
 
             self.visitor.visit_inference_batch_end(batch_index=batch_idx)
 
@@ -330,6 +332,7 @@ class InferenceEngine(InferenceBase):
                     processor: VibeVoiceProcessor,
                     generation_time: float,
                     input_tokens: int,
+                    batch_index: int,
                     **kwargs) -> None:
         if outputs.speech_outputs is None or len(outputs.speech_outputs) == 0:
             raise RuntimeError("No audio output generated.")
@@ -352,7 +355,7 @@ class InferenceEngine(InferenceBase):
             )
 
         # Generate output filename and set it in the generation object
-        output_filename = f"{self.request_id}.wav"
+        output_filename = f"{self.request_id}_{batch_index}.wav"
 
         # Save output (processor handles device internally)
         output_audio_path = Path(self.project_dir) / output_filename
@@ -469,6 +472,7 @@ class FakeInferenceEngine(InferenceBase):
                     processor: VibeVoiceProcessor,
                     generation_time: float, 
                     input_tokens: int,
+                    batch_index: int,
                     **kwargs) -> None:
         base64_wav_audio = "UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA"  # Fake short audio for test
         audio_data = base64.b64decode(base64_wav_audio)
@@ -486,7 +490,7 @@ class FakeInferenceEngine(InferenceBase):
             )
 
         # Generate output filename and set it in the generation object
-        output_filename = f"{self.request_id}.wav"
+        output_filename = f"{self.request_id}_{batch_index}.wav"
 
         output_audio_path = Path(self.project_dir) / output_filename
         with open(output_audio_path, 'wb') as f:
