@@ -58,7 +58,7 @@ class Generation(GenerationVisitor):
     is_multi_generation: bool = False  # Flag for multi-generation
     fix_seed: bool = False  # Flag to fix the random seed
     lora_weight: float = 1.0  # Weight for LoRA model
-    details: Optional[GenerationDetails] = GenerationDetails()
+    details: Optional[GenerationDetails] = None
     current_batch_index: Optional[int] = None  # Current batch index for multi-generation
     batch_size: Optional[int] = None  # Total number of batches for multi-generation
     is_oom_failure: bool = False  # Flag for out-of-memory failure

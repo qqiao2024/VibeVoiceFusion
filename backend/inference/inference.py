@@ -193,7 +193,7 @@ class InferenceBase(ABC):
                                            voice_sample=voice_sample,
                                            max_speaker_id=max_speaker_id)
         for batch_idx in range(self.batch_size):
-            get_generator(self.seeds)
+            get_generator(self.seeds, force_set=True)
             self.visitor.visit_inference_batch_start(batch_index=batch_idx, seeds=self.seeds)
             processor = VibeVoiceProcessor.from_pretrained(None)
             inputs = processor(text=[full_script],
