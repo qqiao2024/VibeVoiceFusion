@@ -10,7 +10,6 @@ import {
   getOffloadingConfig,
   getOffloadingMetrics,
   getLoraDisplayName,
-  isMultiGeneration,
   getGenerationItems,
   getAudioFilename
 } from '@/types/generation';
@@ -270,14 +269,14 @@ function CurrentGeneration() {
     return null;
   };
 
-  // Render multi-generation progress
-  const renderMultiGenProgress = () => {
-    if (!currentGeneration || !isMultiGeneration(currentGeneration)) {
+  // Render generation progress (always shown, single gen is just batch_size=1)
+  const renderGenerationProgress = () => {
+    if (!currentGeneration) {
       return null;
     }
 
     const items = getGenerationItems(currentGeneration);
-    const batchSize = currentGeneration.batch_size || items.length || 1;
+    const batchSize = currentGeneration.batch_size || 1;
     const currentBatchIndex = currentGeneration.current_batch_index ?? 0;
     const completedCount = items.filter(item => item.audio_path && item.audio_path.length > 0).length;
 
@@ -440,11 +439,9 @@ function CurrentGeneration() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-semibold">{t('generation.currentGeneration')}</h2>
-          {isMultiGeneration(currentGeneration) && (
-            <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">
-              {t('generation.multiGenerationBadge').replace('{count}', String(currentGeneration.batch_size || 1))}
-            </span>
-          )}
+          <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">
+            {t('generation.multiGenerationBadge').replace('{count}', String(currentGeneration.batch_size || 1))}
+          </span>
         </div>
         {isActive && (
           <div className="flex items-center gap-2">
@@ -483,30 +480,8 @@ function CurrentGeneration() {
           <p className="text-sm font-mono">{currentGeneration.request_id}</p>
         </div>
 
-        {/* Multi-Generation Progress (if multi-gen) */}
-        {isMultiGeneration(currentGeneration) && renderMultiGenProgress()}
-
-        {/* Single Generation Progress Bar (if inferencing and NOT multi-gen) */}
-        {isActive && progressPercentage !== null && !isMultiGeneration(currentGeneration) && (
-          <div>
-            <label className="text-sm font-medium opacity-75 mb-2 block">{t('generation.progress')}</label>
-            <div className="w-full bg-white bg-opacity-50 rounded-full h-4">
-              <div
-                className="bg-current h-4 rounded-full transition-all duration-300 flex items-center justify-center"
-                style={{ width: `${Math.min(100, Math.max(0, progressPercentage))}%` }}
-              >
-                <span className="text-xs font-medium text-white px-2">
-                  {progressPercentage.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-            {currentStep !== null && totalSteps !== null && (
-              <p className="text-xs mt-1 opacity-75">
-                {t('generation.status')} {currentStep} {t('generation.of')} {totalSteps}
-              </p>
-            )}
-          </div>
-        )}
+        {/* Generation Progress (always shown) */}
+        {renderGenerationProgress()}
 
         {/* Model Settings */}
         <div className="grid grid-cols-2 gap-4">

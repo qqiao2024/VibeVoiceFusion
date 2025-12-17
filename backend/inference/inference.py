@@ -54,12 +54,13 @@ class FakeModel:
 
     def generate(self, **kwargs) -> Union[torch.LongTensor, VibeVoiceGenerationOutput]:
         visitor: GenerationVisitor = kwargs.get("generation_visitor", None)
-        for i in range(100):
+        steps = random.randint(20, 100)
+        for i in range(steps):
             if visitor is not None:
-                visitor.visit_inference_step_start(current_step=i+1, total_steps=100)
-            time.sleep(0.5)  # Simulate some processing time
+                visitor.visit_inference_step_start(current_step=i+1, total_steps=steps)
+            time.sleep(random.uniform(0.1, 0.5))  # Simulate some processing time
             if visitor is not None:
-                visitor.visit_inference_step_end(current_step=i+1, total_steps=100)
+                visitor.visit_inference_step_end(current_step=i+1, total_steps=steps)
         return torch.randn(1, 16000 * 5)  # Simulate 5 seconds of audio at 16kHz
 
 class InferenceBase(ABC):

@@ -249,7 +249,7 @@ def get_current_generation_for_project(project_id: str):
         }), 200
 
     inference: InferenceBase = task.unwrap()
-    generation: Generation = inference.generation
+    generation: Generation = inference.get_generation()
 
     # Check if the generation belongs to the requested project
     if generation.project_id != project_id:
@@ -421,13 +421,24 @@ def download_generation_item_audio(project_id: str, request_id: str, item_index:
                 'message': t('errors.project_not_found')
             }), 404
 
-        # Get speaker service for validation
-        speaker_service = SpeakerService(project_path / 'voices')
-        dialog_service = DialogSessionService(project_path / 'scripts', speaker_service=speaker_service)
-        service = VoiceGenerationService(project_path / 'output', speaker_service=speaker_service, dialog_service=dialog_service)
+        # First, check if this is the current active generation (in memory)
+        generation = None
+        task: Task = gm.get_current_task()
+        if task and isinstance(task.unwrap(), InferenceBase):
+            inference: InferenceBase = task.unwrap()
+            current_gen = inference.get_generation()
+            if current_gen and current_gen.request_id == request_id and current_gen.project_id == project_id:
+                generation = current_gen
 
-        generations = service.list_generations()
-        generation = next((g for g in generations if g.request_id == request_id), None)
+        # If not found in current task, look in saved generations
+        if not generation:
+            speaker_service = SpeakerService(project_path / 'voices')
+            dialog_service = DialogSessionService(project_path / 'scripts', speaker_service=speaker_service)
+            service = VoiceGenerationService(project_path / 'output', speaker_service=speaker_service, dialog_service=dialog_service)
+
+            generations = service.list_generations()
+            generation = next((g for g in generations if g.request_id == request_id), None)
+
         if not generation:
             return jsonify({
                 'error': t('errors.not_found'),
@@ -435,7 +446,15 @@ def download_generation_item_audio(project_id: str, request_id: str, item_index:
             }), 404
 
         # Check if this is a multi-generation with items
-        generation_items = generation.details.generation_items if generation.details else []
+        # Handle both dict and GenerationDetails object
+        details = generation.details
+        if details is None:
+            generation_items = []
+        elif isinstance(details, dict):
+            generation_items = details.get('generation_items', [])
+        else:
+            generation_items = details.generation_items if hasattr(details, 'generation_items') else []
+
         if not generation_items:
             return jsonify({
                 'error': t('errors.not_found'),
@@ -450,7 +469,9 @@ def download_generation_item_audio(project_id: str, request_id: str, item_index:
             }), 404
 
         item = generation_items[item_index]
-        audio_file_path = project_path / 'output' / item.audio_path
+        # Handle both dict and GenerationItem object
+        audio_path = item.get('audio_path') if isinstance(item, dict) else item.audio_path
+        audio_file_path = project_path / 'output' / audio_path
         if not audio_file_path.exists():
             return jsonify({
                 'error': t('errors.not_found'),

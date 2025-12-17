@@ -10,7 +10,6 @@ import {
   InferencePhase,
   getOffloadingMetrics,
   getLoraDisplayName,
-  isMultiGeneration,
   getGenerationItems,
   getMultiGenerationStats
 } from '@/types/generation';
@@ -181,48 +180,8 @@ function GenerationHistory() {
 
     return (
       <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
-        {/* Audio Player (for single completed generations) */}
-        {generation.status === InferencePhase.COMPLETED && audioUrl && !isMultiGeneration(generation) && (
-          <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-4 border border-green-200">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
-                </svg>
-                <label className="text-sm font-semibold text-gray-800">{t('generation.generatedAudio')}</label>
-              </div>
-              <a
-                href={audioUrl + '?download=true'}
-                download={generation.output_filename}
-                className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                {t('generation.download')}
-              </a>
-            </div>
-            <audio
-              controls
-              className="w-full"
-              preload="metadata"
-            >
-              <source src={audioUrl} type="audio/wav" />
-              Your browser does not support the audio element.
-            </audio>
-            <div className="mt-2 flex items-center gap-4 text-xs text-gray-600">
-              {details?.audio_duration_seconds && (
-                <span>{t('generation.duration')}: {details.audio_duration_seconds.toFixed(2)}s</span>
-              )}
-              {generation.output_filename && (
-                <span className="font-mono truncate">{generation.output_filename}</span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Multi-Generation Items (for multi-gen completed generations) */}
-        {generation.status === InferencePhase.COMPLETED && isMultiGeneration(generation) && (() => {
+          {/* Generation Items (always shown for completed generations) */}
+        {generation.status === InferencePhase.COMPLETED && (() => {
           const items = getGenerationItems(generation);
           const stats = getMultiGenerationStats(generation);
 
@@ -718,14 +677,12 @@ function GenerationHistory() {
                               LoRA
                             </span>
                           )}
-                          {isMultiGeneration(generation) && (
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-800 flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
-                              </svg>
-                              {t('generation.multiGenerationBadge').replace('{count}', String(generation.batch_size || 1))}
-                            </span>
-                          )}
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-800 flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
+                            </svg>
+                            {t('generation.multiGenerationBadge').replace('{count}', String(generation.batch_size || 1))}
+                          </span>
                         </div>
 
                         <p className="text-sm text-gray-600 mb-1">
@@ -736,8 +693,8 @@ function GenerationHistory() {
                           {t('generation.created')}: {formatDate(generation.created_at)}
                         </p>
 
-                        {/* Multi-generation summary stats */}
-                        {isMultiGeneration(generation) && generation.status === InferencePhase.COMPLETED && (() => {
+                        {/* Generation summary stats */}
+                        {generation.status === InferencePhase.COMPLETED && (() => {
                           const stats = getMultiGenerationStats(generation);
                           if (stats) {
                             return (
