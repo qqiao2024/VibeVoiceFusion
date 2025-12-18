@@ -362,6 +362,22 @@ function TrainingHistory() {
           </div>
         )}
 
+        {/* OOM Help Information */}
+        {state.status === 'Failed' && state.is_oom_failure && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-amber-600 text-xl">💡</span>
+              <div>
+                <p className="text-sm font-semibold text-amber-800 mb-2">{t('training.oomHelpTitle')}</p>
+                <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+                  <li>{t('training.oomHelpReduceBatchSize')}</li>
+                  <li>{t('training.oomHelpEnableOffloading')}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Timestamps */}
         <div className="bg-gray-50 rounded p-3">
           <div className="grid grid-cols-3 gap-2 text-xs">

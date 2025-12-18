@@ -90,6 +90,9 @@ export interface Generation {
   fix_seed?: boolean;                   // Flag to fix the random seed (reserved for future)
   current_batch_index?: number | null;  // Current batch index (0-based)
   batch_size?: number | null;           // Total number of batches
+
+  // OOM failure flag
+  is_oom_failure?: boolean;             // Flag for out-of-memory failure
 }
 
 /**

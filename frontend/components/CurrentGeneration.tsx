@@ -248,6 +248,21 @@ function CurrentGeneration() {
               {details.error || JSON.stringify(details, null, 2)}
             </pre>
           </div>
+          {/* OOM Help Information */}
+          {currentGeneration.is_oom_failure && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-amber-600 text-xl">💡</span>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800 mb-2">{t('generation.oomHelpTitle')}</p>
+                  <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+                    <li>{t('generation.oomHelpUseFloat8')}</li>
+                    <li>{t('generation.oomHelpEnableOffloading')}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }

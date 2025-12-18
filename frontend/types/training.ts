@@ -71,6 +71,9 @@ export interface TrainingState {
 
   // Error message (if failed)
   error_message?: string | null;
+
+  // OOM failure flag
+  is_oom_failure?: boolean;
 }
 
 /**

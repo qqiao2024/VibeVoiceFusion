@@ -13,6 +13,7 @@ from backend.services.speaker_service import SpeakerService
 from backend.services.project_service import ProjectService
 from backend.task_manager.task import gm, Task
 from backend.i18n import t
+from config.configuration_vibevoice import InferencePhase
 from util.logger import get_logger
 
 logger = get_logger(__name__)
@@ -314,6 +315,19 @@ def get_all_generations(project_id):
 
         # Enrich all generations with session names
         enriched_generations = [_enrich_generation_with_session_name(g, dialog_service) for g in generations]
+
+        for gen in generations:
+            if gen.status == InferencePhase.PENDING:
+                gen_failed = True
+                task = gm.get_current_task()
+                if task and isinstance(task.unwrap(), InferenceBase):
+                    inference: InferenceBase = task.unwrap()
+                    current_gen: Generation = inference.get_generation()
+                    if current_gen and current_gen.request_id == gen.request_id and current_gen.project_id == project_id:
+                        gen_failed = False
+                if gen_failed:
+                    gen.status = InferencePhase.FAILED
+                    service._save_metadata([g.to_dict() for g in generations])
 
         return jsonify({
             'generations': enriched_generations,
