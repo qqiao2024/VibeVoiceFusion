@@ -198,7 +198,7 @@ def save_audio(
     torchaudio.save(file_path, waveform, sample_rate)
 
 
-def load_deepfilter_model(model_name: str, device: str, post_filter: bool = True, atten_lim: Optional[float] = None):
+def load_deepfilter_model(model_name: str, device: str, post_filter: bool = True):
     """
     Load DeepFilterNet model.
 
@@ -206,37 +206,33 @@ def load_deepfilter_model(model_name: str, device: str, post_filter: bool = True
         model_name: Model version (DeepFilterNet, DeepFilterNet2, DeepFilterNet3)
         device: Device to load model on
         post_filter: Whether to enable post-filtering
-        atten_lim: Noise attenuation limit in dB
 
     Returns:
-        tuple: (model, df_state, enhance_function)
+        tuple: (model, df_state)
     """
     try:
-        from df.enhance import enhance, init_df, load_audio as df_load_audio, save_audio as df_save_audio
-        from df.utils import download_model
-    except ImportError:
-        print("Error: DeepFilterNet is not installed.")
+        from df import init_df
+    except ImportError as e:
+        print(f"Error: DeepFilterNet import failed: {e}")
         print("\nInstall it with:")
         print("  pip install deepfilternet")
         print("\nOr for GPU support:")
         print("  pip install deepfilternet[cuda]")
         sys.exit(1)
 
-    # Download and initialize the model
-    model_path = download_model(model_name)
+    # Initialize the model - init_df will automatically download the model
+    # When model_base_dir is None, it uses default_model parameter
     model, df_state, _ = init_df(
-        model_path,
+        model_base_dir=None,
         post_filter=post_filter,
-        log_level="warning",
+        log_level="WARNING",
+        log_file=None,
+        default_model=model_name,
     )
 
     # Move model to device
     if device == "cuda":
         model = model.cuda()
-
-    # Set attenuation limit if specified
-    if atten_lim is not None:
-        df_state = df_state._replace(atten_lim_db=atten_lim)
 
     return model, df_state
 
@@ -250,6 +246,7 @@ def denoise_audio_deepfilter(
     compensate_delay: bool = False,
     keep_original_sr: bool = False,
     normalize: bool = True,
+    atten_lim: Optional[float] = None,
     verbose: bool = False,
 ):
     """
@@ -264,9 +261,11 @@ def denoise_audio_deepfilter(
         compensate_delay: Whether to compensate algorithmic delay
         keep_original_sr: Whether to resample output back to original sample rate
         normalize: Whether to normalize output audio
+        atten_lim: Noise attenuation limit in dB (passed to enhance function)
         verbose: Whether to print verbose information
     """
-    from df.enhance import enhance, load_audio as df_load_audio, save_audio as df_save_audio
+    from df import enhance
+    from df.io import load_audio as df_load_audio, save_audio as df_save_audio
 
     if verbose:
         print(f"Loading audio from: {input_path}")
@@ -279,14 +278,17 @@ def denoise_audio_deepfilter(
         print(f"  Duration: {audio.shape[-1] / df_state.sr():.2f} seconds")
         print(f"  Channels: {audio.shape[0] if len(audio.shape) > 1 else 1}")
 
-    # Move to device if needed
-    if device == "cuda":
-        audio = torch.from_numpy(audio).cuda()
-    else:
+    # Ensure audio is a tensor and move to device if needed
+    if not isinstance(audio, torch.Tensor):
         audio = torch.from_numpy(audio)
+    
+    if device == "cuda":
+        audio = audio.cuda()
 
     if verbose:
         print("Running DeepFilterNet enhancement...")
+        if atten_lim is not None:
+            print(f"  Attenuation limit: {atten_lim} dB")
 
     # Run enhancement
     enhanced = enhance(
@@ -294,6 +296,7 @@ def denoise_audio_deepfilter(
         df_state,
         audio,
         pad=compensate_delay,
+        atten_lim_db=atten_lim,
     )
 
     # Move back to CPU for saving
@@ -326,7 +329,8 @@ def denoise_audio_deepfilter(
 
     # Optionally resample back to original sample rate
     if keep_original_sr and original_info is not None:
-        original_sr = original_info.get("sr_orig", None)
+        # original_info is an AudioMetaData object with sample_rate attribute
+        original_sr = getattr(original_info, 'sample_rate', None)
         if original_sr and original_sr != df_state.sr():
             # Reload and resample
             waveform, sr = torchaudio.load(output_path)
@@ -351,6 +355,7 @@ def process_directory(
     compensate_delay: bool,
     keep_original_sr: bool,
     normalize: bool,
+    atten_lim: Optional[float],
     verbose: bool,
 ):
     """Process all audio files in a directory."""
@@ -385,6 +390,7 @@ def process_directory(
                 compensate_delay=compensate_delay,
                 keep_original_sr=keep_original_sr,
                 normalize=normalize,
+                atten_lim=atten_lim,
                 verbose=verbose,
             )
         except Exception as e:
@@ -415,13 +421,10 @@ def main():
         model_name=args.model,
         device=device,
         post_filter=post_filter,
-        atten_lim=args.atten_lim,
     )
 
     if args.verbose:
         print(f"Model loaded successfully")
-        if args.atten_lim:
-            print(f"  Attenuation limit: {args.atten_lim} dB")
         print(f"  Post-filter: {'enabled' if post_filter else 'disabled'}")
 
     # Check if input is directory or file
@@ -439,6 +442,7 @@ def main():
             compensate_delay=args.compensate_delay,
             keep_original_sr=args.keep_original_sr,
             normalize=normalize,
+            atten_lim=args.atten_lim,
             verbose=args.verbose,
         )
     else:
@@ -456,6 +460,7 @@ def main():
             compensate_delay=args.compensate_delay,
             keep_original_sr=args.keep_original_sr,
             normalize=normalize,
+            atten_lim=args.atten_lim,
             verbose=args.verbose,
         )
 
