@@ -206,7 +206,6 @@ function TrainingHistory() {
 
   // Render training state details
   const renderStateDetails = (state: TrainingState) => {
-    const isCompleted = state.status === 'Completed';
     const trainingTime = state.start_time && state.current_timestamp
       ? (new Date(state.current_timestamp).getTime() - new Date(state.start_time).getTime()) / 1000
       : null;
@@ -225,10 +224,10 @@ function TrainingHistory() {
           </div>
         </div>
 
-        {/* Final Results (for completed jobs) */}
-        {isCompleted && (
-          <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-4 border border-green-200">
-            <p className="text-sm font-semibold text-gray-800 mb-3">📊 {t('training.finalResults')}</p>
+        {/* Training Results (for completed and failed jobs with data) */}
+        {(state.current_loss !== null || state.current_ce_loss !== null || state.current_diffusion_loss !== null) && (
+          <div className={`bg-gradient-to-r ${state.status === 'Failed' ? 'from-red-50 to-orange-50 border-red-200' : 'from-green-50 to-blue-50 border-green-200'} rounded-lg p-4 border`}>
+            <p className="text-sm font-semibold text-gray-800 mb-3">📊 {t('training.trainingResults')}</p>
             <div className="grid grid-cols-3 gap-4">
               {state.current_loss !== null && (
                 <div className="text-center">
@@ -249,7 +248,7 @@ function TrainingHistory() {
                 </div>
               )}
             </div>
-            <div className="mt-3 pt-3 border-t border-green-200 grid grid-cols-3 gap-4 text-center text-xs text-gray-600">
+            <div className={`mt-3 pt-3 border-t ${state.status === 'Failed' ? 'border-red-200' : 'border-green-200'} grid grid-cols-3 gap-4 text-center text-xs text-gray-600`}>
               {state.current_step !== null && (
                 <div>
                   <p className="font-semibold text-gray-900">{state.current_step.toLocaleString()}</p>
@@ -272,8 +271,8 @@ function TrainingHistory() {
           </div>
         )}
 
-        {/* Training Metrics Charts (for completed jobs with tensorboard data) */}
-        {isCompleted && state.tensorboard_logdir && currentProject && (
+        {/* Training Metrics Charts (for jobs with tensorboard data) */}
+        {state.tensorboard_logdir && currentProject && (
           <div className="bg-white rounded-lg p-4 border border-gray-200">
             <p className="text-sm font-semibold text-gray-800 mb-3">📊 {t('training.trainingMetrics')}</p>
             <TrainingMetricsChart
@@ -376,9 +375,9 @@ function TrainingHistory() {
                 <p className="font-medium">{formatDate(state.start_time)}</p>
               </div>
             )}
-            {isCompleted && state.current_timestamp && (
+            {(state.status === 'Completed' || state.status === 'Failed') && state.current_timestamp && (
               <div>
-                <p className="text-gray-600">{t('training.completed')}</p>
+                <p className="text-gray-600">{state.status === 'Completed' ? t('training.completed') : t('training.ended')}</p>
                 <p className="font-medium">{formatDate(state.current_timestamp)}</p>
               </div>
             )}
