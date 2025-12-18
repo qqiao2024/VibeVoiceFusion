@@ -28,11 +28,13 @@
 
 ### Purpose
 
-VibeVoiceFusion is a **web application** for generating high-quality, multi-speaker synthetic speech with voice cloning capabilities. Built on Microsoft's VibeVoice model (AR + diffusion architecture), this project provides a complete full-stack solution with an intuitive user interface, project management, and advanced VRAM optimization features.
+VibeVoiceFusion is a **web application** for generating high-quality, multi-speaker synthetic speech with voice cloning capabilities. Built on Microsoft's VibeVoice model (AR + diffusion architecture), this project provides a complete full-stack solution with voice generation, LoRA fine-tuning, dataset management, batch generation, and advanced VRAM optimization features.
 
 **Key Goals:**
 - Provide a user-friendly interface for voice generation without requiring coding knowledge
 - Enable efficient multi-speaker dialog synthesis with distinct voice characteristics
+- Support LoRA fine-tuning for custom voice adaptation and style transfer
+- Generate multiple audio variations in batch with different random seeds
 - Optimize memory usage for consumer-grade GPUs (10GB+ VRAM)
 - Support bilingual workflows (English/Chinese)
 - Offer both web UI and CLI interfaces for different use cases
@@ -72,8 +74,34 @@ VibeVoice combines **autoregressive (AR)** and **diffusion** techniques for text
   - Queue-based task management (prevents GPU conflicts)
   - Real-time progress monitoring with live updates
   - Configurable parameters (CFG scale, random seed, model precision)
+  - **Multi-Generation**: Generate 2-20 audio variations in a single batch with different seeds
+  - LoRA model support with configurable weight (0-1]
   - Generation history with filtering, sorting, and pagination
   - Audio playback and download for completed generations
+
+#### LoRA Fine-Tuning
+
+- **Dataset Management**:
+  - Create and manage training datasets with audio/text pairs
+  - Import datasets from ZIP archives or local folders
+  - JSONL format for efficient data handling
+  - Pagination and search for large datasets
+  - Export datasets for backup or sharing
+
+- **Training System**:
+  - LoRA (Low-Rank Adaptation) fine-tuning for voice customization
+  - Configurable training parameters (epochs, learning rate, LoRA rank, batch size)
+  - Layer offloading support for training on consumer GPUs
+  - Real-time training progress with tqdm-style progress bar
+  - Live training metrics charts (Loss, Learning Rate, Timing)
+  - TensorBoard integration for detailed metrics
+  - Training history with status tracking (Prepare, Training, Completed, Failed)
+  - OOM detection with helpful suggestions for recovery
+
+- **LoRA Model Usage**:
+  - Select trained LoRA models during voice generation
+  - Configurable LoRA weight for blending with base model
+  - Multiple LoRA files per training job (epoch checkpoints + final)
 
 #### VRAM Optimization
 
@@ -431,25 +459,31 @@ vibevoice/
 │   │   ├── projects.py     # Project CRUD
 │   │   ├── speakers.py     # Speaker management
 │   │   ├── dialog_sessions.py  # Dialog CRUD
-│   │   └── generation.py   # Voice generation
+│   │   ├── generation.py   # Voice generation
+│   │   ├── dataset.py      # Dataset management
+│   │   └── training.py     # LoRA training
 │   ├── services/           # Business logic layer
 │   ├── models/             # Data models
 │   ├── task_manager/       # Background task queue
 │   ├── inference/          # Inference engine
+│   ├── training/           # Training engine & state management
 │   ├── i18n/              # Backend translations
 │   └── dist/              # Frontend static files (production)
 ├── frontend/               # Next.js web application
-│   ├── app/               # Next.js app router pages
+│   ├── app/               # Next.js pages
 │   │   ├── page.tsx       # Home/Project selector
 │   │   ├── speaker-role/  # Speaker management
 │   │   ├── voice-editor/  # Dialog editor
-│   │   └── generate-voice/ # Generation page
+│   │   ├── generate-voice/ # Generation page
+│   │   ├── dataset/       # Dataset management
+│   │   └── fine-tuning/   # LoRA training page
 │   ├── components/        # React components
 │   ├── lib/              # Context providers & utilities
 │   │   ├── ProjectContext.tsx
 │   │   ├── SessionContext.tsx
 │   │   ├── SpeakerRoleContext.tsx
 │   │   ├── GenerationContext.tsx
+│   │   ├── TrainingContext.tsx
 │   │   ├── GlobalTaskContext.tsx
 │   │   ├── i18n/         # Frontend translations
 │   │   └── api.ts        # API client
@@ -464,37 +498,7 @@ vibevoice/
 
 ### API Reference
 
-All endpoints prefixed with `/api/v1`:
-
-#### Projects
-- `GET /projects` - List all projects
-- `POST /projects` - Create new project
-- `GET /projects/:id` - Get project details
-- `PUT /projects/:id` - Update project
-- `DELETE /projects/:id` - Delete project
-
-#### Speakers
-- `GET /projects/:id/speakers` - List speakers
-- `POST /projects/:id/speakers` - Add speaker (multipart: description, voice_file)
-- `PUT /projects/:id/speakers/:speaker_id` - Update speaker metadata
-- `PUT /projects/:id/speakers/:speaker_id/voice` - Replace voice file
-- `DELETE /projects/:id/speakers/:speaker_id` - Delete speaker
-
-#### Dialog Sessions
-- `GET /projects/:id/sessions` - List sessions
-- `POST /projects/:id/sessions` - Create session
-- `GET /projects/:id/sessions/:session_id` - Get session
-- `PUT /projects/:id/sessions/:session_id` - Update session
-- `DELETE /projects/:id/sessions/:session_id` - Delete session
-- `GET /projects/:id/sessions/:session_id/text` - Get dialog text
-
-#### Voice Generation
-- `POST /projects/:id/generations` - Start generation
-- `GET /projects/generations/current` - Get current running task
-- `GET /projects/:id/generations` - List generation history
-- `GET /projects/:id/generations/:request_id` - Get generation details
-- `DELETE /projects/:id/generations/:request_id` - Delete generation
-- `POST /projects/:id/generations/batch-delete` - Delete multiple generations
+For complete API documentation including request/response examples, see [docs/APIs.md](docs/APIs.md).
 
 ### Workspace Structure
 
@@ -508,9 +512,21 @@ workspace/
     ├── scripts/
     │   ├── sessions.json  # Session metadata
     │   └── {uuid}.txt     # Dialog text files
-    └── output/
-        ├── generation.json  # Generation metadata
-        └── {request_id}.wav # Generated audio files
+    ├── output/
+    │   ├── generation.json  # Generation metadata
+    │   └── {request_id}.wav # Generated audio files
+    ├── datasets/
+    │   ├── datasets.json    # Dataset metadata
+    │   └── {dataset-id}/
+    │       ├── datasets.jsonl  # Dataset items (one JSON per line)
+    │       ├── audio/          # Audio files
+    │       └── voice_prompts/  # Voice prompt files
+    └── training/
+        ├── training_history.json  # Training job metadata
+        └── lora_output/
+            └── {lora-name}/
+                ├── model_epoch_*.safetensors  # Checkpoint files
+                └── model_final.safetensors    # Final model
 ```
 
 ### Performance Benchmarks
@@ -628,7 +644,8 @@ This project follows the same license terms as the original Microsoft VibeVoice 
 
 - **Microsoft Research**: Original VibeVoice model and architecture
 - **ComfyUI**: Float8 casting techniques inspiration
-- **kohya-ss/musubi-tuner**: Offloading implementation reference
+- **kohya-ss/musubi-tuner**: Offloading implementation and LoRA network reference
+- **[voicepowered-ai/VibeVoice-finetuning](https://github.com/voicepowered-ai/VibeVoice-finetuning)**: Training dataloader implementation
 - **HuggingFace**: Model hosting and distribution
 - **Open Source Community**: Libraries and frameworks that made this possible
 

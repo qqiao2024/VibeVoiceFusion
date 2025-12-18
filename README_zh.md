@@ -28,12 +28,14 @@
 
 ### 项目目的
 
-VibeVoiceFusion 是一个**Web 应用**，用于生成高质量、多说话人的合成语音，具备声音克隆功能。基于微软的 VibeVoice 模型（AR + 扩散架构），本项目提供完整的全栈解决方案，包含直观的用户界面、项目管理和先进的显存优化功能。
+VibeVoiceFusion 是一个**Web 应用**，用于生成高质量、多说话人的合成语音，具备声音克隆功能。基于微软的 VibeVoice 模型（AR + 扩散架构），本项目提供完整的全栈解决方案，包含语音生成、LoRA 微调、数据集管理、批量生成和先进的显存优化功能。
 
 **核心目标：**
 
 - 提供无需编程知识的友好界面进行语音生成
 - 支持高效的多说话人对话合成，保持不同说话人的独特声音特征
+- 支持 LoRA 微调，实现自定义声音适配和风格迁移
+- 批量生成多个音频变体，使用不同的随机种子
 - 优化显存使用，支持消费级 GPU（10GB+ 显存）
 - 支持双语工作流（英语/中文）
 - 提供 Web 界面和命令行界面以适应不同使用场景
@@ -74,8 +76,34 @@ VibeVoice 结合**自回归（AR）**和**扩散**技术进行文本转语音合
   - 基于队列的任务管理（防止 GPU 冲突）
   - 实时进度监控与动态更新
   - 可配置参数（CFG scale、随机种子、模型精度）
+  - **批量生成**：单次生成 2-20 个音频变体，使用不同随机种子
+  - LoRA 模型支持，可配置权重 (0-1]
   - 生成历史记录，支持过滤、排序和分页
   - 完成的生成可播放和下载
+
+#### LoRA 微调
+
+- **数据集管理**：
+  - 创建和管理包含音频/文本对的训练数据集
+  - 支持从 ZIP 压缩包或本地文件夹导入数据集
+  - JSONL 格式高效处理数据
+  - 大型数据集支持分页和搜索
+  - 导出数据集用于备份或分享
+
+- **训练系统**：
+  - LoRA（低秩适应）微调，实现声音定制
+  - 可配置训练参数（训练轮数、学习率、LoRA 秩、批量大小）
+  - 支持层卸载，可在消费级 GPU 上训练
+  - 实时训练进度，带 tqdm 风格进度条
+  - 实时训练指标图表（损失、学习率、时间）
+  - TensorBoard 集成，查看详细指标
+  - 训练历史记录，状态跟踪（准备中、训练中、已完成、失败）
+  - OOM 检测，提供恢复建议
+
+- **LoRA 模型使用**：
+  - 在语音生成时选择已训练的 LoRA 模型
+  - 可配置 LoRA 权重，与基础模型混合
+  - 每个训练任务支持多个 LoRA 文件（epoch 检查点 + 最终模型）
 
 #### 显存优化
 
@@ -440,25 +468,31 @@ vibevoice/
 │   │   ├── projects.py     # 项目 CRUD
 │   │   ├── speakers.py     # 说话人管理
 │   │   ├── dialog_sessions.py  # 对话 CRUD
-│   │   └── generation.py   # 语音生成
+│   │   ├── generation.py   # 语音生成
+│   │   ├── dataset.py      # 数据集管理
+│   │   └── training.py     # LoRA 训练
 │   ├── services/           # 业务逻辑层
 │   ├── models/             # 数据模型
-│   ├── task_manager/          # 后台任务队列
+│   ├── task_manager/       # 后台任务队列
 │   ├── inference/          # 推理引擎
+│   ├── training/           # 训练引擎和状态管理
 │   ├── i18n/              # 后端翻译
 │   └── dist/              # 前端静态文件（生产）
 ├── frontend/               # Next.js Web 应用
-│   ├── app/               # Next.js app router 页面
+│   ├── app/               # Next.js 页面
 │   │   ├── page.tsx       # 主页/项目选择器
 │   │   ├── speaker-role/  # 说话人管理
 │   │   ├── voice-editor/  # 对话编辑器
-│   │   └── generate-voice/ # 生成页面
+│   │   ├── generate-voice/ # 生成页面
+│   │   ├── dataset/       # 数据集管理
+│   │   └── fine-tuning/   # LoRA 训练页面
 │   ├── components/        # React 组件
 │   ├── lib/              # Context providers 和工具
 │   │   ├── ProjectContext.tsx
 │   │   ├── SessionContext.tsx
 │   │   ├── SpeakerRoleContext.tsx
 │   │   ├── GenerationContext.tsx
+│   │   ├── TrainingContext.tsx
 │   │   ├── GlobalTaskContext.tsx
 │   │   ├── i18n/         # 前端翻译
 │   │   └── api.ts        # API 客户端
@@ -473,41 +507,7 @@ vibevoice/
 
 ### API 参考
 
-所有端点前缀为 `/api/v1`：
-
-#### 项目
-
-- `GET /projects` - 列出所有项目
-- `POST /projects` - 创建新项目
-- `GET /projects/:id` - 获取项目详情
-- `PUT /projects/:id` - 更新项目
-- `DELETE /projects/:id` - 删除项目
-
-#### 说话人
-
-- `GET /projects/:id/speakers` - 列出说话人
-- `POST /projects/:id/speakers` - 添加说话人（multipart: description, voice_file）
-- `PUT /projects/:id/speakers/:speaker_id` - 更新说话人元数据
-- `PUT /projects/:id/speakers/:speaker_id/voice` - 替换语音文件
-- `DELETE /projects/:id/speakers/:speaker_id` - 删除说话人
-
-#### 对话会话
-
-- `GET /projects/:id/sessions` - 列出会话
-- `POST /projects/:id/sessions` - 创建会话
-- `GET /projects/:id/sessions/:session_id` - 获取会话
-- `PUT /projects/:id/sessions/:session_id` - 更新会话
-- `DELETE /projects/:id/sessions/:session_id` - 删除会话
-- `GET /projects/:id/sessions/:session_id/text` - 获取对话文本
-
-#### 语音生成
-
-- `POST /projects/:id/generations` - 开始生成
-- `GET /projects/generations/current` - 获取当前运行任务
-- `GET /projects/:id/generations` - 列出生成历史
-- `GET /projects/:id/generations/:request_id` - 获取生成详情
-- `DELETE /projects/:id/generations/:request_id` - 删除生成
-- `POST /projects/:id/generations/batch-delete` - 批量删除生成
+完整的 API 文档（包含请求/响应示例），请参阅 [docs/APIs.md](docs/APIs.md)。
 
 ### 工作空间结构
 
@@ -521,9 +521,21 @@ workspace/
     ├── scripts/
     │   ├── sessions.json  # 会话元数据
     │   └── {uuid}.txt     # 对话文本文件
-    └── output/
-        ├── generation.json  # 生成元数据
-        └── {request_id}.wav # 生成的音频文件
+    ├── output/
+    │   ├── generation.json  # 生成元数据
+    │   └── {request_id}.wav # 生成的音频文件
+    ├── datasets/
+    │   ├── datasets.json    # 数据集元数据
+    │   └── {dataset-id}/
+    │       ├── datasets.jsonl  # 数据集条目（每行一个 JSON）
+    │       ├── audio/          # 音频文件
+    │       └── voice_prompts/  # 语音提示文件
+    └── training/
+        ├── training_history.json  # 训练任务元数据
+        └── lora_output/
+            └── {lora-name}/
+                ├── model_epoch_*.safetensors  # 检查点文件
+                └── model_final.safetensors    # 最终模型
 ```
 
 ### 性能基准
@@ -645,7 +657,8 @@ npm test
 
 - **Microsoft Research**：原始 VibeVoice 模型和架构
 - **ComfyUI**：Float8 转换技术灵感
-- **kohya-ss/musubi-tuner**: Offloading 实现参考
+- **kohya-ss/musubi-tuner**: Offloading 和 LoRA 网络实现参考
+- **[voicepowered-ai/VibeVoice-finetuning](https://github.com/voicepowered-ai/VibeVoice-finetuning)**：训练数据加载器实现
 - **HuggingFace**：模型托管和分发
 - **开源社区**：使本项目成为可能的各种库和框架
 
