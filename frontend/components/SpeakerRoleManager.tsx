@@ -8,7 +8,9 @@ import { api } from "@/lib/api";
 import AudioUploader from "./AudioUploader";
 import AudioPlayer from "./AudioPlayer";
 import VoiceRecorder from "./VoiceRecorder";
+import PresetVoiceSelector from "./PresetVoiceSelector";
 import toast from "react-hot-toast";
+import type { PresetVoice } from "@/types/preset";
 
 export default function SpeakerRoleManager() {
   const { currentProject } = useProject();
@@ -21,6 +23,7 @@ export default function SpeakerRoleManager() {
     uploadVoiceFile,
     removeVoiceFile,
     trimAudio,
+    refreshSpeakers,
     loading,
     error,
   } = useSpeakerRole();
@@ -34,8 +37,8 @@ export default function SpeakerRoleManager() {
   // Delete confirmation dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  // Track input method per speaker (upload or record)
-  const [inputMethod, setInputMethod] = useState<Record<string, 'upload' | 'record'>>({});
+  // Track input method per speaker (upload, record, or preset)
+  const [inputMethod, setInputMethod] = useState<Record<string, 'upload' | 'record' | 'preset'>>({});
 
   // Initialize local descriptions from speaker roles
   useEffect(() => {
@@ -148,6 +151,30 @@ export default function SpeakerRoleManager() {
       toast.error(errorMessage);
     } finally {
       setSavingStates(prev => ({ ...prev, [speakerId]: false }));
+    }
+  };
+
+  const handleSelectPreset = async (speakerId: string, preset: PresetVoice) => {
+    const currentRole = speakerRoles.find(r => r.speakerId === speakerId);
+    if (!currentRole || !currentProject) return;
+
+    setLocalError(null);
+    try {
+      // Create speaker from preset, using preset name as description
+      await api.createSpeakerFromPreset(currentProject.id, {
+        preset_filename: preset.filename,
+        description: preset.name,
+      });
+
+      toast.success(t('speaker.createSuccess'));
+
+      // Refresh speakers list from backend (removes temp speaker, adds new one)
+      await refreshSpeakers();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : t('speaker.createError');
+      setLocalError(errorMessage);
+      toast.error(errorMessage);
+      throw err; // Re-throw to let PresetVoiceSelector handle the error state
     }
   };
 
@@ -271,7 +298,7 @@ export default function SpeakerRoleManager() {
                   />
                 ) : (
                   <div>
-                    {/* Tabs for Upload/Record */}
+                    {/* Tabs for Upload/Record/Preset */}
                     <div className="flex border-b border-gray-200 mb-4">
                       <button
                         onClick={() => setInputMethod(prev => ({ ...prev, [role.speakerId]: 'upload' }))}
@@ -303,6 +330,21 @@ export default function SpeakerRoleManager() {
                           {t('speaker.uploadVoice')}
                         </div>
                       </button>
+                      <button
+                        onClick={() => setInputMethod(prev => ({ ...prev, [role.speakerId]: 'preset' }))}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                          inputMethod[role.speakerId] === 'preset'
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                          </svg>
+                          {t('speaker.preset')}
+                        </div>
+                      </button>
                     </div>
 
                     {/* Content based on selected tab */}
@@ -310,9 +352,13 @@ export default function SpeakerRoleManager() {
                       <AudioUploader
                         onUpload={(file) => handleUploadVoice(role.speakerId, file)}
                       />
-                    ) : (
+                    ) : inputMethod[role.speakerId] === 'record' ? (
                       <VoiceRecorder
                         onSave={(file) => handleUploadVoice(role.speakerId, file)}
+                      />
+                    ) : (
+                      <PresetVoiceSelector
+                        onSelect={(preset) => handleSelectPreset(role.speakerId, preset)}
                       />
                     )}
                   </div>

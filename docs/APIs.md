@@ -12,11 +12,12 @@ http://localhost:9527/api/v1
 
 1. [Projects API](#projects-api)
 2. [Speakers API](#speakers-api)
-3. [Dialog Sessions API](#dialog-sessions-api)
-4. [Tasks API (Unified)](#tasks-api-unified)
-5. [Generation API](#generation-api)
-6. [Dataset Management API](#dataset-management-api)
-7. [Training Management API](#training-management-api)
+3. [Preset Voices API](#preset-voices-api)
+4. [Dialog Sessions API](#dialog-sessions-api)
+5. [Tasks API (Unified)](#tasks-api-unified)
+6. [Generation API](#generation-api)
+7. [Dataset Management API](#dataset-management-api)
+8. [Training Management API](#training-management-api)
 
 ---
 
@@ -211,6 +212,118 @@ Download the speaker's voice file.
 **Response (200 OK):**
 - Content-Type: `audio/wav` (or appropriate audio type)
 - Binary audio data
+
+### 6. Create Speaker from Preset
+
+**POST** `/api/v1/projects/{project_id}/speakers/from-preset`
+
+Create a new speaker using a preset voice file.
+
+**Request Body:**
+```json
+{
+  "preset_filename": "en-Alice_woman.wav",
+  "description": "Main character voice"
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "speaker_id": "Speaker 1",
+  "description": "Main character voice",
+  "voice_filename": "a1b2c3d4e5f6.wav",
+  "created_at": "2025-12-19T10:00:00Z",
+  "updated_at": "2025-12-19T10:00:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Missing preset_filename
+- `404 Not Found`: Project or preset voice not found
+
+---
+
+# Preset Voices API
+
+## Overview
+
+The Preset Voices API provides access to pre-provided voice samples that users can use to quickly create speakers without uploading their own files.
+
+## Endpoints
+
+### 1. List Preset Voices
+
+**GET** `/api/v1/preset-voices`
+
+Get all available preset voices with optional filtering.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `language` | string | Filter by language code (`en`, `zh`, `in`) |
+| `gender` | string | Filter by gender (`man`, `woman`) |
+| `has_bgm` | boolean | Filter by BGM presence (`true`, `false`) |
+
+**Response (200 OK):**
+```json
+{
+  "presets": [
+    {
+      "filename": "en-Alice_woman.wav",
+      "language": "en",
+      "name": "Alice",
+      "gender": "woman",
+      "has_bgm": false,
+      "display_name": "Alice (English, Female)"
+    },
+    {
+      "filename": "zh-Bowen_man.wav",
+      "language": "zh",
+      "name": "Bowen",
+      "gender": "man",
+      "has_bgm": false,
+      "display_name": "Bowen (Chinese, Male)"
+    }
+  ],
+  "count": 9
+}
+```
+
+### 2. List Available Languages
+
+**GET** `/api/v1/preset-voices/languages`
+
+Get available languages for preset voices with counts.
+
+**Response (200 OK):**
+```json
+{
+  "languages": [
+    {"code": "en", "name": "English", "count": 5},
+    {"code": "zh", "name": "Chinese", "count": 3},
+    {"code": "in", "name": "Indian English", "count": 1}
+  ]
+}
+```
+
+### 3. Preview Preset Voice
+
+**GET** `/api/v1/preset-voices/{filename}/preview`
+
+Stream the preset voice audio file for preview.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `filename` | string | Preset voice filename (e.g., `en-Alice_woman.wav`) |
+
+**Response (200 OK):**
+- Content-Type: `audio/wav`
+- Binary audio data
+
+**Error Responses:**
+- `404 Not Found`: Preset voice not found
 
 ---
 

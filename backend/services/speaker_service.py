@@ -3,6 +3,7 @@ Speaker role management service - handles business logic for speaker roles
 """
 import uuid
 import wave
+import shutil
 import tempfile
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -463,3 +464,59 @@ class SpeakerService:
             if speaker:
                 file_paths.append(str(self.voices_dir / speaker.voice_filename))
         return file_paths
+
+    def add_speaker_from_preset(
+        self,
+        description: str,
+        preset_file_path: Path
+    ) -> SpeakerRole:
+        """
+        Add a new speaker role from a preset voice file
+
+        Args:
+            description: Speaker description
+            preset_file_path: Path to preset voice file
+
+        Returns:
+            Created SpeakerRole object
+
+        Raises:
+            ValueError: If preset file not found
+            RuntimeError: If operation fails
+        """
+        if not preset_file_path.exists():
+            raise ValueError("Preset voice file not found")
+
+        # Generate unique filename (copy to project directory)
+        unique_filename = f"{uuid.uuid4().hex}.wav"
+        dest_path = self.voices_dir / unique_filename
+
+        # Load current speakers
+        speakers = self.list_speakers()
+
+        # Generate speaker ID (next in sequence)
+        speaker_id = self._generate_speaker_id(len(speakers))
+
+        try:
+            # Copy preset file to project directory
+            shutil.copy2(preset_file_path, dest_path)
+
+            # Create speaker role
+            speaker = SpeakerRole.create(
+                speaker_id,
+                description.strip() if description else '',
+                unique_filename
+            )
+
+            # Update metadata atomically
+            speakers.append(speaker)
+            metadata = [s.to_dict() for s in speakers]
+            self._save_metadata(metadata)
+
+            return speaker
+
+        except Exception as e:
+            # Cleanup copied file if metadata save fails
+            if dest_path.exists():
+                dest_path.unlink()
+            raise RuntimeError(f"Failed to add speaker from preset: {str(e)}")

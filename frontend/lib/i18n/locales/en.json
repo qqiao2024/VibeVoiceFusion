@@ -95,7 +95,24 @@
     "audioFormats": "Supported formats: WAV, MP3, OGG",
     "addSpeaker": "Add Speaker",
     "speakerDescription": "Voice Description",
-    "speakerCount": "speakers"
+    "speakerCount": "speakers",
+    "preset": "Preset",
+    "presetVoices": "Preset Voices",
+    "selectPreset": "Select a preset voice"
+  },
+  "preset": {
+    "allLanguages": "All Languages",
+    "allGenders": "All Genders",
+    "allTypes": "All Types",
+    "withBgm": "With BGM",
+    "withoutBgm": "Without BGM",
+    "female": "Female",
+    "male": "Male",
+    "preview": "Preview",
+    "stop": "Stop",
+    "select": "Select",
+    "noPresetsFound": "No preset voices found matching your filters",
+    "selectPresetToCreate": "Select a preset voice to create a new speaker"
   },
   "session": {
     "deleted": "Deleted Session",

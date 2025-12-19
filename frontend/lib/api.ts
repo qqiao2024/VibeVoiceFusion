@@ -22,6 +22,7 @@ import type {
 } from '@/types/training';
 
 import type { CurrentTaskResponse } from '@/types/task';
+import type { PresetVoice, PresetLanguage } from '@/types/preset';
 
 // API base URL configuration
 // Development: Full URL to backend server (different origin)
@@ -268,6 +269,48 @@ class ApiClient {
 
   getVoiceFileUrl(projectId: string, speakerId: string): string {
     return `${this.baseUrl}/projects/${encodeURIComponent(projectId)}/speakers/${encodeURIComponent(speakerId)}/voice`;
+  }
+
+  async createSpeakerFromPreset(
+    projectId: string,
+    data: {
+      preset_filename: string;
+      description?: string;
+    }
+  ): Promise<Speaker> {
+    return this.fetch(
+      `/projects/${encodeURIComponent(projectId)}/speakers/from-preset`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  // ============ Preset Voices API ============
+
+  async listPresetVoices(filters?: {
+    language?: string;
+    gender?: 'man' | 'woman';
+    has_bgm?: boolean;
+  }): Promise<{ presets: PresetVoice[]; count: number }> {
+    const params = new URLSearchParams();
+    if (filters?.language) params.append('language', filters.language);
+    if (filters?.gender) params.append('gender', filters.gender);
+    if (filters?.has_bgm !== undefined) {
+      params.append('has_bgm', filters.has_bgm.toString());
+    }
+
+    const queryString = params.toString();
+    return this.fetch(`/preset-voices${queryString ? '?' + queryString : ''}`);
+  }
+
+  async listPresetLanguages(): Promise<{ languages: PresetLanguage[] }> {
+    return this.fetch('/preset-voices/languages');
+  }
+
+  getPresetPreviewUrl(filename: string): string {
+    return `${this.baseUrl}/preset-voices/${encodeURIComponent(filename)}/preview`;
   }
 
   // ============ Dialog Sessions API ============

@@ -37,7 +37,9 @@
     "invalid_file_type": "无效的文件类型。支持的格式：{formats}",
     "generation_already_running": "已有生成任务正在运行",
     "no_speakers_found": "项目中未找到说话人",
-    "session_required": "会话为必填项"
+    "session_required": "会话为必填项",
+    "preset_voice_not_found": "预设语音未找到",
+    "preset_filename_required": "预设文件名为必填项"
   },
   "success": {
     "project_created": "项目创建成功",

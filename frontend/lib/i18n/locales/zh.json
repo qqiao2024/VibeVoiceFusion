@@ -95,7 +95,24 @@
     "audioFormats": "支持格式：WAV、MP3、OGG",
     "addSpeaker": "添加说话人",
     "speakerDescription": "语音描述",
-    "speakerCount": "个说话人"
+    "speakerCount": "个说话人",
+    "preset": "预设",
+    "presetVoices": "预设语音",
+    "selectPreset": "选择预设语音"
+  },
+  "preset": {
+    "allLanguages": "所有语言",
+    "allGenders": "所有性别",
+    "allTypes": "所有类型",
+    "withBgm": "带背景音乐",
+    "withoutBgm": "无背景音乐",
+    "female": "女性",
+    "male": "男性",
+    "preview": "预览",
+    "stop": "停止",
+    "select": "选择",
+    "noPresetsFound": "未找到符合筛选条件的预设语音",
+    "selectPresetToCreate": "选择预设语音以创建新说话人"
   },
   "session": {
     "deleted": "已删除的会话",

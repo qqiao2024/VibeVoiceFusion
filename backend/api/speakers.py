@@ -5,6 +5,7 @@ from flask import request, jsonify, current_app, send_file
 from backend.api import api_bp
 from backend.services.speaker_service import SpeakerService
 from backend.services.project_service import ProjectService
+from backend.services.preset_voice_service import PresetVoiceService
 from backend.i18n import t
 
 
@@ -306,6 +307,70 @@ def update_voice_file(project_id, speaker_id):
             }), 404
 
         return jsonify(speaker.to_dict()), 200
+
+    except ValueError as e:
+        return jsonify({
+            'error': t('errors.validation_error'),
+            'message': str(e)
+        }), 400
+    except Exception as e:
+        return jsonify({
+            'error': t('errors.internal_error'),
+            'message': str(e)
+        }), 500
+
+
+@api_bp.route('/projects/<project_id>/speakers/from-preset', methods=['POST'])
+def add_speaker_from_preset(project_id):
+    """
+    Add a new speaker role from a preset voice
+
+    Args:
+        project_id: Project identifier
+
+    Request body (JSON):
+        preset_filename: Preset voice filename (required)
+        description: Speaker description (optional)
+
+    Returns:
+        JSON response with created speaker data
+    """
+    try:
+        service = get_speaker_service(project_id)
+        if not service:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.project_not_found')
+            }), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'error': t('errors.bad_request'),
+                'message': 'Request body must be JSON'
+            }), 400
+
+        preset_filename = data.get('preset_filename')
+        if not preset_filename:
+            return jsonify({
+                'error': t('errors.bad_request'),
+                'message': t('errors.preset_filename_required')
+            }), 400
+
+        # Get preset file path
+        preset_service = PresetVoiceService(current_app.config['PRESET_VOICE_DIR'])
+        preset_path = preset_service.get_preset_path(preset_filename)
+
+        if not preset_path:
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.preset_voice_not_found')
+            }), 404
+
+        description = data.get('description', '')
+        speaker = service.add_speaker_from_preset(description, preset_path)
+
+        return jsonify(speaker.to_dict()), 201
 
     except ValueError as e:
         return jsonify({

@@ -13,6 +13,7 @@ interface SpeakerRoleContextType {
   uploadVoiceFile: (speakerId: string, file: File) => Promise<void>;
   removeVoiceFile: (speakerId: string) => Promise<void>;
   trimAudio: (speakerId: string, startTime: number, endTime: number) => Promise<void>;
+  refreshSpeakers: () => Promise<void>;
   loading: boolean;
   error: string | null;
 }
@@ -229,6 +230,25 @@ export function SpeakerRoleProvider({ children, projectId }: { children: React.R
     }
   };
 
+  const refreshSpeakers = async (): Promise<void> => {
+    if (!projectId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.listSpeakers(projectId);
+      const roles = response.speakers.map(backendToFrontend);
+      setSpeakerRoles(roles);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to refresh speakers";
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SpeakerRoleContext.Provider
       value={{
@@ -239,6 +259,7 @@ export function SpeakerRoleProvider({ children, projectId }: { children: React.R
         uploadVoiceFile,
         removeVoiceFile,
         trimAudio,
+        refreshSpeakers,
         loading,
         error,
       }}

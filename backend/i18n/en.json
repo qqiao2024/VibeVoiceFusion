@@ -37,7 +37,9 @@
     "invalid_file_type": "Invalid file type. Supported formats: {formats}",
     "generation_already_running": "A generation task is already running",
     "no_speakers_found": "No speakers found in project",
-    "session_required": "Session is required"
+    "session_required": "Session is required",
+    "preset_voice_not_found": "Preset voice not found",
+    "preset_filename_required": "Preset filename is required"
   },
   "success": {
     "project_created": "Project created successfully",

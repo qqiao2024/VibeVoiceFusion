@@ -3,7 +3,7 @@ Configuration management for VibeVoice backend
 """
 import os
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 
 @dataclass
@@ -31,6 +31,9 @@ class Config:
 
     # Generation settings
     MAX_GENERATION_TIME = int(os.environ.get('MAX_GENERATION_TIME', 300))  # 5 minutes
+
+    # Preset voice settings
+    PRESET_VOICE_DIR = Path(os.environ.get('PRESET_VOICE_DIR', os.path.join(os.path.dirname(__file__), 'preset_voice'))).resolve()
 
     # API rate limiting
     RATELIMIT_ENABLED = os.environ.get('RATELIMIT_ENABLED', 'true').lower() == 'true'
