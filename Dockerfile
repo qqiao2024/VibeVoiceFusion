@@ -46,6 +46,7 @@ RUN echo "Cache bust: ${CACHE_BUST}"
 WORKDIR /build
 RUN git clone --depth 1 --branch ${GITHUB_BRANCH} ${GITHUB_REPO} vibevoice && \
     cd /build/vibevoice && \
+    git fetch --tags --depth=1 origin && \
     git checkout main && \
     git rev-parse HEAD > backend/version.txt
 
