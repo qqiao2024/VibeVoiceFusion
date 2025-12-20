@@ -333,7 +333,7 @@ export default function Navigation() {
         <div className="flex items-center justify-between gap-3">
           {/* Version Info */}
           <div className="text-xs text-gray-500 flex-1">
-            <p>{t('app.version')}</p>
+            <p>{process.env.NEXT_PUBLIC_APP_VERSION || 'dev'}</p>
             <p className="mt-1">{t('app.copyright')}</p>
           </div>
 

@@ -249,6 +249,11 @@ export default function ProjectSelector() {
           </div>
         )}
       </div>
+
+      {/* Version Info - Bottom Right */}
+      <div className="absolute bottom-6 right-6 text-xs text-gray-400">
+        {process.env.NEXT_PUBLIC_APP_VERSION || 'dev'}
+      </div>
     </div>
   );
 }

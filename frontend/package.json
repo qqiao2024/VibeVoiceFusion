@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "version": "node scripts/generate-version.js",
+    "dev": "npm run version && next dev --turbopack",
+    "build": "npm run version && next build --turbopack",
     "start": "next start",
     "lint": "eslint"
   },
