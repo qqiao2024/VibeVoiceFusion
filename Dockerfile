@@ -42,11 +42,12 @@ RUN apk add --no-cache git
 # Cache bust: Force rebuild from here when CACHE_BUST changes
 RUN echo "Cache bust: ${CACHE_BUST}"
 
-# Clone repository
+# Clone repository (shallow clone, then unshallow to get full history for git describe)
 WORKDIR /build
 RUN git clone --depth 1 --branch ${GITHUB_BRANCH} ${GITHUB_REPO} vibevoice && \
     cd /build/vibevoice && \
-    git fetch --tags --depth=1 origin && \
+    git fetch --unshallow origin && \
+    git fetch --tags origin && \
     git checkout main && \
     git rev-parse HEAD > backend/version.txt
 
