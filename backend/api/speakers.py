@@ -329,7 +329,7 @@ def add_speaker_from_preset(project_id):
         project_id: Project identifier
 
     Request body (JSON):
-        preset_filename: Preset voice filename (required)
+        preset_filename: Preset voice filename (e.g., "en-Alice_woman.wav")
         description: Speaker description (optional)
 
     Returns:

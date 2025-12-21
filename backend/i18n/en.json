@@ -39,7 +39,10 @@
     "no_speakers_found": "No speakers found in project",
     "session_required": "Session is required",
     "preset_voice_not_found": "Preset voice not found",
-    "preset_filename_required": "Preset filename is required"
+    "preset_filename_required": "Preset filename is required",
+    "preset_name_required": "Preset voice name is required",
+    "preset_language_required": "Preset voice language is required",
+    "preset_gender_required": "Preset voice gender is required"
   },
   "success": {
     "project_created": "Project created successfully",
@@ -63,7 +66,11 @@
     "item_deleted": "Item deleted successfully",
     "training_started": "Training started successfully",
     "training_job_deleted": "Training job deleted successfully",
-    "training_jobs_deleted": "Training jobs deleted successfully"
+    "training_jobs_deleted": "Training jobs deleted successfully",
+    "preset_voice_created": "Preset voice created successfully",
+    "preset_voice_updated": "Preset voice updated successfully",
+    "preset_voice_deleted": "Preset voice deleted successfully",
+    "preset_voices_deleted": "Preset voices deleted successfully"
   },
   "status": {
     "healthy": "Service is healthy",

@@ -22,7 +22,13 @@ import type {
 } from '@/types/training';
 
 import type { CurrentTaskResponse } from '@/types/task';
-import type { PresetVoice, PresetLanguage } from '@/types/preset';
+import type {
+  PresetVoice,
+  PresetLanguage,
+  ListPresetsResponse,
+  DeletePresetResponse,
+  BatchDeletePresetsResponse
+} from '@/types/preset';
 
 // API base URL configuration
 // Development: Full URL to backend server (different origin)
@@ -289,20 +295,85 @@ class ApiClient {
 
   // ============ Preset Voices API ============
 
-  async listPresetVoices(filters?: {
+  async listPresetVoices(options?: {
     language?: string;
-    gender?: 'man' | 'woman';
+    gender?: "man" | "woman";
     has_bgm?: boolean;
-  }): Promise<{ presets: PresetVoice[]; count: number }> {
+    offset?: number;
+    limit?: number;
+  }): Promise<ListPresetsResponse> {
     const params = new URLSearchParams();
-    if (filters?.language) params.append('language', filters.language);
-    if (filters?.gender) params.append('gender', filters.gender);
-    if (filters?.has_bgm !== undefined) {
-      params.append('has_bgm', filters.has_bgm.toString());
+    if (options?.language) params.append('language', options.language);
+    if (options?.gender) params.append('gender', options.gender);
+    if (options?.has_bgm !== undefined) {
+      params.append('has_bgm', options.has_bgm.toString());
+    }
+    if (options?.offset !== undefined) {
+      params.append('offset', options.offset.toString());
+    }
+    if (options?.limit !== undefined) {
+      params.append('limit', options.limit.toString());
     }
 
     const queryString = params.toString();
     return this.fetch(`/preset-voices${queryString ? '?' + queryString : ''}`);
+  }
+
+  async getPresetVoice(filename: string): Promise<PresetVoice> {
+    return this.fetch(`/preset-voices/${encodeURIComponent(filename)}`);
+  }
+
+  async createPresetVoice(data: {
+    name: string;
+    language: string;
+    gender: "man" | "woman";
+    has_bgm: boolean;
+    voice_file: File;
+  }): Promise<PresetVoice> {
+    const formData = new FormData();
+    formData.append('name', data.name);
+    formData.append('language', data.language);
+    formData.append('gender', data.gender);
+    formData.append('has_bgm', data.has_bgm.toString());
+    formData.append('voice_file', data.voice_file);
+
+    const url = `${this.baseUrl}/preset-voices`;
+    const locale = typeof window !== 'undefined'
+      ? localStorage.getItem('vibevoice-locale') || 'en'
+      : 'en';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Language': locale,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: response.statusText
+      }));
+      throw new Error(error.message || error.error || response.statusText);
+    }
+
+    return await response.json();
+  }
+
+  async deletePresetVoice(filename: string): Promise<DeletePresetResponse> {
+    return this.fetch(`/preset-voices/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async batchDeletePresetVoices(
+    filenames: string[]
+  ): Promise<BatchDeletePresetsResponse> {
+    return this.fetch('/preset-voices/batch-delete', {
+      method: 'POST',
+      body: JSON.stringify({ filenames }),
+    });
   }
 
   async listPresetLanguages(): Promise<{ languages: PresetLanguage[] }> {
