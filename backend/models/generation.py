@@ -37,6 +37,7 @@ class GenerationDetails:
     max_speaker_id: Optional[int] = None
     preprocessing_duration: Optional[float] = None
     generation_items: Optional[List[GenerationItem]] = field(default_factory=list)
+    offloading_config: Optional[Dict[str, Any]] = field(default_factory=dict)
 
 @dataclass
 class Generation(GenerationVisitor):
