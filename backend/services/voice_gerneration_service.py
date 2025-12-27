@@ -192,7 +192,7 @@ class VoiceGenerationService:
 
         # Store offloading config in generation details for reference
         if offloading_config:
-            generation.details['offloading_config'] = offloading_config
+            generation.details.offloading_config = offloading_config
 
         inference = InferenceBase.create(generation, self.speaker_service,
                                          self.dialog_service, self.meta_file_path,
