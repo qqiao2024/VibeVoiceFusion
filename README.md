@@ -39,6 +39,12 @@ VibeVoiceFusion is a **web application** for generating high-quality, multi-spea
 - Support bilingual workflows (English/Chinese)
 - Offer both web UI and CLI interfaces for different use cases
 
+<div align="center">
+  <a href="https://youtu.be/J9pmcOBWN4c" target="_blank">
+    <img src="docs/images/VibevoiceFusion.png" alt="Video Introduction" width="700"/>
+  </a>
+</div>
+
 ### Principle
 
 VibeVoice combines **autoregressive (AR)** and **diffusion** techniques for text-to-speech synthesis:
