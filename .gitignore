@@ -2,6 +2,7 @@
 CLAUDE.md
 .vscode/
 uv.lock
+media/
 
 
 demo/example/
@@ -235,3 +236,5 @@ outputs_offloading/
 demo/datasets/
 tensorboard_logs/
 nohup.out
+
+docs/images/vibevoice_architecture_1.svg

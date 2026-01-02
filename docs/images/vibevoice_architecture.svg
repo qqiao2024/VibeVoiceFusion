@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700" width="900" height="700">
+  <defs>
+    <!-- Gradients for layers -->
+    <linearGradient id="cudaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#76B900;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5A8F00;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="pytorchGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#EE4C2C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#CC3D22;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="vibeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#667EEA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5A67D8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="engineGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#F6AD55;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ED8936;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="serviceGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4FD1C5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38B2AC;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="apiGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FC8181;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F56565;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="frontendGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#63B3ED;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4299E1;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Shadow filter -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.2"/>
+    </filter>
+
+    <!-- Contributor badge gradients -->
+    <linearGradient id="aiBadgeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#9F7AEA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#805AD5;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="authorBadgeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#F6E05E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ECC94B;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="communityBadgeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#68D391;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#48BB78;stop-opacity:1" />
+    </linearGradient>
+
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="700" fill="#F7FAFC"/>
+
+  <!-- Title -->
+  <text x="450" y="35" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#2D3748" text-anchor="middle">VibeVoiceFusion Architecture</text>
+  <text x="450" y="55" font-family="Arial, sans-serif" font-size="12" fill="#718096" text-anchor="middle">Multi-Layer System Overview</text>
+
+  <!-- Layer Labels (left side) -->
+  <text x="25" y="115" font-family="Arial, sans-serif" font-size="11" fill="#4A5568" font-weight="bold">PRESENTATION</text>
+  <text x="25" y="205" font-family="Arial, sans-serif" font-size="11" fill="#4A5568" font-weight="bold">API LAYER</text>
+  <text x="25" y="295" font-family="Arial, sans-serif" font-size="11" fill="#4A5568" font-weight="bold">SERVICE</text>
+  <text x="25" y="395" font-family="Arial, sans-serif" font-size="11" fill="#4A5568" font-weight="bold">ENGINE</text>
+  <text x="25" y="505" font-family="Arial, sans-serif" font-size="11" fill="#4A5568" font-weight="bold">CORE MODEL</text>
+  <text x="25" y="615" font-family="Arial, sans-serif" font-size="11" fill="#4A5568" font-weight="bold">FOUNDATION</text>
+
+  <!-- Vertical line for layer labels -->
+  <line x1="85" y1="70" x2="85" y2="670" stroke="#E2E8F0" stroke-width="2" stroke-dasharray="5,5"/>
+
+  <!-- LAYER 1: Frontend (Top) -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="75" width="780" height="70" rx="8" fill="url(#frontendGrad)"/>
+    <text x="120" y="100" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">Frontend (Next.js)</text>
+
+    <!-- Frontend sub-modules -->
+    <rect x="120" y="108" width="100" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="170" y="127" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Project Selector</text>
+
+    <rect x="230" y="108" width="100" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="280" y="127" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Speaker Role</text>
+
+    <rect x="340" y="108" width="100" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="390" y="127" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Voice Editor</text>
+
+    <rect x="450" y="108" width="110" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="505" y="127" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Generate Voice</text>
+
+    <rect x="570" y="108" width="90" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="615" y="127" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Dataset Mgmt</text>
+
+    <rect x="670" y="108" width="90" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="715" y="127" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Fine-Tuning</text>
+
+    <rect x="770" y="108" width="90" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="815" y="127" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">i18n Context</text>
+
+    <!-- AI Badge -->
+    <rect x="835" y="78" width="28" height="20" rx="10" fill="url(#aiBadgeGrad)"/>
+    <text x="849" y="93" font-size="14" text-anchor="middle">🤖</text>
+  </g>
+
+  <!-- LAYER 2: API Layer -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="165" width="780" height="70" rx="8" fill="url(#apiGrad)"/>
+    <text x="120" y="190" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">API Layer (Flask REST)</text>
+
+    <!-- API sub-modules -->
+    <rect x="120" y="198" width="90" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="165" y="217" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Projects API</text>
+
+    <rect x="220" y="198" width="90" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="265" y="217" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Speakers API</text>
+
+    <rect x="320" y="198" width="90" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="365" y="217" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Sessions API</text>
+
+    <rect x="420" y="198" width="100" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="470" y="217" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Generation API</text>
+
+    <rect x="530" y="198" width="90" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="575" y="217" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Dataset API</text>
+
+    <rect x="630" y="198" width="90" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="675" y="217" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Training API</text>
+
+    <rect x="730" y="198" width="80" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="770" y="217" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Tasks API</text>
+
+    <!-- AI Badge -->
+    <rect x="835" y="168" width="28" height="20" rx="10" fill="url(#aiBadgeGrad)"/>
+    <text x="849" y="183" font-size="14" text-anchor="middle">🤖</text>
+  </g>
+
+  <!-- LAYER 3: Service Layer -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="255" width="780" height="70" rx="8" fill="url(#serviceGrad)"/>
+    <text x="120" y="280" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">Service Layer (Business Logic)</text>
+
+    <!-- Service sub-modules -->
+    <rect x="120" y="288" width="120" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="180" y="307" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Project Service</text>
+
+    <rect x="250" y="288" width="120" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="310" y="307" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Speaker Service</text>
+
+    <rect x="380" y="288" width="130" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="445" y="307" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Generation Service</text>
+
+    <rect x="520" y="288" width="120" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="580" y="307" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Dataset Service</text>
+
+    <rect x="650" y="288" width="110" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="705" y="307" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Training Service</text>
+
+    <rect x="770" y="288" width="100" height="28" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="820" y="307" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Task Manager</text>
+
+    <!-- AI Badge -->
+    <rect x="835" y="258" width="28" height="20" rx="10" fill="url(#aiBadgeGrad)"/>
+    <text x="849" y="273" font-size="14" text-anchor="middle">🤖</text>
+  </g>
+
+  <!-- LAYER 4: Engine Layer (Inference + Training) -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="350" width="780" height="85" rx="8" fill="url(#engineGrad)"/>
+    <text x="120" y="375" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">Engine Layer</text>
+
+    <!-- Inference Engine Box -->
+    <rect x="120" y="385" width="350" height="40" rx="6" fill="white" fill-opacity="0.3"/>
+    <text x="295" y="400" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">Inference Engine</text>
+    <text x="295" y="418" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">AR Decoder | Diffusion Model | Voice Synthesis | Multi-Generation</text>
+
+    <!-- Training Engine Box -->
+    <rect x="490" y="385" width="380" height="40" rx="6" fill="white" fill-opacity="0.3"/>
+    <text x="680" y="400" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white" text-anchor="middle">Training Engine</text>
+    <text x="680" y="418" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">LoRA Training | Layer Offloading | TensorBoard | State Management</text>
+
+    <!-- Author Badge -->
+    <rect x="835" y="353" width="28" height="20" rx="10" fill="url(#authorBadgeGrad)"/>
+    <text x="849" y="368" font-size="14" text-anchor="middle">🧑‍💻</text>
+  </g>
+
+  <!-- LAYER 5: VibeVoice Core Module -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="460" width="780" height="85" rx="8" fill="url(#vibeGrad)"/>
+    <text x="120" y="485" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">VibeVoice Core Module (AR + Diffusion TTS)</text>
+
+    <!-- Core sub-modules -->
+    <rect x="120" y="495" width="140" height="40" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="190" y="512" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">AR Language Model</text>
+    <text x="190" y="526" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Text-to-Token</text>
+
+    <rect x="270" y="495" width="140" height="40" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="340" y="512" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Diffusion Decoder</text>
+    <text x="340" y="526" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Token-to-Audio</text>
+
+    <rect x="420" y="495" width="130" height="40" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="485" y="512" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Speaker Encoder</text>
+    <text x="485" y="526" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Voice Embedding</text>
+
+    <rect x="560" y="495" width="110" height="40" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="615" y="512" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Text Encoder</text>
+    <text x="615" y="526" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Phoneme/Token</text>
+
+    <rect x="680" y="495" width="100" height="40" rx="4" fill="white" fill-opacity="0.25"/>
+    <text x="730" y="512" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Vocoder</text>
+    <text x="730" y="526" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Mel-to-Wave</text>
+
+    <rect x="790" y="495" width="80" height="40" rx="4" fill="white" fill-opacity="0.4" stroke="#ECC94B" stroke-width="2"/>
+    <text x="830" y="512" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">LoRA</text>
+    <text x="830" y="526" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">Adapter</text>
+    <!-- Author mini badge for LoRA -->
+    <rect x="848" y="497" width="18" height="16" rx="8" fill="url(#authorBadgeGrad)"/>
+    <text x="857" y="509" font-size="10" text-anchor="middle">🧑‍💻</text>
+
+    <!-- Community Badge for layer -->
+    <rect x="835" y="463" width="28" height="20" rx="10" fill="url(#communityBadgeGrad)"/>
+    <text x="849" y="478" font-size="14" text-anchor="middle">👥</text>
+  </g>
+
+  <!-- LAYER 6: Foundation (CUDA + PyTorch) -->
+  <g filter="url(#shadow)">
+    <!-- PyTorch section -->
+    <rect x="100" y="570" width="470" height="60" rx="8" fill="url(#pytorchGrad)"/>
+    <text x="335" y="595" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">PyTorch</text>
+
+    <!-- PyTorch sub-modules -->
+    <rect x="120" y="602" width="70" height="20" rx="3" fill="white" fill-opacity="0.25"/>
+    <text x="155" y="616" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">Autograd</text>
+
+    <rect x="200" y="602" width="80" height="20" rx="3" fill="white" fill-opacity="0.25"/>
+    <text x="240" y="616" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">nn.Module</text>
+
+    <rect x="290" y="602" width="80" height="20" rx="3" fill="white" fill-opacity="0.25"/>
+    <text x="330" y="616" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">DataLoader</text>
+
+    <rect x="380" y="602" width="80" height="20" rx="3" fill="white" fill-opacity="0.25"/>
+    <text x="420" y="616" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">Optimizer</text>
+
+    <rect x="470" y="602" width="80" height="20" rx="3" fill="white" fill-opacity="0.25"/>
+    <text x="510" y="616" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">Distributed</text>
+
+    <!-- CUDA section -->
+    <rect x="580" y="570" width="300" height="60" rx="8" fill="url(#cudaGrad)"/>
+    <text x="730" y="595" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">NVIDIA CUDA</text>
+
+    <!-- CUDA sub-modules -->
+    <rect x="600" y="602" width="70" height="20" rx="3" fill="white" fill-opacity="0.25"/>
+    <text x="635" y="616" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">cuDNN</text>
+
+    <rect x="680" y="602" width="70" height="20" rx="3" fill="white" fill-opacity="0.25"/>
+    <text x="715" y="616" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">cuBLAS</text>
+
+    <rect x="760" y="602" width="100" height="20" rx="3" fill="white" fill-opacity="0.25"/>
+    <text x="810" y="616" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">GPU Memory</text>
+
+    <!-- Community Badge for Foundation -->
+    <rect x="835" y="573" width="28" height="20" rx="10" fill="url(#communityBadgeGrad)"/>
+    <text x="849" y="588" font-size="14" text-anchor="middle">👥</text>
+  </g>
+
+  <!-- Hardware indicator -->
+  <rect x="100" y="645" width="780" height="30" rx="5" fill="#2D3748"/>
+  <text x="490" y="665" font-family="Arial, sans-serif" font-size="12" fill="#A0AEC0" text-anchor="middle">Hardware: GPU (NVIDIA) + CPU + Storage</text>
+
+  <!-- Legend -->
+  <g transform="translate(100, 685)">
+    <rect width="12" height="12" rx="2" fill="url(#frontendGrad)"/>
+    <text x="18" y="11" font-family="Arial, sans-serif" font-size="9" fill="#4A5568">Frontend</text>
+
+    <rect x="80" width="12" height="12" rx="2" fill="url(#apiGrad)"/>
+    <text x="98" y="11" font-family="Arial, sans-serif" font-size="9" fill="#4A5568">API</text>
+
+    <rect x="140" width="12" height="12" rx="2" fill="url(#serviceGrad)"/>
+    <text x="158" y="11" font-family="Arial, sans-serif" font-size="9" fill="#4A5568">Service</text>
+
+    <rect x="210" width="12" height="12" rx="2" fill="url(#engineGrad)"/>
+    <text x="228" y="11" font-family="Arial, sans-serif" font-size="9" fill="#4A5568">Engine</text>
+
+    <rect x="280" width="12" height="12" rx="2" fill="url(#vibeGrad)"/>
+    <text x="298" y="11" font-family="Arial, sans-serif" font-size="9" fill="#4A5568">Core Model</text>
+
+    <!-- Separator -->
+    <line x1="370" y1="0" x2="370" y2="12" stroke="#CBD5E0" stroke-width="1"/>
+
+    <!-- Contributor badges legend -->
+    <rect x="385" width="20" height="14" rx="7" fill="url(#aiBadgeGrad)"/>
+    <text x="395" y="12" font-size="10" text-anchor="middle">🤖</text>
+    <text x="415" y="11" font-family="Arial, sans-serif" font-size="8" fill="#4A5568">AI</text>
+
+    <rect x="440" width="20" height="14" rx="7" fill="url(#authorBadgeGrad)"/>
+    <text x="450" y="12" font-size="10" text-anchor="middle">🧑‍💻</text>
+    <text x="475" y="11" font-family="Arial, sans-serif" font-size="8" fill="#4A5568">Author</text>
+
+    <rect x="515" width="20" height="14" rx="7" fill="url(#communityBadgeGrad)"/>
+    <text x="525" y="12" font-size="10" text-anchor="middle">👥</text>
+    <text x="555" y="11" font-family="Arial, sans-serif" font-size="8" fill="#4A5568">Community</text>
+
+    <!-- Separator -->
+    <line x1="610" y1="0" x2="610" y2="12" stroke="#CBD5E0" stroke-width="1"/>
+
+    <rect x="625" width="12" height="12" rx="2" fill="url(#pytorchGrad)"/>
+    <text x="643" y="11" font-family="Arial, sans-serif" font-size="9" fill="#4A5568">PyTorch</text>
+
+    <rect x="700" width="12" height="12" rx="2" fill="url(#cudaGrad)"/>
+    <text x="718" y="11" font-family="Arial, sans-serif" font-size="9" fill="#4A5568">CUDA</text>
+  </g>
+</svg>
