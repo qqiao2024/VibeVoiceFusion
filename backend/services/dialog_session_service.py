@@ -108,7 +108,8 @@ class DialogSessionService:
                 return session
         return None
 
-    def create_session(self, name: str, description: str, dialog_text: str) -> DialogSession:
+    def create_session(self, name: str, description: str, dialog_text: str,
+                        mode: str = "dialogue", narrator_speaker_id: str = None) -> DialogSession:
         """
         Create a new dialog session with text file
 
@@ -116,6 +117,8 @@ class DialogSessionService:
             name: Session name
             description: Session description
             dialog_text: Dialog text content
+            mode: Session mode - "dialogue" or "narration"
+            narrator_speaker_id: Speaker ID for narration mode (required if mode="narration")
 
         Returns:
             Created DialogSession object
@@ -127,21 +130,38 @@ class DialogSessionService:
         if not name or not name.strip():
             raise ValueError("Session name cannot be empty")
 
-        # Allow empty dialog text - user can add dialogs later
-        # Only validate if dialog text is provided
-        if dialog_text and dialog_text.strip():
-            # Validate dialog text format
-            try:
-                DialogValidator.parse_dialog_text(dialog_text)
-            except ValueError as e:
-                raise ValueError(f"Invalid dialog text format: {str(e)}")
+        # Validate mode
+        if mode not in ("dialogue", "narration"):
+            raise ValueError(f"Invalid mode: {mode}. Must be 'dialogue' or 'narration'")
 
-            # Validate speaker IDs if speaker service is available
-            valid_speaker_ids = self._get_valid_speaker_ids()
-            if valid_speaker_ids:
-                is_valid, error_msg = DialogValidator.validate_speaker_ids(dialog_text, valid_speaker_ids)
-                if not is_valid:
-                    raise ValueError(f"Speaker ID validation failed: {error_msg}")
+        valid_speaker_ids = self._get_valid_speaker_ids()
+
+        if mode == "narration":
+            # Narration mode: validate narrator speaker ID
+            if not narrator_speaker_id:
+                raise ValueError("Narrator speaker ID is required for narration mode")
+
+            is_valid, error_msg = DialogValidator.validate_narration_text(
+                dialog_text, narrator_speaker_id, valid_speaker_ids
+            )
+            if not is_valid:
+                raise ValueError(error_msg)
+        else:
+            # Dialogue mode: validate dialog text format
+            # Allow empty dialog text - user can add dialogs later
+            # Only validate if dialog text is provided
+            if dialog_text and dialog_text.strip():
+                # Validate dialog text format
+                try:
+                    DialogValidator.parse_dialog_text(dialog_text)
+                except ValueError as e:
+                    raise ValueError(f"Invalid dialog text format: {str(e)}")
+
+                # Validate speaker IDs if speaker service is available
+                if valid_speaker_ids:
+                    is_valid, error_msg = DialogValidator.validate_speaker_ids(dialog_text, valid_speaker_ids)
+                    if not is_valid:
+                        raise ValueError(f"Speaker ID validation failed: {error_msg}")
 
         # Generate unique session ID and filename
         session_id = str(uuid.uuid4())
@@ -157,7 +177,10 @@ class DialogSessionService:
                 f.write(dialog_text)
 
             # Create dialog session
-            session = DialogSession.create(session_id, name.strip(), description.strip(), text_filename)
+            session = DialogSession.create(
+                session_id, name.strip(), description.strip(), text_filename,
+                mode=mode, narrator_speaker_id=narrator_speaker_id
+            )
 
             # Update metadata atomically
             sessions.append(session)
@@ -174,7 +197,9 @@ class DialogSessionService:
 
     def update_session(self, session_id: str, name: Optional[str] = None,
                        description: Optional[str] = None,
-                       dialog_text: Optional[str] = None) -> Optional[DialogSession]:
+                       dialog_text: Optional[str] = None,
+                       mode: Optional[str] = None,
+                       narrator_speaker_id: Optional[str] = None) -> Optional[DialogSession]:
         """
         Update dialog session metadata and/or text content
 
@@ -183,6 +208,8 @@ class DialogSessionService:
             name: New session name (optional)
             description: New description (optional)
             dialog_text: New dialog text content (optional)
+            mode: New session mode - "dialogue" or "narration" (optional)
+            narrator_speaker_id: Speaker ID for narration mode (optional)
 
         Returns:
             Updated DialogSession object or None if not found
@@ -196,31 +223,57 @@ class DialogSessionService:
         session_found = False
         for session in sessions:
             if session.session_id == session_id:
+                # Determine effective mode (use new mode if provided, otherwise keep existing)
+                effective_mode = mode if mode is not None else session.mode
+                effective_narrator = narrator_speaker_id if narrator_speaker_id is not None else session.narrator_speaker_id
+
+                # Validate mode if changing
+                if mode is not None and mode not in ("dialogue", "narration"):
+                    raise ValueError(f"Invalid mode: {mode}. Must be 'dialogue' or 'narration'")
+
+                valid_speaker_ids = self._get_valid_speaker_ids()
+
                 # Validate and update dialog text if provided
                 if dialog_text is not None:
-                    # Allow empty dialog text (consistent with create behavior)
-                    if dialog_text.strip():
-                        # Only validate if dialog text is not empty
-                        # Validate dialog text format
-                        try:
-                            DialogValidator.parse_dialog_text(dialog_text)
-                        except ValueError as e:
-                            raise ValueError(f"Invalid dialog text format: {str(e)}")
+                    if effective_mode == "narration":
+                        # Narration mode: validate narrator speaker ID
+                        if not effective_narrator:
+                            raise ValueError("Narrator speaker ID is required for narration mode")
 
-                        # Validate speaker IDs if speaker service is available
-                        valid_speaker_ids = self._get_valid_speaker_ids()
-                        if valid_speaker_ids:
-                            is_valid, error_msg = DialogValidator.validate_speaker_ids(dialog_text, valid_speaker_ids)
-                            if not is_valid:
-                                raise ValueError(f"Speaker ID validation failed: {error_msg}")
+                        is_valid, error_msg = DialogValidator.validate_narration_text(
+                            dialog_text, effective_narrator, valid_speaker_ids
+                        )
+                        if not is_valid:
+                            raise ValueError(error_msg)
+                    else:
+                        # Dialogue mode validation
+                        # Allow empty dialog text (consistent with create behavior)
+                        if dialog_text.strip():
+                            # Only validate if dialog text is not empty
+                            # Validate dialog text format
+                            try:
+                                DialogValidator.parse_dialog_text(dialog_text)
+                            except ValueError as e:
+                                raise ValueError(f"Invalid dialog text format: {str(e)}")
+
+                            # Validate speaker IDs if speaker service is available
+                            if valid_speaker_ids:
+                                is_valid, error_msg = DialogValidator.validate_speaker_ids(dialog_text, valid_speaker_ids)
+                                if not is_valid:
+                                    raise ValueError(f"Speaker ID validation failed: {error_msg}")
 
                     # Update text file (even if empty)
                     text_file_path = self.scripts_dir / session.text_filename
                     with open(text_file_path, 'w', encoding='utf-8') as f:
                         f.write(dialog_text)
 
+                # Validate narrator when switching to narration mode
+                if mode == "narration" and not effective_narrator:
+                    raise ValueError("Narrator speaker ID is required for narration mode")
+
                 # Update metadata
-                session.update(name=name, description=description)
+                session.update(name=name, description=description,
+                              mode=mode, narrator_speaker_id=narrator_speaker_id)
                 session_found = True
                 break
 
@@ -371,3 +424,41 @@ class DialogSessionService:
             unique_speaker_names.add(f"Speaker {current_speaker}")
 
         return txt_content, scripts, list(unique_speaker_names), max_speaker_id
+
+    def parse_narration_script(self, session_id: str) -> Tuple[str, List[str], str]:
+        """
+        Parse narration session content and convert to dialog format.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Tuple of (txt_content, scripts_with_speaker_prefix, narrator_speaker_id)
+            - txt_content: Raw text content
+            - scripts: List of "Speaker N: text" formatted strings
+            - narrator_speaker_id: The speaker ID used for narration
+
+        Raises:
+            ValueError: If session not found or not in narration mode
+        """
+        session = self.get_session(session_id)
+        if not session:
+            raise ValueError(f"Dialog session with ID '{session_id}' not found")
+
+        if session.mode != "narration":
+            raise ValueError(f"Session '{session_id}' is not in narration mode")
+
+        if not session.narrator_speaker_id:
+            raise ValueError(f"Session '{session_id}' has no narrator speaker ID")
+
+        txt_content = self.get_session_text(session_id)
+        if txt_content is None:
+            raise ValueError(f"Could not read text content for session '{session_id}'")
+
+        # Convert narration text to dialog format
+        dialogs = DialogValidator.convert_narration_to_dialog(txt_content, session.narrator_speaker_id)
+
+        # Format as "Speaker N: text" strings
+        scripts = [f"{speaker_id}: {text}" for speaker_id, text in dialogs]
+
+        return txt_content, scripts, session.narrator_speaker_id

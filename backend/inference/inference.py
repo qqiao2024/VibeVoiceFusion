@@ -162,17 +162,38 @@ class InferenceBase(ABC):
     def run_inference(self):
 
         self.visitor.visit_preprocessing(datetime.now().timestamp())
-        txt_content, scripts, unique_speaker_names, max_speaker_id = self.dialog_service.parse_session_txt_script(self.session_id)
-        if not scripts or not unique_speaker_names:
-            raise RuntimeError("No scripts, speaker_numbers found for the specified dialog session.")
 
-        voice_names = []
-        for i in range(max_speaker_id):
-            voice_names.append(f"Speaker {i+1}")
+        # Get session to check mode
+        session = self.dialog_service.get_session(self.session_id)
+        if not session:
+            raise RuntimeError(f"Dialog session with ID '{self.session_id}' not found")
+
+        if session.mode == "narration":
+            # Narration mode: single speaker
+            txt_content, scripts, narrator_speaker_id = self.dialog_service.parse_narration_script(self.session_id)
+            if not scripts:
+                raise RuntimeError("No content found in the narration session.")
+
+            unique_speaker_names = [narrator_speaker_id]
+            voice_names = [narrator_speaker_id]
+            max_speaker_id = 1
+
+            logger.info(f"Narration mode: narrator={narrator_speaker_id}, paragraphs={len(scripts)}")
+        else:
+            # Dialogue mode: multiple speakers
+            txt_content, scripts, unique_speaker_names, max_speaker_id = self.dialog_service.parse_session_txt_script(self.session_id)
+            if not scripts or not unique_speaker_names:
+                raise RuntimeError("No scripts, speaker_numbers found for the specified dialog session.")
+
+            voice_names = []
+            for i in range(max_speaker_id):
+                voice_names.append(f"Speaker {i+1}")
+
+            logger.info(f"Dialogue mode: max_speaker_id={max_speaker_id}, unique speakers: {unique_speaker_names}")
 
         voice_sample = self.speaker_service.get_speakers_filepath(voice_names)
 
-        logger.info(f"Max speaker ID: {max_speaker_id}, unique speakers: {unique_speaker_names}, all voice samples: {voice_sample}")
+        logger.info(f"Voice samples: {voice_sample}")
         # Proceed with inference using txt_content, scripts, and speaker_numbers
         # ...
         full_script = '\n'.join(scripts)

@@ -1,26 +1,33 @@
 "use client";
 
-import { SpeakerInfo } from "@/types/dialog";
+import { SpeakerInfo, SessionMode } from "@/types/dialog";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 interface SpeakerSelectorProps {
   speakers: SpeakerInfo[];
   selectedSpeakerId: string | null;
   onSelectSpeaker: (speakerId: string) => void;
+  mode?: SessionMode;
 }
 
 export default function SpeakerSelector({
   speakers,
   selectedSpeakerId,
   onSelectSpeaker,
+  mode = 'dialogue',
 }: SpeakerSelectorProps) {
   const { t } = useLanguage();
+  const isNarrationMode = mode === 'narration';
 
   return (
     <div className="h-full flex flex-col bg-gray-50 border-r border-gray-200">
       <div className="p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800">{t('voiceEditor.speakers')}</h2>
-        <p className="text-xs text-gray-500 mt-1">{t('voiceEditor.selectSpeakerHint')}</p>
+        <h2 className="text-lg font-semibold text-gray-800">
+          {isNarrationMode ? t('session.narratorVoice') : t('voiceEditor.speakers')}
+        </h2>
+        <p className="text-xs text-gray-500 mt-1">
+          {isNarrationMode ? t('voiceEditor.selectNarratorHint') : t('voiceEditor.selectSpeakerHint')}
+        </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
@@ -58,7 +65,11 @@ export default function SpeakerSelector({
       <div className="p-4 border-t border-gray-200 bg-white">
         <div className="text-xs text-gray-500">
           <p className="font-medium mb-1">{t('voiceEditor.quickActions')}</p>
-          <p>• {t('voiceEditor.clickSpeakerToAdd')}</p>
+          {isNarrationMode ? (
+            <p>• {t('voiceEditor.clickToChangeNarrator')}</p>
+          ) : (
+            <p>• {t('voiceEditor.clickSpeakerToAdd')}</p>
+          )}
           <p>• {t('voiceEditor.editInCenter')}</p>
         </div>
       </div>

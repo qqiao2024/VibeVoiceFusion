@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
+import { useSpeakerRole } from "@/lib/SpeakerRoleContext";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import { SessionMode } from "@/types/dialog";
 import toast from "react-hot-toast";
 
 export default function SessionManager() {
   const router = useRouter();
   const { sessions, currentSession, createSession, deleteSession, updateSession, loading, error } = useSession();
+  const { speakerRoles } = useSpeakerRole();
   const { t } = useLanguage();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -17,15 +20,34 @@ export default function SessionManager() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [newSessionName, setNewSessionName] = useState("");
   const [newSessionDescription, setNewSessionDescription] = useState("");
+  const [newSessionMode, setNewSessionMode] = useState<SessionMode>("dialogue");
+  const [newNarratorSpeakerId, setNewNarratorSpeakerId] = useState<string>("");
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const resetCreateForm = () => {
+    setNewSessionName("");
+    setNewSessionDescription("");
+    setNewSessionMode("dialogue");
+    setNewNarratorSpeakerId("");
+  };
 
   const handleCreateSession = async () => {
     if (newSessionName.trim()) {
+      // Validate narrator for narration mode
+      if (newSessionMode === "narration" && !newNarratorSpeakerId) {
+        setLocalError(t('session.narratorRequired'));
+        return;
+      }
+
       setLocalError(null);
       try {
-        await createSession(newSessionName.trim(), newSessionDescription.trim());
-        setNewSessionName("");
-        setNewSessionDescription("");
+        await createSession({
+          name: newSessionName.trim(),
+          description: newSessionDescription.trim(),
+          mode: newSessionMode,
+          narratorSpeakerId: newSessionMode === "narration" ? newNarratorSpeakerId : undefined,
+        });
+        resetCreateForm();
         setShowCreateModal(false);
       } catch (err) {
         setLocalError(err instanceof Error ? err.message : t('session.createError'));
@@ -158,6 +180,20 @@ export default function SessionManager() {
               </div>
 
               <div className={`flex items-center text-xs ${isActive ? "text-blue-100" : "text-gray-500"}`}>
+                {/* Mode badge */}
+                {session.mode === "narration" ? (
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium mr-2 ${
+                    isActive ? "bg-blue-400/30 text-blue-100" : "bg-purple-100 text-purple-700"
+                  }`}>
+                    {t('session.narration')}
+                  </span>
+                ) : (
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium mr-2 ${
+                    isActive ? "bg-blue-400/30 text-blue-100" : "bg-gray-100 text-gray-600"
+                  }`}>
+                    {t('session.dialogue')}
+                  </span>
+                )}
                 <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
@@ -214,14 +250,76 @@ export default function SessionManager() {
                   rows={3}
                 />
               </div>
+
+              {/* Mode Toggle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t('session.mode')}
+                </label>
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    type="button"
+                    onClick={() => setNewSessionMode("dialogue")}
+                    className={`flex-1 px-3 py-2 text-sm font-medium rounded transition-colors ${
+                      newSessionMode === "dialogue"
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    {t('session.dialogueMode')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewSessionMode("narration")}
+                    className={`flex-1 px-3 py-2 text-sm font-medium rounded transition-colors ${
+                      newSessionMode === "narration"
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    {t('session.narrationMode')}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {newSessionMode === "dialogue"
+                    ? t('session.dialogueModeDesc')
+                    : t('session.narrationModeDesc')}
+                </p>
+              </div>
+
+              {/* Narrator Speaker Selector (only for narration mode) */}
+              {newSessionMode === "narration" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('session.narratorVoice')} *
+                  </label>
+                  <select
+                    value={newNarratorSpeakerId}
+                    onChange={(e) => setNewNarratorSpeakerId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">{t('session.selectNarrator')}</option>
+                    {speakerRoles.map((speaker) => (
+                      <option key={speaker.speakerId} value={speaker.speakerId}>
+                        {speaker.speakerId}
+                        {speaker.description ? ` - ${speaker.description}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {speakerRoles.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      {t('session.noSpeakersForNarration')}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex space-x-3">
               <button
                 onClick={() => {
                   setShowCreateModal(false);
-                  setNewSessionName("");
-                  setNewSessionDescription("");
+                  resetCreateForm();
                 }}
                 className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
               >
@@ -229,7 +327,7 @@ export default function SessionManager() {
               </button>
               <button
                 onClick={handleCreateSession}
-                disabled={!newSessionName.trim() || loading}
+                disabled={!newSessionName.trim() || loading || (newSessionMode === "narration" && !newNarratorSpeakerId)}
                 className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? t('session.creating') : t('common.create')}

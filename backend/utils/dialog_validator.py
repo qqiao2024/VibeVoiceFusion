@@ -13,6 +13,85 @@ class DialogValidator:
     DIALOG_LINE_PATTERN = re.compile(r'^Speaker\s+(\d+):\s*(.+)$')
 
     @staticmethod
+    def parse_narration_text(text: str) -> List[str]:
+        """
+        Parse plain text for narration mode.
+        Returns list of non-empty paragraphs.
+
+        Args:
+            text: Plain text content (no Speaker N: formatting required)
+
+        Returns:
+            List of text paragraphs (non-empty lines/blocks)
+        """
+        if not text or not text.strip():
+            return []
+
+        # Split by double newlines (paragraph separator) or single newlines
+        # and filter out empty paragraphs
+        lines = text.strip().split('\n')
+        paragraphs = []
+        current_paragraph = []
+
+        for line in lines:
+            stripped = line.strip()
+            if stripped:
+                current_paragraph.append(stripped)
+            elif current_paragraph:
+                # Empty line - save accumulated paragraph
+                paragraphs.append(' '.join(current_paragraph))
+                current_paragraph = []
+
+        # Don't forget the last paragraph
+        if current_paragraph:
+            paragraphs.append(' '.join(current_paragraph))
+
+        return paragraphs
+
+    @staticmethod
+    def validate_narration_text(text: str, narrator_speaker_id: str,
+                                 valid_speaker_ids: Set[str]) -> Tuple[bool, Optional[str]]:
+        """
+        Validate narration mode text and narrator speaker.
+
+        Args:
+            text: Plain text content
+            narrator_speaker_id: The speaker ID to use for narration (e.g., "Speaker 1")
+            valid_speaker_ids: Set of valid speaker IDs from speaker management system
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # Narrator speaker ID is required for narration mode
+        if not narrator_speaker_id:
+            return False, "Narrator speaker ID is required for narration mode"
+
+        # Validate narrator speaker exists
+        if valid_speaker_ids and narrator_speaker_id not in valid_speaker_ids:
+            return False, f"Invalid narrator speaker ID: {narrator_speaker_id}"
+
+        # Parse narration text (can be empty)
+        paragraphs = DialogValidator.parse_narration_text(text)
+
+        # Text can be empty - user can add later
+        return True, None
+
+    @staticmethod
+    def convert_narration_to_dialog(text: str, narrator_speaker_id: str) -> List[Tuple[str, str]]:
+        """
+        Convert narration text to dialog format (speaker_id, text) tuples.
+
+        Args:
+            text: Plain text content
+            narrator_speaker_id: The speaker ID to assign to all text (e.g., "Speaker 1")
+
+        Returns:
+            List of (speaker_id, dialog_text) tuples
+        """
+        paragraphs = DialogValidator.parse_narration_text(text)
+        return [(narrator_speaker_id, paragraph) for paragraph in paragraphs]
+
+    @staticmethod
     def parse_dialog_text(text: str) -> List[Tuple[str, str]]:
         """
         Parse dialog text into list of (speaker_id, dialog_text) tuples

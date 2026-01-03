@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DialogLine, SpeakerInfo } from "@/types/dialog";
+import { DialogLine, SpeakerInfo, SessionMode } from "@/types/dialog";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import toast from "react-hot-toast";
 
@@ -16,6 +16,8 @@ interface DialogEditorProps {
   onSetLines: (lines: DialogLine[]) => void;
   hasUnsavedChanges: boolean;
   isSaving: boolean;
+  mode?: SessionMode;
+  narratorSpeakerId?: string | null;
 }
 
 export default function DialogEditor({
@@ -29,11 +31,16 @@ export default function DialogEditor({
   onSetLines,
   hasUnsavedChanges,
   isSaving,
+  mode = 'dialogue',
+  narratorSpeakerId,
 }: DialogEditorProps) {
   const { t } = useLanguage();
   const [viewMode, setViewMode] = useState<'visual' | 'text'>('visual');
   const [textContent, setTextContent] = useState('');
+  const [narrationContent, setNarrationContent] = useState('');
   const [showClearDialog, setShowClearDialog] = useState(false);
+
+  const isNarrationMode = mode === 'narration';
 
   const getSpeakerById = (speakerId: string) => {
     return speakers.find((s) => s.id === speakerId);
@@ -89,6 +96,35 @@ export default function DialogEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode]);
 
+  // Sync narration content from dialogLines (for narration mode)
+  useEffect(() => {
+    if (isNarrationMode) {
+      // In narration mode, dialogLines contain paragraphs as content
+      // Combine them into plain text
+      const plainText = dialogLines.map(line => line.content).join('\n\n');
+      setNarrationContent(plainText);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNarrationMode, dialogLines]);
+
+  // Handle narration text change - convert to dialogLines
+  const handleNarrationChange = (text: string) => {
+    setNarrationContent(text);
+
+    if (!narratorSpeakerId) return;
+
+    // Split by double newlines (paragraph separator) or treat as single block
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+
+    const newLines: DialogLine[] = paragraphs.map((paragraph, index) => ({
+      id: `line-${Date.now()}-${index}`,
+      speakerId: narratorSpeakerId,
+      content: paragraph.trim(),
+    }));
+
+    onSetLines(newLines);
+  };
+
   // Handle view mode toggle
   const handleToggleView = () => {
     if (viewMode === 'visual') {
@@ -113,30 +149,40 @@ export default function DialogEditor({
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-3">
-            <h2 className="text-lg font-semibold text-gray-800">{t('voiceEditor.dialogEditor')}</h2>
-            {/* View Mode Toggle */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => viewMode === 'text' && handleToggleView()}
-                className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
-                  viewMode === 'visual'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {t('session.visualEditor')}
-              </button>
-              <button
-                onClick={() => viewMode === 'visual' && handleToggleView()}
-                className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
-                  viewMode === 'text'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {t('session.textEditor')}
-              </button>
-            </div>
+            <h2 className="text-lg font-semibold text-gray-800">
+              {isNarrationMode ? t('voiceEditor.narrationEditor') : t('voiceEditor.dialogEditor')}
+            </h2>
+            {/* Mode badge */}
+            {isNarrationMode && (
+              <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                {t('session.narration')}
+              </span>
+            )}
+            {/* View Mode Toggle - only for dialogue mode */}
+            {!isNarrationMode && (
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => viewMode === 'text' && handleToggleView()}
+                  className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
+                    viewMode === 'visual'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {t('session.visualEditor')}
+                </button>
+                <button
+                  onClick={() => viewMode === 'visual' && handleToggleView()}
+                  className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
+                    viewMode === 'text'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {t('session.textEditor')}
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             {hasUnsavedChanges && (
@@ -160,12 +206,23 @@ export default function DialogEditor({
           </div>
         </div>
         <p className="text-sm text-gray-500">
-          {dialogLines.length} {t('voiceEditor.dialogLinesCount')} • {viewMode === 'visual' ? t('voiceEditor.editContentHint') : t('voiceEditor.editTextHint')}
+          {isNarrationMode
+            ? t('voiceEditor.narrationHint')
+            : `${dialogLines.length} ${t('voiceEditor.dialogLinesCount')} • ${viewMode === 'visual' ? t('voiceEditor.editContentHint') : t('voiceEditor.editTextHint')}`
+          }
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {viewMode === 'text' ? (
+        {/* Narration mode - simple text editor */}
+        {isNarrationMode ? (
+          <textarea
+            value={narrationContent}
+            onChange={(e) => handleNarrationChange(e.target.value)}
+            placeholder={t('voiceEditor.narrationPlaceholder')}
+            className="w-full h-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-700 text-base leading-relaxed"
+          />
+        ) : viewMode === 'text' ? (
           <textarea
             value={textContent}
             onChange={(e) => setTextContent(e.target.value)}

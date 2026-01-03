@@ -110,7 +110,9 @@ def create_session(project_id):
         {
             "name": "Session name",
             "description": "Session description",
-            "dialog_text": "Speaker 1: Hello\\n\\nSpeaker 2: Hi"
+            "dialog_text": "Speaker 1: Hello\\n\\nSpeaker 2: Hi",
+            "mode": "dialogue",  // or "narration"
+            "narrator_speaker_id": "Speaker 1"  // required if mode="narration"
         }
 
     Returns:
@@ -134,6 +136,8 @@ def create_session(project_id):
         name = data.get('name')
         description = data.get('description', '')
         dialog_text = data.get('dialog_text', '')  # Default to empty string if not provided
+        mode = data.get('mode', 'dialogue')  # Default to dialogue mode
+        narrator_speaker_id = data.get('narrator_speaker_id')
 
         if not name:
             return jsonify({
@@ -142,7 +146,10 @@ def create_session(project_id):
             }), 400
 
         # Allow empty dialog_text - user can add dialogs later
-        session = service.create_session(name, description, dialog_text)
+        session = service.create_session(
+            name, description, dialog_text,
+            mode=mode, narrator_speaker_id=narrator_speaker_id
+        )
 
         return jsonify(session.to_dict()), 201
 
@@ -171,7 +178,9 @@ def update_session(project_id, session_id):
         {
             "name": "Updated name",
             "description": "Updated description",
-            "dialog_text": "Speaker 1: Updated text"
+            "dialog_text": "Speaker 1: Updated text",
+            "mode": "dialogue",  // or "narration"
+            "narrator_speaker_id": "Speaker 1"  // required if mode="narration"
         }
 
     Returns:
@@ -195,8 +204,13 @@ def update_session(project_id, session_id):
         name = data.get('name')
         description = data.get('description')
         dialog_text = data.get('dialog_text')
+        mode = data.get('mode')
+        narrator_speaker_id = data.get('narrator_speaker_id')
 
-        session = service.update_session(session_id, name, description, dialog_text)
+        session = service.update_session(
+            session_id, name, description, dialog_text,
+            mode=mode, narrator_speaker_id=narrator_speaker_id
+        )
         if not session:
             return jsonify({
                 'error': t('errors.not_found'),

@@ -75,6 +75,7 @@ VibeVoice combines **autoregressive (AR)** and **diffusion** techniques for text
   - Visual editor with drag-and-drop line reordering
   - Text editor mode for bulk editing
   - Support for multi-speaker dialogs (up to 4+ speakers)
+  - **Narration mode** for single-speaker content (audiobooks, articles, podcasts)
   - Real-time preview and validation
 - **Generation System**:
   - Queue-based task management (prevents GPU conflicts)
@@ -356,12 +357,30 @@ Speaker 2: Thanks for having me. It's great to be here.
 Speaker 1: Let's dive into today's topic.
 ```
 
+**Narration Mode:**
+
+For single-speaker content like audiobooks, articles, or podcasts, use **Narration Mode**:
+
+1. When creating a new session, toggle to "Narration" mode
+2. Select a narrator voice from your uploaded speakers
+3. Enter plain text without `Speaker N:` prefixes
+4. Each paragraph will be spoken by the selected narrator
+
+```
+This is the first paragraph of your narration.
+
+This is the second paragraph. No speaker formatting needed.
+
+The narrator voice you selected will read all the text.
+```
+
 **Features:**
 - Visual editor with drag-and-drop
 - Text editor for bulk editing
 - Real-time preview
 - Copy and download functionality
 - Format validation
+- **Narration mode** for single-speaker content
 
 #### Step 4: Generate Voice
 
