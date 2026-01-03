@@ -11,6 +11,8 @@ export interface SpeakerInfo {
   description?: string;
 }
 
+export type SessionMode = 'dialogue' | 'narration';
+
 export interface DialogSession {
   id: string; // Frontend ID (for UI, same as session_id from backend)
   sessionId: string; // Backend session_id
@@ -20,4 +22,6 @@ export interface DialogSession {
   dialogLines: DialogLine[]; // Frontend-only, loaded from backend text file
   createdAt?: Date; // From backend
   updatedAt?: Date; // From backend
+  mode: SessionMode; // "dialogue" or "narration"
+  narratorSpeakerId: string | null; // Required when mode="narration"
 }

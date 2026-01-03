@@ -53,6 +53,8 @@ export interface Speaker {
   updated_at: string;
 }
 
+export type SessionMode = 'dialogue' | 'narration';
+
 export interface DialogSession {
   session_id: string;
   name: string;
@@ -60,6 +62,8 @@ export interface DialogSession {
   text_filename: string;
   created_at: string;
   updated_at: string;
+  mode: SessionMode;
+  narrator_speaker_id: string | null;
 }
 
 export interface Dataset {
@@ -402,6 +406,8 @@ class ApiClient {
       name: string;
       description?: string;
       dialog_text: string;
+      mode?: SessionMode;
+      narrator_speaker_id?: string;
     }
   ): Promise<DialogSession> {
     return this.fetch(`/projects/${encodeURIComponent(projectId)}/sessions`, {
@@ -417,6 +423,8 @@ class ApiClient {
       name?: string;
       description?: string;
       dialog_text?: string;
+      mode?: SessionMode;
+      narrator_speaker_id?: string;
     }
   ): Promise<DialogSession> {
     return this.fetch(

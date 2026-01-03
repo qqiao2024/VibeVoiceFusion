@@ -1,16 +1,23 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { DialogSession, DialogLine } from "@/types/dialog";
+import { DialogSession, DialogLine, SessionMode } from "@/types/dialog";
 import { useProject } from "@/lib/ProjectContext";
 import { api } from "@/lib/api";
 import type { DialogSession as ApiDialogSession } from "@/lib/api";
+
+interface CreateSessionOptions {
+  name: string;
+  description: string;
+  mode?: SessionMode;
+  narratorSpeakerId?: string;
+}
 
 interface SessionContextType {
   sessions: DialogSession[];
   currentSession: DialogSession | null;
   selectSession: (sessionId: string) => Promise<void>;
-  createSession: (name: string, description: string) => Promise<void>;
+  createSession: (options: CreateSessionOptions) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
   updateSession: (sessionId: string, updates: Partial<DialogSession>) => Promise<void>;
   updateSessionDialogs: (sessionId: string, dialogLines: DialogLine[]) => Promise<void>;
@@ -64,6 +71,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       dialogLines: [], // Empty - will be loaded on demand
       createdAt: new Date(apiSession.created_at),
       updatedAt: new Date(apiSession.updated_at),
+      mode: (apiSession.mode || 'dialogue') as SessionMode,
+      narratorSpeakerId: apiSession.narrator_speaker_id || null,
     };
   };
 
@@ -166,10 +175,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const createSession = async (name: string, description: string): Promise<void> => {
+  const createSession = async (options: CreateSessionOptions): Promise<void> => {
     if (!currentProject) {
       throw new Error("No project selected");
     }
+
+    const { name, description, mode = 'dialogue', narratorSpeakerId } = options;
 
     setLoading(true);
     setError(null);
@@ -180,6 +191,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         name,
         description,
         dialog_text: "", // Empty initially
+        mode,
+        narrator_speaker_id: narratorSpeakerId,
       });
 
       // Convert to frontend format (no text to load for new empty session)
@@ -248,12 +261,24 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setCurrentSession({ ...currentSession, ...updates, updatedAt: new Date() });
     }
 
-    // Only sync name/description to backend (not dialogLines)
-    if (updates.name !== undefined || updates.description !== undefined) {
+    // Sync name/description/mode/narrator to backend (not dialogLines)
+    const hasMetadataUpdates = updates.name !== undefined ||
+      updates.description !== undefined ||
+      updates.mode !== undefined ||
+      updates.narratorSpeakerId !== undefined;
+
+    if (hasMetadataUpdates) {
       try {
-        const updateData: { name?: string; description?: string } = {};
+        const updateData: {
+          name?: string;
+          description?: string;
+          mode?: SessionMode;
+          narrator_speaker_id?: string;
+        } = {};
         if (updates.name !== undefined) updateData.name = updates.name;
         if (updates.description !== undefined) updateData.description = updates.description;
+        if (updates.mode !== undefined) updateData.mode = updates.mode;
+        if (updates.narratorSpeakerId !== undefined) updateData.narrator_speaker_id = updates.narratorSpeakerId ?? undefined;
 
         const updatedApiSession = await api.updateSession(currentProject.id, sessionId, updateData);
 
@@ -340,3 +365,5 @@ export function useSession() {
   }
   return context;
 }
+
+export type { CreateSessionOptions };

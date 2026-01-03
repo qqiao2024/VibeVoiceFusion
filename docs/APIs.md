@@ -496,9 +496,14 @@ Stream preset voice audio by filename (legacy endpoint for backwards compatibili
 
 ## Overview
 
-The Dialog Sessions API manages dialog scripts within a project. Each session contains a multi-speaker dialog script.
+The Dialog Sessions API manages dialog scripts within a project. Sessions support two modes:
 
-## Dialog Format
+- **Dialogue Mode** (default): Multi-speaker conversations with "Speaker N: text" format
+- **Narration Mode**: Single-speaker plain text for articles, books, narration
+
+## Session Modes
+
+### Dialogue Mode (default)
 
 ```
 Speaker 1: First line
@@ -510,6 +515,16 @@ Speaker 1: Can appear multiple times
 
 **Critical**: Speaker names must match exactly with uploaded speakers.
 
+### Narration Mode
+
+Plain text without speaker prefixes. All text is spoken by the selected narrator.
+
+```
+This is the first paragraph of plain text.
+
+This is the second paragraph. No speaker formatting needed.
+```
+
 ## Endpoints
 
 ### 1. List Sessions
@@ -519,14 +534,29 @@ Speaker 1: Can appear multiple times
 Get all dialog sessions for a project.
 
 **Response (200 OK):**
+
 ```json
 {
   "sessions": [
     {
-      "id": "session-id",
+      "session_id": "session-id",
       "name": "My Dialog",
-      "script_file": "uuid.txt",
-      "created_at": "2025-12-02T10:00:00Z"
+      "description": "Optional description",
+      "text_filename": "uuid.txt",
+      "mode": "dialogue",
+      "narrator_speaker_id": null,
+      "created_at": "2025-12-02T10:00:00Z",
+      "updated_at": "2025-12-02T10:00:00Z"
+    },
+    {
+      "session_id": "narration-id",
+      "name": "My Narration",
+      "description": "Article narration",
+      "text_filename": "uuid2.txt",
+      "mode": "narration",
+      "narrator_speaker_id": "Speaker 1",
+      "created_at": "2025-12-02T11:00:00Z",
+      "updated_at": "2025-12-02T11:00:00Z"
     }
   ]
 }
@@ -538,23 +568,48 @@ Get all dialog sessions for a project.
 
 Create a new dialog session.
 
-**Request Body:**
+**Request Body (Dialogue Mode):**
+
 ```json
 {
   "name": "My Dialog",
-  "script": "Speaker 1: Hello\n\nSpeaker 2: Hi there"
+  "description": "Optional description",
+  "dialog_text": "Speaker 1: Hello\n\nSpeaker 2: Hi there",
+  "mode": "dialogue"
+}
+```
+
+**Request Body (Narration Mode):**
+
+```json
+{
+  "name": "My Article",
+  "description": "Article narration",
+  "dialog_text": "This is the first paragraph.\n\nThis is the second paragraph.",
+  "mode": "narration",
+  "narrator_speaker_id": "Speaker 1"
 }
 ```
 
 **Response (201 Created):**
+
 ```json
 {
-  "id": "session-id",
+  "session_id": "session-id",
   "name": "My Dialog",
-  "script_file": "uuid.txt",
-  "created_at": "2025-12-02T10:00:00Z"
+  "description": "Optional description",
+  "text_filename": "uuid.txt",
+  "mode": "dialogue",
+  "narrator_speaker_id": null,
+  "created_at": "2025-12-02T10:00:00Z",
+  "updated_at": "2025-12-02T10:00:00Z"
 }
 ```
+
+**Validation:**
+
+- `mode`: Must be "dialogue" or "narration" (default: "dialogue")
+- `narrator_speaker_id`: Required when mode="narration", must be a valid speaker ID
 
 ### 3. Get Session
 
@@ -563,12 +618,17 @@ Create a new dialog session.
 Get session details and script content.
 
 **Response (200 OK):**
+
 ```json
 {
-  "id": "session-id",
+  "session_id": "session-id",
   "name": "My Dialog",
-  "script": "Speaker 1: Hello\n\nSpeaker 2: Hi there",
-  "created_at": "2025-12-02T10:00:00Z"
+  "description": "Optional description",
+  "text_filename": "uuid.txt",
+  "mode": "dialogue",
+  "narrator_speaker_id": null,
+  "created_at": "2025-12-02T10:00:00Z",
+  "updated_at": "2025-12-02T10:00:00Z"
 }
 ```
 
@@ -576,23 +636,31 @@ Get session details and script content.
 
 **PUT** `/api/v1/projects/{project_id}/sessions/{session_id}`
 
-Update session name or script content.
+Update session metadata, script content, or mode.
 
 **Request Body:**
+
 ```json
 {
   "name": "Updated Dialog Name",
-  "script": "Speaker 1: Updated script..."
+  "dialog_text": "Speaker 1: Updated script...",
+  "mode": "narration",
+  "narrator_speaker_id": "Speaker 1"
 }
 ```
 
 **Response (200 OK):**
+
 ```json
 {
-  "id": "session-id",
+  "session_id": "session-id",
   "name": "Updated Dialog Name",
-  "script_file": "uuid.txt",
-  "created_at": "2025-12-02T10:00:00Z"
+  "description": "Optional description",
+  "text_filename": "uuid.txt",
+  "mode": "narration",
+  "narrator_speaker_id": "Speaker 1",
+  "created_at": "2025-12-02T10:00:00Z",
+  "updated_at": "2025-12-02T12:00:00Z"
 }
 ```
 
@@ -603,6 +671,7 @@ Update session name or script content.
 Delete a dialog session.
 
 **Response (200 OK):**
+
 ```json
 {
   "message": "Session deleted successfully"

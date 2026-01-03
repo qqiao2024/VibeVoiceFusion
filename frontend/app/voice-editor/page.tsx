@@ -179,6 +179,8 @@ function VoiceEditorContent() {
             onSetLines={setDialogLines}
             hasUnsavedChanges={hasUnsavedChanges}
             isSaving={isSaving}
+            mode={currentSession?.mode}
+            narratorSpeakerId={currentSession?.narratorSpeakerId}
           />
         </div>
 
