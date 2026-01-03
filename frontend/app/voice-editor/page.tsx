@@ -15,7 +15,7 @@ import toast from "react-hot-toast";
 
 function VoiceEditorContent() {
   const { currentProject } = useProject();
-  const { currentSession, updateSessionDialogs, selectSession } = useSession();
+  const { currentSession, updateSessionDialogs, selectSession, updateSession } = useSession();
   const { speakerRoles } = useSpeakerRole();
   const { t } = useLanguage();
   const searchParams = useSearchParams();
@@ -34,12 +34,20 @@ function VoiceEditorContent() {
     }));
   }, [speakerRoles]);
 
-  // Auto-select first speaker when speakers load
+  const isNarrationMode = currentSession?.mode === 'narration';
+
+  // Auto-select speaker when speakers load or session changes
   useEffect(() => {
-    if (speakers.length > 0 && !selectedSpeakerId) {
-      setSelectedSpeakerId(speakers[0].id);
+    if (speakers.length > 0) {
+      if (isNarrationMode && currentSession?.narratorSpeakerId) {
+        // In narration mode, select the narrator
+        setSelectedSpeakerId(currentSession.narratorSpeakerId);
+      } else if (!selectedSpeakerId) {
+        // Default to first speaker
+        setSelectedSpeakerId(speakers[0].id);
+      }
     }
-  }, [speakers, selectedSpeakerId]);
+  }, [speakers, selectedSpeakerId, isNarrationMode, currentSession?.narratorSpeakerId]);
 
   // Handle session query parameter - URL is the source of truth
   useEffect(() => {
@@ -77,15 +85,33 @@ function VoiceEditorContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dialogLines]);
 
-  const handleSelectSpeaker = (speakerId: string) => {
+  const handleSelectSpeaker = async (speakerId: string) => {
     setSelectedSpeakerId(speakerId);
-    // Add a new dialog line for this speaker
-    const newLine: DialogLine = {
-      id: `line-${Date.now()}`,
-      speakerId,
-      content: "",
-    };
-    setDialogLines([...dialogLines, newLine]);
+
+    if (isNarrationMode && currentSession) {
+      // In narration mode, change the narrator for the whole session
+      try {
+        await updateSession(currentSession.id, { narratorSpeakerId: speakerId });
+        // Update existing dialog lines to use the new narrator
+        const updatedLines = dialogLines.map(line => ({
+          ...line,
+          speakerId,
+        }));
+        setDialogLines(updatedLines);
+        toast.success(t('session.narratorChanged'));
+      } catch (error) {
+        console.error('Failed to update narrator:', error);
+        toast.error(t('session.updateError'));
+      }
+    } else {
+      // In dialogue mode, add a new dialog line for this speaker
+      const newLine: DialogLine = {
+        id: `line-${Date.now()}`,
+        speakerId,
+        content: "",
+      };
+      setDialogLines([...dialogLines, newLine]);
+    }
   };
 
   const handleUpdateLine = (lineId: string, content: string) => {
@@ -163,6 +189,7 @@ function VoiceEditorContent() {
             speakers={speakers}
             selectedSpeakerId={selectedSpeakerId}
             onSelectSpeaker={handleSelectSpeaker}
+            mode={currentSession?.mode}
           />
         </div>
 

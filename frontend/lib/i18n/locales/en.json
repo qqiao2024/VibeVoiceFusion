@@ -205,7 +205,8 @@
     "narratorVoice": "Narrator Voice",
     "selectNarrator": "Select a narrator voice",
     "narratorRequired": "Please select a narrator voice for narration mode",
-    "noSpeakersForNarration": "Please upload speaker voices first to use narration mode"
+    "noSpeakersForNarration": "Please upload speaker voices first to use narration mode",
+    "narratorChanged": "Narrator changed successfully"
   },
   "voiceEditor": {
     "pageTitle": "Voice Contents Editor",
@@ -246,7 +247,9 @@
     "clearConfirm": "Are you sure you want to clear all dialog lines? This action cannot be undone.",
     "narrationEditor": "Narration Editor",
     "narrationHint": "Write plain text for single-speaker narration. Separate paragraphs with blank lines.",
-    "narrationPlaceholder": "Enter your narration text here...\n\nSeparate paragraphs with blank lines.\n\nThe selected narrator voice will be used for all text."
+    "narrationPlaceholder": "Enter your narration text here...\n\nSeparate paragraphs with blank lines.\n\nThe selected narrator voice will be used for all text.",
+    "selectNarratorHint": "Click to change narrator voice",
+    "clickToChangeNarrator": "Click speaker to change narrator"
   },
   "generation": {
     "title": "Voice Generation",

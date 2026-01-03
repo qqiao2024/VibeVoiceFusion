@@ -205,7 +205,8 @@
     "narratorVoice": "旁白声音",
     "selectNarrator": "选择旁白声音",
     "narratorRequired": "请为旁白模式选择一个声音",
-    "noSpeakersForNarration": "请先上传说话人声音以使用旁白模式"
+    "noSpeakersForNarration": "请先上传说话人声音以使用旁白模式",
+    "narratorChanged": "旁白声音已更改"
   },
   "voiceEditor": {
     "pageTitle": "语音内容编辑器",
@@ -246,7 +247,9 @@
     "clearConfirm": "确定要清空所有对话行吗？此操作无法撤销。",
     "narrationEditor": "旁白编辑器",
     "narrationHint": "输入单说话人旁白的纯文本。用空行分隔段落。",
-    "narrationPlaceholder": "在此输入您的旁白文本...\n\n用空行分隔段落。\n\n所选的旁白声音将用于所有文本。"
+    "narrationPlaceholder": "在此输入您的旁白文本...\n\n用空行分隔段落。\n\n所选的旁白声音将用于所有文本。",
+    "selectNarratorHint": "点击更换旁白声音",
+    "clickToChangeNarrator": "点击说话人更换旁白"
   },
   "generation": {
     "title": "语音生成",
