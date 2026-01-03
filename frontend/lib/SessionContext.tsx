@@ -35,26 +35,54 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   // Helper: Convert backend dialog text to DialogLine array
-  const parseDialogText = (dialogText: string): DialogLine[] => {
+  const parseDialogText = (
+    dialogText: string,
+    mode: SessionMode = 'dialogue',
+    narratorSpeakerId?: string | null
+  ): DialogLine[] => {
     const lines: DialogLine[] = [];
+    if (!dialogText.trim()) return lines;
+
     const textLines = dialogText.trim().split('\n\n');
 
-    textLines.forEach((line, index) => {
-      const match = line.match(/^(Speaker \d+):\s*(.*)$/);
-      if (match) {
-        lines.push({
-          id: `line-${Date.now()}-${index}`,
-          speakerId: match[1],
-          content: match[2],
-        });
-      }
-    });
+    if (mode === 'narration' && narratorSpeakerId) {
+      // Narration mode: plain text paragraphs, use narrator from metadata
+      textLines.forEach((line, index) => {
+        const content = line.trim();
+        if (content) {
+          lines.push({
+            id: `line-${Date.now()}-${index}`,
+            speakerId: narratorSpeakerId,
+            content,
+          });
+        }
+      });
+    } else {
+      // Dialogue mode: "Speaker N: content" format
+      textLines.forEach((line, index) => {
+        const match = line.match(/^(Speaker \d+):\s*(.*)$/);
+        if (match) {
+          lines.push({
+            id: `line-${Date.now()}-${index}`,
+            speakerId: match[1],
+            content: match[2],
+          });
+        }
+      });
+    }
 
     return lines;
   };
 
   // Helper: Convert DialogLine array to backend dialog text
-  const formatDialogText = (dialogLines: DialogLine[]): string => {
+  const formatDialogText = (dialogLines: DialogLine[], mode: SessionMode = 'dialogue'): string => {
+    if (mode === 'narration') {
+      // Narration mode: save plain text only, no speaker prefix
+      return dialogLines
+        .map(line => line.content)
+        .join('\n\n');
+    }
+    // Dialogue mode: "Speaker N: content" format
     return dialogLines
       .map(line => `${line.speakerId}: ${line.content}`)
       .join('\n\n');
@@ -90,7 +118,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const textResponse = await api.getSessionText(projectId, session.sessionId);
-      const dialogLines = parseDialogText(textResponse.dialog_text);
+      // Pass mode and narratorSpeakerId to correctly parse narration vs dialogue
+      const dialogLines = parseDialogText(
+        textResponse.dialog_text,
+        session.mode,
+        session.narratorSpeakerId
+      );
       return { ...session, dialogLines };
     } catch (err) {
       console.error('Failed to load dialog text:', err);
@@ -310,8 +343,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      // Convert dialog lines to backend text format
-      const dialogText = formatDialogText(dialogLines);
+      // Find session to get its mode
+      const session = sessions.find(s => s.id === sessionId);
+      const mode = session?.mode || 'dialogue';
+
+      // Convert dialog lines to backend text format (plain text for narration, with speaker prefix for dialogue)
+      const dialogText = formatDialogText(dialogLines, mode);
 
       // Update on backend
       const updatedApiSession = await api.updateSession(currentProject.id, sessionId, {
