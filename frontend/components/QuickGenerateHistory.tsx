@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { api } from '@/lib/api';
-import type { QuickGenerate, QuickGenerateItem } from '@/types/quickGenerate';
+import type { QuickGenerate, QuickGenerateHistoryItem, QuickGenerateItem } from '@/types/quickGenerate';
 import toast from 'react-hot-toast';
 
 interface QuickGenerateHistoryProps {
@@ -13,7 +13,8 @@ interface QuickGenerateHistoryProps {
 
 export default function QuickGenerateHistory({ onSelectGeneration, currentGenerationId }: QuickGenerateHistoryProps) {
   const { t } = useLanguage();
-  const [generations, setGenerations] = useState<QuickGenerate[]>([]);
+  const [generations, setGenerations] = useState<QuickGenerateHistoryItem[]>([]);
+  const [expandedGeneration, setExpandedGeneration] = useState<QuickGenerate | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -54,9 +55,22 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
 
   const totalPages = Math.ceil(total / itemsPerPage);
 
-  const toggleDetails = useCallback((requestId: string) => {
-    setExpandedId(prev => prev === requestId ? null : requestId);
-  }, []);
+  const toggleDetails = useCallback(async (requestId: string) => {
+    if (expandedId === requestId) {
+      setExpandedId(null);
+      setExpandedGeneration(null);
+    } else {
+      setExpandedId(requestId);
+      // Fetch full generation data for expanded view
+      try {
+        const fullGen = await api.getQuickGeneration(requestId);
+        setExpandedGeneration(fullGen);
+      } catch (err) {
+        console.error('Failed to load generation details:', err);
+        setExpandedGeneration(null);
+      }
+    }
+  }, [expandedId]);
 
   // Selection handlers
   const toggleSelection = useCallback((requestId: string, e: React.MouseEvent) => {
@@ -113,6 +127,16 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
       toast.error(t('quickGenerate.errorDelete'));
     }
   }, [selectedIds, t, loadHistory]);
+
+  const handleSelectGeneration = useCallback(async (gen: QuickGenerateHistoryItem) => {
+    try {
+      const fullGen = await api.getQuickGeneration(gen.request_id);
+      onSelectGeneration(fullGen);
+    } catch (err) {
+      console.error('Failed to load generation:', err);
+      toast.error(t('quickGenerate.errorLoadHistory'));
+    }
+  }, [onSelectGeneration, t]);
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { bg: string; text: string }> = {
@@ -199,7 +223,7 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
-                onClick={() => onSelectGeneration(gen)}
+                onClick={() => handleSelectGeneration(gen)}
               >
                 {/* Main Info */}
                 <div className="p-3">
@@ -235,7 +259,7 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
 
                       {/* Text Preview */}
                       <p className="text-sm text-gray-700 truncate mb-1">
-                        {gen.text_preview || gen.text?.substring(0, 100)}
+                        {gen.text_preview || '...'}
                       </p>
 
                       {/* Date */}
@@ -270,7 +294,7 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
                 </div>
 
                 {/* Expanded Details */}
-                {expandedId === gen.request_id && (
+                {expandedId === gen.request_id && expandedGeneration && (
                   <div className="px-3 pb-3 pt-2 border-t border-gray-100 space-y-3">
                     {/* Voice Preview */}
                     <div>
@@ -286,7 +310,7 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
                     <div>
                       <p className="text-xs font-medium text-gray-500 mb-1">{t('quickGenerate.fullText')}</p>
                       <p className="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-2 rounded max-h-32 overflow-y-auto">
-                        {gen.text}
+                        {expandedGeneration.text}
                       </p>
                     </div>
 
@@ -294,9 +318,9 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
                     {gen.status === 'completed' && (
                       <div>
                         <p className="text-xs font-medium text-gray-500 mb-1">{t('quickGenerate.generatedAudio')}</p>
-                        {gen.batch_size > 1 && gen.details?.generation_items ? (
+                        {gen.batch_size > 1 && expandedGeneration.details?.generation_items ? (
                           <div className="space-y-2">
-                            {gen.details.generation_items.map((item: QuickGenerateItem, idx: number) => (
+                            {expandedGeneration.details.generation_items.map((item: QuickGenerateItem, idx: number) => (
                               <div key={idx} className="flex items-center gap-2">
                                 <span className="text-xs text-gray-500 w-6">#{idx + 1}</span>
                                 <audio
@@ -319,8 +343,8 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
 
                     {/* Seed Info */}
                     <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span>{t('quickGenerate.seed')}: {gen.seeds}</span>
-                      <span>{t('quickGenerate.cfgScale')}: {gen.cfg_scale}</span>
+                      <span>{t('quickGenerate.seed')}: {expandedGeneration.seeds}</span>
+                      <span>{t('quickGenerate.cfgScale')}: {expandedGeneration.cfg_scale}</span>
                     </div>
                   </div>
                 )}

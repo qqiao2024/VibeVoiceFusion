@@ -99,14 +99,15 @@ def detect_mode(text: str) -> str:
     """
     Detect if text is dialogue or narration format.
 
-    Dialogue format: Lines starting with "Speaker X:" pattern
+    Dialogue format: Lines starting with "Speaker N:" pattern (case-insensitive)
     Narration format: Plain text without speaker prefixes
     """
     import re
 
     lines = text.strip().split('\n')
-    # Check if any non-empty line starts with "Speaker X:" pattern
-    speaker_pattern = re.compile(r'^[^:]+:\s*\S')
+    # Only match "Speaker N:" pattern specifically to avoid false positives
+    # from text containing colons (URLs, timestamps, error logs, etc.)
+    speaker_pattern = re.compile(r'^Speaker\s+\d+\s*:', re.IGNORECASE)
 
     for line in lines:
         line = line.strip()
@@ -116,6 +117,8 @@ def detect_mode(text: str) -> str:
     return "narration"
 ```
 
+**Important**: The pattern specifically matches `Speaker N:` format only (case-insensitive). Earlier versions used `^[^:]+:\s*\S` which incorrectly detected any text with colons (error logs, timestamps, URLs) as dialogue.
+
 **Behavior:**
 
 - **Dialogue detected**: Text contains lines like "Speaker 1: Hello"
@@ -124,7 +127,35 @@ def detect_mode(text: str) -> str:
 
 - **Narration detected**: Plain text without speaker prefixes
   - Single speaker reads all content
+  - Text is automatically converted to dialogue format with "Speaker 1:" prefix for each paragraph
   - Standard narration mode
+
+### Narration Mode Conversion
+
+For narration mode, the backend automatically converts plain text to the required dialogue format:
+
+```python
+def _convert_narration_to_script(self, text: str) -> str:
+    """Convert narration text to script format with Speaker 1: prefix."""
+    lines = text.strip().split('\n')
+    paragraphs = []
+    current_paragraph = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped:
+            current_paragraph.append(stripped)
+        elif current_paragraph:
+            paragraphs.append(' '.join(current_paragraph))
+            current_paragraph = []
+
+    if current_paragraph:
+        paragraphs.append(' '.join(current_paragraph))
+
+    # Add Speaker 1: prefix to each paragraph
+    scripts = [f"Speaker 1: {paragraph}" for paragraph in paragraphs]
+    return '\n'.join(scripts).replace("'", "'")
+```
 
 ## Technical Design
 
@@ -336,15 +367,25 @@ Or create new project:
 
 #### New Page
 
-- `app/quick-generate/page.tsx` - Quick Generate page
+- `app/quick-generate/page.tsx` - Quick Generate page with two-column layout (history left, form right)
 
 #### Components
 
-- `QuickGenerateForm.tsx` - Main form with voice upload, text input, settings
-- `QuickGenerateProgress.tsx` - Generation progress display
-- `QuickGenerateResult.tsx` - Audio player, download button, save to project
-- `QuickGenerateHistory.tsx` - List of previous quick generations
-- `SaveToProjectModal.tsx` - Modal for saving to existing/new project
+- `QuickGenerateNavigation.tsx` - Dedicated sidebar navigation for Quick Generate page (no project switching, only generate menu item)
+- `QuickGenerateHistory.tsx` - Left panel history list with:
+  - Pagination support
+  - Multi-select with bulk delete
+  - Expandable details showing voice preview, full text, generated audio
+  - Status badges and mode indicators
+  - Fetches full generation data on expand (history API returns subset)
+- `QuickGenerateForm.tsx` - Main form with voice upload, text input, settings (integrated in page.tsx)
+- `QuickGenerateProgress.tsx` - Generation progress display (integrated in page.tsx)
+- `QuickGenerateResult.tsx` - Audio player, download button (integrated in page.tsx)
+- `SaveToProjectModal.tsx` - Modal for saving to existing/new project (future)
+
+#### Layout Integration
+
+- `LayoutWrapper.tsx` - Routes to `QuickGenerateNavigation` when pathname is `/quick-generate`, otherwise uses standard `Navigation`
 
 #### Home Page Update
 
@@ -384,24 +425,30 @@ Cleanup runs on server startup and daily via background task.
 
 ## Implementation Phases
 
-### Phase 1: Core MVP
+### Phase 1: Core MVP ✅ Completed
 
-- [ ] Backend: Quick generate API endpoints
-- [ ] Backend: Dedicated storage structure
-- [ ] Backend: Mode detection logic
-- [ ] Frontend: Quick Generate page with form
-- [ ] Frontend: Progress display and audio playback
-- [ ] Frontend: Download functionality
+- [x] Backend: Quick generate API endpoints
+- [x] Backend: Dedicated storage structure (`workspace/_quick-generate/`)
+- [x] Backend: Mode detection logic (fixed pattern to `^Speaker\s+\d+\s*:`)
+- [x] Backend: Narration mode conversion (adds "Speaker 1:" prefix)
+- [x] Frontend: Quick Generate page with form
+- [x] Frontend: Progress display and audio playback
+- [x] Frontend: Download functionality
 
-### Phase 2: History & Polish
+### Phase 2: History & UI Redesign ✅ Completed
 
-- [ ] Backend: History API endpoints
-- [ ] Backend: Cleanup policy implementation
-- [ ] Frontend: Generation history list
-- [ ] Frontend: Home page integration with Quick Generate button
-- [ ] i18n: Bilingual support for all new strings
+- [x] Backend: History API endpoints (list, get, delete)
+- [x] Backend: Voice preview endpoint
+- [x] Frontend: Generation history list with pagination
+- [x] Frontend: Dedicated navigation (`QuickGenerateNavigation.tsx`)
+- [x] Frontend: Two-column layout (history left, form right)
+- [x] Frontend: Expandable history items with full details
+- [x] Frontend: Multi-select and bulk delete
+- [x] Frontend: Home page integration with Quick Generate button
+- [x] i18n: Bilingual support for all new strings
+- [ ] Backend: Cleanup policy implementation (future)
 
-### Phase 3: Save to Project
+### Phase 3: Save to Project (Future)
 
 - [ ] Backend: Save to project API
 - [ ] Frontend: Save to Project modal
@@ -426,3 +473,50 @@ Cleanup runs on server startup and daily via background task.
 - No LoRA support in quick generate - users must use full workflow for LoRA
 - All speakers in dialogue mode use the same uploaded voice
 - Preset voices can be used as voice sample source
+
+---
+
+## Work Log
+
+### 2025-01-07: Bug Fixes and UI Redesign
+
+**Bug Fixes:**
+
+1. **InferencePhase Error** (`backend/models/quick_generate.py`)
+   - Issue: `InferencePhase()` takes no arguments - was trying to instantiate a class with string constants
+   - Fix: Changed `status: InferencePhase` to `status: str` in dataclass, simplified `to_dict()` and `from_dict()` methods
+
+2. **Mode Detection False Positives** (`backend/models/quick_generate.py`, `frontend/app/quick-generate/page.tsx`)
+   - Issue: Regex `^[^:]+:\s*\S` matched any text with colons (error logs, timestamps, URLs)
+   - Fix: Changed to `^Speaker\s+\d+\s*:` (case-insensitive) to only match "Speaker N:" format
+
+3. **Narration Mode Missing Speaker Prefix** (`backend/inference/quick_generate_inference.py`)
+   - Issue: Narration mode passed raw text to inference without required "Speaker 1:" prefix
+   - Fix: Added `_convert_narration_to_script()` method that converts paragraphs to "Speaker 1: {paragraph}" format
+
+**UI Redesign:**
+
+1. **Dedicated Navigation** (`frontend/components/QuickGenerateNavigation.tsx`)
+   - Created simplified sidebar with only "Generate Voice" menu item
+   - Removed project switching and other menu items
+   - Added "Back to Projects" button
+
+2. **Two-Column Layout** (`frontend/app/quick-generate/page.tsx`)
+   - Left column: Generation history list
+   - Right column: Generation form and current progress/result
+   - Similar layout to project generate-voice page
+
+3. **History Component** (`frontend/components/QuickGenerateHistory.tsx`)
+   - Pagination support (10 items per page)
+   - Multi-select with bulk delete functionality
+   - Expandable details showing voice preview, full text, generated audio
+   - Fixed TypeScript type mismatch: `QuickGenerateHistoryItem` (list) vs `QuickGenerate` (full data)
+   - Fetches full generation data via API when expanding or selecting
+
+4. **Layout Integration** (`frontend/components/LayoutWrapper.tsx`)
+   - Routes to `QuickGenerateNavigation` when pathname is `/quick-generate`
+   - Uses standard `Navigation` for all other pages
+
+5. **i18n Updates** (`frontend/lib/i18n/locales/en.json`, `zh.json`)
+   - Added translations for history, delete, select actions
+   - Added translations for expanded detail labels
