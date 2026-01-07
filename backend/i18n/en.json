@@ -42,7 +42,12 @@
     "preset_filename_required": "Preset filename is required",
     "preset_name_required": "Preset voice name is required",
     "preset_language_required": "Preset voice language is required",
-    "preset_gender_required": "Preset voice gender is required"
+    "preset_gender_required": "Preset voice gender is required",
+    "quick_generate_voice_required": "Voice file is required",
+    "quick_generate_text_required": "Text to generate is required",
+    "quick_generate_not_found": "Quick generation not found",
+    "quick_generate_item_not_found": "Quick generation item not found",
+    "quick_generate_voice_not_found": "Voice file not found"
   },
   "success": {
     "project_created": "Project created successfully",
@@ -70,7 +75,9 @@
     "preset_voice_created": "Preset voice created successfully",
     "preset_voice_updated": "Preset voice updated successfully",
     "preset_voice_deleted": "Preset voice deleted successfully",
-    "preset_voices_deleted": "Preset voices deleted successfully"
+    "preset_voices_deleted": "Preset voices deleted successfully",
+    "quick_generate_started": "Quick generation started successfully",
+    "quick_generate_deleted": "Quick generation deleted successfully"
   },
   "status": {
     "healthy": "Service is healthy",

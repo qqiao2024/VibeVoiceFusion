@@ -16,8 +16,9 @@ http://localhost:9527/api/v1
 4. [Dialog Sessions API](#dialog-sessions-api)
 5. [Tasks API (Unified)](#tasks-api-unified)
 6. [Generation API](#generation-api)
-7. [Dataset Management API](#dataset-management-api)
-8. [Training Management API](#training-management-api)
+7. [Quick Generate API](#quick-generate-api)
+8. [Dataset Management API](#dataset-management-api)
+9. [Training Management API](#training-management-api)
 
 ---
 
@@ -1045,6 +1046,399 @@ Delete multiple generation requests at once.
 | `saving_audio` | Saving generated audio to file |
 | `completed` | Generation finished successfully |
 | `failed` | Generation failed with error |
+
+---
+
+# Quick Generate API
+
+## Overview
+
+The Quick Generate API provides a streamlined voice generation workflow that bypasses project/speaker/session setup. Users can upload a voice sample, provide text, and generate voice immediately. The mode (dialogue or narration) is auto-detected based on text format.
+
+**Storage Location:** `workspace/_quick-generate/`
+
+## Data Models
+
+### QuickGenerate
+
+```json
+{
+  "request_id": "qg_abc123",
+  "status": "completed",
+  "mode": "narration",
+  "text": "This is sample text for generation.",
+  "voice_file": "voice_abc123.wav",
+  "output_file": "output_abc123.wav",
+  "seeds": 42,
+  "batch_size": 1,
+  "model_dtype": "float8_e4m3fn",
+  "cfg_scale": 1.3,
+  "offloading": {
+    "enabled": false,
+    "mode": "preset",
+    "preset": "balanced"
+  },
+  "created_at": "2025-12-02T10:00:00Z",
+  "completed_at": "2025-12-02T10:01:00Z",
+  "details": {
+    "current": 100,
+    "total_step": 100,
+    "percentage": 100.0,
+    "audio_duration_seconds": 5.2,
+    "generation_time": 12.5,
+    "real_time_factor": 2.4,
+    "generation_items": []
+  },
+  "error": null
+}
+```
+
+### QuickGenerateMode
+
+| Mode | Description |
+|------|-------------|
+| `dialogue` | Multi-speaker mode, text contains "Speaker X:" prefixes |
+| `narration` | Single-speaker mode, plain text without speaker prefixes |
+
+### Mode Auto-Detection
+
+The mode is automatically detected based on text format:
+- **Dialogue mode**: If any line matches the pattern `^[^:]+:\s*\S` (e.g., "Speaker 1: Hello")
+- **Narration mode**: Plain text without speaker prefixes
+
+In dialogue mode, the uploaded voice sample is used for ALL detected speakers.
+
+## Endpoints
+
+### 1. Start Quick Generation
+
+**POST** `/api/v1/quick-generate`
+
+Start a new quick generation task. Uses multipart form data for voice file upload.
+
+**Form Data:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `voice_file` | file | Yes | Voice sample audio file (WAV, MP3, M4A, FLAC, WEBM) |
+| `text` | string | Yes | Text to generate (dialogue or narration format) |
+| `seeds` | integer | No | Random seed (default: random) |
+| `batch_size` | integer | No | Number of generations (1-20, default: 1) |
+| `model_dtype` | string | No | Model data type (default: "float8_e4m3fn") |
+| `cfg_scale` | float | No | CFG scale (default: 1.3) |
+| `offloading_enabled` | boolean | No | Enable layer offloading (default: false) |
+| `offloading_preset` | string | No | Offloading preset: "balanced", "aggressive", "extreme" |
+
+**Response (200 OK):**
+```json
+{
+  "message": "Quick generation started successfully",
+  "request_id": "qg_abc123",
+  "generation": {
+    "request_id": "qg_abc123",
+    "status": "pending",
+    "mode": "narration",
+    "text": "This is sample text.",
+    "created_at": "2025-12-02T10:00:00Z"
+  }
+}
+```
+
+**Response (400 Bad Request):**
+```json
+{
+  "error": "Bad Request",
+  "message": "Voice file is required"
+}
+```
+
+**Response (409 Conflict):**
+```json
+{
+  "error": "Conflict",
+  "message": "A generation task is already running"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "http://localhost:9527/api/v1/quick-generate" \
+  -F "voice_file=@sample.wav" \
+  -F "text=This is the text to generate." \
+  -F "seeds=42" \
+  -F "batch_size=3"
+```
+
+---
+
+### 2. Get Specific Quick Generation
+
+**GET** `/api/v1/quick-generate/{request_id}`
+
+Get details of a specific quick generation request.
+
+**Response (200 OK):**
+```json
+{
+  "generation": {
+    "request_id": "qg_abc123",
+    "status": "completed",
+    "mode": "narration",
+    "text": "This is sample text.",
+    "voice_file": "voice_abc123.wav",
+    "output_file": "output_abc123.wav",
+    "created_at": "2025-12-02T10:00:00Z",
+    "completed_at": "2025-12-02T10:01:00Z",
+    "details": {
+      "audio_duration_seconds": 5.2,
+      "generation_time": 12.5,
+      "real_time_factor": 2.4
+    }
+  }
+}
+```
+
+**Response (404 Not Found):**
+```json
+{
+  "error": "Not Found",
+  "message": "Quick generation not found"
+}
+```
+
+---
+
+### 3. Get Current Quick Generation
+
+**GET** `/api/v1/quick-generate/current`
+
+Get the currently running quick generation task with live progress.
+
+**Response (200 OK, generation in progress):**
+```json
+{
+  "message": "Current quick generation retrieved successfully",
+  "generation": {
+    "request_id": "qg_abc123",
+    "status": "inferencing",
+    "mode": "narration",
+    "text": "This is sample text.",
+    "details": {
+      "current": 45,
+      "total_step": 100,
+      "percentage": 45.0
+    },
+    "created_at": "2025-12-02T10:00:00Z"
+  }
+}
+```
+
+**Response (200 OK, no active generation):**
+```json
+{
+  "message": "No active quick generation task",
+  "generation": null
+}
+```
+
+---
+
+### 4. List Quick Generation History
+
+**GET** `/api/v1/quick-generate/history`
+
+Get quick generation history with optional pagination.
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `offset` | integer | Number of items to skip (default: 0) |
+| `limit` | integer | Maximum items per page (optional) |
+
+**Response (200 OK):**
+```json
+{
+  "generations": [
+    {
+      "request_id": "qg_abc123",
+      "status": "completed",
+      "mode": "narration",
+      "text": "This is sample text.",
+      "created_at": "2025-12-02T10:00:00Z",
+      "completed_at": "2025-12-02T10:01:00Z"
+    }
+  ],
+  "count": 1,
+  "total": 10,
+  "offset": 0,
+  "limit": 20
+}
+```
+
+---
+
+### 5. Download Quick Generation Audio
+
+**GET** `/api/v1/quick-generate/{request_id}/download`
+
+Download or stream the generated audio file.
+
+**Query Parameters:**
+- `download` (optional): If `true`, force download as attachment. Otherwise, serve inline for playback.
+
+**Response (200 OK):**
+- Content-Type: `audio/wav`
+- Binary audio data
+
+**Response (404 Not Found):**
+```json
+{
+  "error": "Not Found",
+  "message": "Quick generation not found or audio not ready"
+}
+```
+
+---
+
+### 6. Download Quick Generation Item Audio (Multi-Generation)
+
+**GET** `/api/v1/quick-generate/{request_id}/items/{item_index}/download`
+
+Download or stream an individual audio file from a multi-generation batch.
+
+**Path Parameters:**
+- `request_id`: Quick generation request identifier
+- `item_index`: Index of the generation item (0-based)
+
+**Query Parameters:**
+- `download` (optional): If `true`, force download as attachment. Otherwise, serve inline for playback.
+
+**Response (200 OK):**
+- Content-Type: `audio/wav`
+- Binary audio data
+
+**Response (404 Not Found):**
+```json
+{
+  "error": "Not Found",
+  "message": "Generation item not found"
+}
+```
+
+**Example:**
+```bash
+# Stream audio for playback (item 0 from a multi-generation batch)
+curl "http://localhost:9527/api/v1/quick-generate/qg_abc123/items/0/download"
+
+# Force download as attachment
+curl -O "http://localhost:9527/api/v1/quick-generate/qg_abc123/items/2/download?download=true"
+```
+
+---
+
+### 7. Preview Voice Sample
+
+**GET** `/api/v1/quick-generate/{request_id}/voice-preview`
+
+Stream the uploaded voice sample for preview.
+
+**Response (200 OK):**
+- Content-Type: `audio/wav`
+- Binary audio data
+
+**Response (404 Not Found):**
+```json
+{
+  "error": "Not Found",
+  "message": "Voice file not found"
+}
+```
+
+---
+
+### 8. Delete Quick Generation
+
+**DELETE** `/api/v1/quick-generate/{request_id}`
+
+Delete a quick generation request and its associated files.
+
+**Response (200 OK):**
+```json
+{
+  "message": "Quick generation deleted successfully",
+  "request_id": "qg_abc123"
+}
+```
+
+**Response (404 Not Found):**
+```json
+{
+  "error": "Not Found",
+  "message": "Quick generation not found"
+}
+```
+
+---
+
+## Quick Generation Status Values
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Task created, waiting to start |
+| `preprocessing` | Preparing voice sample and text |
+| `inferencing` | Voice generation in progress |
+| `saving_audio` | Saving generated audio to file |
+| `completed` | Generation finished successfully |
+| `failed` | Generation failed with error |
+
+---
+
+## Workspace Structure
+
+```
+workspace/_quick-generate/
+├── generations.json       # History of all quick generations
+├── voices/                # Uploaded voice samples
+│   └── voice_{uuid}.wav
+└── outputs/               # Generated audio files
+    └── output_{uuid}.wav
+```
+
+---
+
+## Multi-Generation Feature
+
+Quick Generate supports batch generation with different random seeds:
+
+- Set `batch_size` > 1 to generate multiple variations
+- Each generation uses a different random seed
+- Progress shows overall completion and per-item status
+- Individual audio files can be downloaded via `/items/{index}/download`
+
+**Data Model:**
+```json
+{
+  "details": {
+    "generation_items": [
+      {
+        "epoch_idx": 0,
+        "audio_path": "outputs/item_0_abc123.wav",
+        "seeds": 42,
+        "generation_time": 4.2,
+        "audio_duration_seconds": 5.2,
+        "real_time_factor": 1.24
+      },
+      {
+        "epoch_idx": 1,
+        "audio_path": "outputs/item_1_abc123.wav",
+        "seeds": 123456789,
+        "generation_time": 4.1,
+        "audio_duration_seconds": 5.2,
+        "real_time_factor": 1.27
+      }
+    ]
+  }
+}
+```
 
 ---
 

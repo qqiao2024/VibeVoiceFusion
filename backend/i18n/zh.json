@@ -42,7 +42,12 @@
     "preset_filename_required": "预设文件名为必填项",
     "preset_name_required": "预设语音名称为必填项",
     "preset_language_required": "预设语音语言为必填项",
-    "preset_gender_required": "预设语音性别为必填项"
+    "preset_gender_required": "预设语音性别为必填项",
+    "quick_generate_voice_required": "语音文件为必填项",
+    "quick_generate_text_required": "待生成文本为必填项",
+    "quick_generate_not_found": "快速生成记录未找到",
+    "quick_generate_item_not_found": "快速生成项未找到",
+    "quick_generate_voice_not_found": "语音文件未找到"
   },
   "success": {
     "project_created": "项目创建成功",
@@ -70,7 +75,9 @@
     "preset_voice_created": "预设语音创建成功",
     "preset_voice_updated": "预设语音更新成功",
     "preset_voice_deleted": "预设语音删除成功",
-    "preset_voices_deleted": "预设语音批量删除成功"
+    "preset_voices_deleted": "预设语音批量删除成功",
+    "quick_generate_started": "快速生成任务启动成功",
+    "quick_generate_deleted": "快速生成记录删除成功"
   },
   "status": {
     "healthy": "服务正常",

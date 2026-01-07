@@ -142,6 +142,35 @@ export default function ProjectSelector() {
           <p className="text-sm text-gray-500 mt-2">{t('project.selectProject')}</p>
         </div>
 
+        {/* Quick Generate Card */}
+        <div
+          onClick={() => router.push('/quick-generate')}
+          className="mb-8 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 p-6 cursor-pointer hover:scale-[1.02] group"
+        >
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center group-hover:bg-white/30 transition-colors flex-shrink-0">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div className="flex-1 text-white">
+              <h3 className="text-xl font-semibold mb-1">{t('quickGenerate.cardTitle')}</h3>
+              <p className="text-white/80 text-sm">{t('quickGenerate.cardDescription')}</p>
+            </div>
+            <div className="text-white/60 group-hover:text-white transition-colors">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Projects Section Header */}
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-lg font-semibold text-gray-700">{t('project.yourProjects')}</h2>
+          <span className="text-sm text-gray-500">({projects.length})</span>
+        </div>
+
         {/* Projects Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {projects.map((project) => (
