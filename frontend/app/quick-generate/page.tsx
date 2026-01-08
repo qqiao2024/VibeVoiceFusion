@@ -1010,6 +1010,7 @@ function QuickGenerateContent() {
             <QuickGenerateHistory
               onSelectGeneration={handleSelectGeneration}
               currentGenerationId={currentGeneration?.request_id}
+              currentGenerationStatus={currentGeneration?.status}
             />
           </div>
 

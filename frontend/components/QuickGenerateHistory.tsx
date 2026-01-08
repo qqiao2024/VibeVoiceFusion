@@ -9,9 +9,10 @@ import toast from 'react-hot-toast';
 interface QuickGenerateHistoryProps {
   onSelectGeneration: (generation: QuickGenerate) => void;
   currentGenerationId?: string;
+  currentGenerationStatus?: string;
 }
 
-export default function QuickGenerateHistory({ onSelectGeneration, currentGenerationId }: QuickGenerateHistoryProps) {
+export default function QuickGenerateHistory({ onSelectGeneration, currentGenerationId, currentGenerationStatus }: QuickGenerateHistoryProps) {
   const { t } = useLanguage();
   const [generations, setGenerations] = useState<QuickGenerateHistoryItem[]>([]);
   const [expandedGeneration, setExpandedGeneration] = useState<QuickGenerate | null>(null);
@@ -51,12 +52,19 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
     loadHistory();
   }, [loadHistory]);
 
-  // Refresh when current generation changes
+  // Refresh when current generation changes or completes
   useEffect(() => {
     if (currentGenerationId) {
       loadHistory();
     }
   }, [currentGenerationId, loadHistory]);
+
+  // Refresh history when generation status changes to completed or failed
+  useEffect(() => {
+    if (currentGenerationStatus === 'completed' || currentGenerationStatus === 'failed') {
+      loadHistory();
+    }
+  }, [currentGenerationStatus, loadHistory]);
 
   const totalPages = Math.ceil(total / itemsPerPage);
 
