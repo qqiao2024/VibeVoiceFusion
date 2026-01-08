@@ -502,3 +502,95 @@ The Quick Generate page supports two voice source options:
 5. **i18n Updates** (`frontend/lib/i18n/locales/en.json`, `zh.json`)
    - Added translations for history, delete, select actions
    - Added translations for expanded detail labels
+
+### 2026-01-08: Multi-Voice Support & UI Improvements
+
+**Multi-Voice Prompt Support:**
+
+1. **Up to 4 Voice Prompts** (`frontend/app/quick-generate/page.tsx`, `backend/models/quick_generate.py`)
+   - Extended voice source to support 1-4 voice files
+   - Changed `voice_file` (single) to `voice_files` (array) with backward compatibility
+   - Added voice slot management UI with preview and remove buttons
+   - Backend converts preset voices to files before generation
+
+2. **History Detail View Fix** (`frontend/components/QuickGenerateHistory.tsx`, `frontend/lib/api.ts`)
+   - Added `getQuickGenerationVoicePreviewByIndexUrl()` API method
+   - History detail now displays multiple audio players for each voice file
+   - Updated `QuickGenerate` type to include `voice_files: string[]`
+
+**UI Consistency Improvements:**
+
+3. **Delete Confirmation Dialog** (`frontend/components/QuickGenerateHistory.tsx`)
+   - Replaced browser `confirm()` with modal dialog matching normal generation style
+   - Consistent button styling with normal generation delete functionality
+   - Added i18n translations for confirmation messages
+
+4. **History Refresh Fix** (`frontend/components/QuickGenerateHistory.tsx`)
+   - Added `currentGenerationStatus` prop to track generation state
+   - History auto-refreshes when status becomes 'completed' or 'failed'
+   - Fixed stuck "pending" status display issue
+
+5. **Generation Display Improvements** (`frontend/app/quick-generate/page.tsx`)
+   - Completely rewrote `renderGenerationResult()` to match normal generation page
+   - Status-colored borders/backgrounds based on generation state
+   - Overall progress bar with batch progress info
+   - Generated items list with individual status badges
+   - Performance statistics grid (total duration, generation time, average RTF)
+   - Model settings display and timestamps
+
+6. **Individual Progress Bars** (`frontend/app/quick-generate/page.tsx`, `frontend/types/quickGenerate.ts`, `backend/models/quick_generate.py`, `backend/inference/quick_generate_inference.py`)
+   - Added `current_step` and `total_steps` fields to `QuickGenerateItem`
+   - Backend visitor now updates step progress on current generation item
+   - Each generating voice shows individual progress bar with "Step X/Y" display
+   - Completed items show duration, RTF, and generation time stats
+
+7. **New Generation Button Position** (`frontend/app/quick-generate/page.tsx`)
+   - Moved button outside the generation card for better visibility
+   - Appears only when generation is completed or failed
+
+**Task Indicator & Navigation:**
+
+8. **Task Indicator Support** (`backend/api/tasks.py`, `frontend/components/QuickGenerateNavigation.tsx`, `frontend/types/task.ts`)
+   - Backend `/api/v1/tasks/current` now returns `type: 'quick_generation'` for quick gen tasks
+   - Added `isQuickGenerationTask()` type guard
+   - QuickGenerateNavigation now shows task indicator matching normal navigation
+
+9. **Navigation Improvements** (`frontend/components/Navigation.tsx`, `frontend/components/QuickGenerateNavigation.tsx`)
+   - Made VibeVoice logo clickable to return to home page
+   - Removed "Back to Projects" button from quick generate navigation
+   - Added `navigation.goToHome` i18n translations
+
+10. **Home Page Quick Generate Card** (`frontend/components/ProjectSelector.tsx`)
+    - Changed Quick Generate from horizontal bar to card layout
+    - Matches "Create New Project" card style with emerald/teal gradient
+    - Consistent hover effects and sizing
+
+**Data Model Updates:**
+
+```python
+# backend/models/quick_generate.py
+@dataclass
+class QuickGenerateItem:
+    audio_path: str
+    seeds: int
+    generation_time: float
+    batch_index: int = 0
+    audio_duration_seconds: Optional[float] = None
+    real_time_factor: Optional[float] = None
+    current_step: Optional[int] = None   # NEW: Current step in generation
+    total_steps: Optional[int] = None    # NEW: Total steps in generation
+```
+
+```typescript
+// frontend/types/quickGenerate.ts
+interface QuickGenerateItem {
+  batch_index: number;
+  audio_path: string;
+  seeds: number;
+  generation_time: number;
+  audio_duration_seconds?: number;
+  real_time_factor?: number;
+  current_step?: number;   // NEW
+  total_steps?: number;    // NEW
+}
+```

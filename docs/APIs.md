@@ -1065,31 +1065,45 @@ The Quick Generate API provides a streamlined voice generation workflow that byp
 {
   "request_id": "qg_abc123",
   "status": "completed",
-  "mode": "narration",
+  "detected_mode": "narration",
   "text": "This is sample text for generation.",
+  "voice_files": ["voice_abc123.wav", "voice_def456.wav"],
   "voice_file": "voice_abc123.wav",
-  "output_file": "output_abc123.wav",
+  "output_files": ["output_abc123_0.wav"],
   "seeds": 42,
   "batch_size": 1,
-  "model_dtype": "float8_e4m3fn",
+  "is_multi_generation": false,
+  "current_batch_index": 0,
+  "percentage": 100.0,
+  "model_dtype": "bf16",
   "cfg_scale": 1.3,
+  "attn_implementation": "sdpa",
   "offloading": {
     "enabled": false,
     "mode": "preset",
     "preset": "balanced"
   },
   "created_at": "2025-12-02T10:00:00Z",
+  "updated_at": "2025-12-02T10:01:00Z",
   "completed_at": "2025-12-02T10:01:00Z",
   "details": {
-    "current": 100,
-    "total_step": 100,
-    "percentage": 100.0,
-    "audio_duration_seconds": 5.2,
-    "generation_time": 12.5,
-    "real_time_factor": 2.4,
-    "generation_items": []
+    "preprocessing_duration": 2.5,
+    "offloading_config": {},
+    "generation_items": [
+      {
+        "batch_index": 0,
+        "audio_path": "/path/to/output_0.wav",
+        "seeds": 42,
+        "generation_time": 12.5,
+        "audio_duration_seconds": 5.2,
+        "real_time_factor": 2.4,
+        "current_step": 100,
+        "total_steps": 100
+      }
+    ]
   },
-  "error": null
+  "error_message": null,
+  "text_preview": "This is sample text..."
 }
 ```
 
@@ -1103,10 +1117,10 @@ The Quick Generate API provides a streamlined voice generation workflow that byp
 ### Mode Auto-Detection
 
 The mode is automatically detected based on text format:
-- **Dialogue mode**: If any line matches the pattern `^[^:]+:\s*\S` (e.g., "Speaker 1: Hello")
+- **Dialogue mode**: If any line matches the pattern `^Speaker\s+\d+\s*:` (e.g., "Speaker 1: Hello")
 - **Narration mode**: Plain text without speaker prefixes
 
-In dialogue mode, the uploaded voice sample is used for ALL detected speakers.
+In dialogue mode, the uploaded voice samples are used for ALL detected speakers. Up to 4 voice samples can be provided.
 
 ## Endpoints
 
@@ -1119,11 +1133,11 @@ Start a new quick generation task. Uses multipart form data for voice file uploa
 **Form Data:**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `voice_file` | file | Yes | Voice sample audio file (WAV, MP3, M4A, FLAC, WEBM) |
+| `voice_files` | file[] | Yes | Voice sample audio files (1-4 files, WAV, MP3, M4A, FLAC, WEBM) |
 | `text` | string | Yes | Text to generate (dialogue or narration format) |
 | `seeds` | integer | No | Random seed (default: random) |
 | `batch_size` | integer | No | Number of generations (1-20, default: 1) |
-| `model_dtype` | string | No | Model data type (default: "float8_e4m3fn") |
+| `model_dtype` | string | No | Model data type (default: "bf16") |
 | `cfg_scale` | float | No | CFG scale (default: 1.3) |
 | `offloading_enabled` | boolean | No | Enable layer offloading (default: false) |
 | `offloading_preset` | string | No | Offloading preset: "balanced", "aggressive", "extreme" |
@@ -1339,7 +1353,17 @@ curl -O "http://localhost:9527/api/v1/quick-generate/qg_abc123/items/2/download?
 
 **GET** `/api/v1/quick-generate/{request_id}/voice-preview`
 
-Stream the uploaded voice sample for preview.
+Stream the first uploaded voice sample for preview (backward compatibility).
+
+**GET** `/api/v1/quick-generate/{request_id}/voice/{voice_index}/preview`
+
+Stream a specific voice sample by index (0-3) for preview.
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `request_id` | string | Quick generation request ID |
+| `voice_index` | integer | Voice file index (0-3) |
 
 **Response (200 OK):**
 - Content-Type: `audio/wav`
