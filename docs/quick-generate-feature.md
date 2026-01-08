@@ -28,11 +28,11 @@ No project creation, no speaker setup, no session management required.
 |----------|----------|
 | Storage Strategy | **Dedicated storage** (`workspace/_quick-generate/`) |
 | Multi-Speaker | **Single voice sample** - same voice for all detected speakers |
-| Save to Project | **Full save** - can convert quick-generate to full project |
+| Voice Source | **Upload or Preset** - support both custom upload and preset voices |
 | LoRA Support | **No LoRA** - base model only in quick generate |
 | Text Detection | **Auto-detect only** - no manual override |
 | Entry Point | **Home page** - primary action alongside projects |
-| Generation History | **Persistent history** - stored with cleanup policy |
+| Generation History | **Persistent history** - stored in history.json |
 
 ## User Flow
 
@@ -43,9 +43,21 @@ No project creation, no speaker setup, no session management required.
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │ Voice Sample                                          │  │
-│  │ [Upload audio file] or [Select from presets]         │  │
+│  │ [Upload]  [Preset]  ← Tab selection                  │  │
 │  │                                                       │  │
-│  │ 🎵 sample.wav                           [Preview] [X] │  │
+│  │ Upload Tab:                                           │  │
+│  │ ┌────────────────────────────────────────────────┐   │  │
+│  │ │ Drop audio file here or click to browse        │   │  │
+│  │ └────────────────────────────────────────────────┘   │  │
+│  │ 🎵 sample.wav                        [▶ Preview] [X] │  │
+│  │                                                       │  │
+│  │ Preset Tab:                                           │  │
+│  │ [Language ▼] [Gender ▼] [Type ▼]  ← Filters          │  │
+│  │ ┌────────────┐ ┌────────────┐ ┌────────────┐        │  │
+│  │ │ Alice      │ │ Carter     │ │ Frank      │        │  │
+│  │ │ EN Female  │ │ EN Male    │ │ EN Male    │        │  │
+│  │ │ [▶] [✓]    │ │ [▶] [✓]    │ │ [▶] [✓]    │        │  │
+│  │ └────────────┘ └────────────┘ └────────────┘        │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐  │
@@ -84,7 +96,7 @@ No project creation, no speaker setup, no session management required.
 │  │                                                       │  │
 │  │ 🔊 ▶ ━━━━━━━━━━●━━━━━━━━━━━━━━━━ 0:15 / 0:45         │  │
 │  │                                                       │  │
-│  │ [Download] [Save to Project ▼]                       │  │
+│  │ [Download]                                            │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -325,44 +337,6 @@ GET /api/v1/quick-generate/history?limit=20&offset=0
 DELETE /api/v1/quick-generate/{request_id}
 ```
 
-#### Save to Project
-
-```http
-POST /api/v1/quick-generate/{request_id}/save-to-project
-```
-
-**Request Body:**
-
-```json
-{
-  "project_id": "existing-project-id",
-  "speaker_name": "My Speaker",
-  "session_name": "My Dialog"
-}
-```
-
-Or create new project:
-
-```json
-{
-  "project_name": "New Project Name",
-  "speaker_name": "My Speaker",
-  "session_name": "My Dialog"
-}
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "message": "Saved to project successfully",
-  "project_id": "project-id",
-  "speaker_id": "speaker-id",
-  "session_id": "session-id",
-  "generation_id": "generation-id"
-}
-```
-
 ### Frontend Components
 
 #### New Page
@@ -378,10 +352,11 @@ Or create new project:
   - Expandable details showing voice preview, full text, generated audio
   - Status badges and mode indicators
   - Fetches full generation data on expand (history API returns subset)
-- `QuickGenerateForm.tsx` - Main form with voice upload, text input, settings (integrated in page.tsx)
+- `QuickGenerateForm.tsx` - Main form with voice upload/preset selection, text input, settings (integrated in page.tsx)
+  - Voice source tabs: Upload (drag & drop with preview) and Preset (grid with filters)
+  - Audio preview for both uploaded files and preset voices
 - `QuickGenerateProgress.tsx` - Generation progress display (integrated in page.tsx)
 - `QuickGenerateResult.tsx` - Audio player, download button (integrated in page.tsx)
-- `SaveToProjectModal.tsx` - Modal for saving to existing/new project (future)
 
 #### Layout Integration
 
@@ -413,15 +388,21 @@ Update `components/ProjectSelector.tsx` to include Quick Generate button:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Cleanup Policy
+### Voice Source Options
 
-Automatic cleanup of old quick-generate data:
+The Quick Generate page supports two voice source options:
 
-- **Voice samples**: Delete after 7 days of no use
-- **Generated audio**: Delete after 30 days
-- **History entries**: Keep metadata for 90 days, then archive
+1. **Upload**: User uploads their own audio file (WAV, MP3, M4A, FLAC, WEBM)
+   - Drag and drop or click to browse
+   - Preview uploaded audio before generation
+   - Remove and re-upload as needed
 
-Cleanup runs on server startup and daily via background task.
+2. **Preset**: Select from pre-provided voice samples
+   - Filter by language (English, Chinese, Indian English)
+   - Filter by gender (Male, Female)
+   - Filter by type (With/Without BGM)
+   - Preview any preset before selection
+   - Uses existing preset voice API endpoints
 
 ## Implementation Phases
 
@@ -446,14 +427,14 @@ Cleanup runs on server startup and daily via background task.
 - [x] Frontend: Multi-select and bulk delete
 - [x] Frontend: Home page integration with Quick Generate button
 - [x] i18n: Bilingual support for all new strings
-- [ ] Backend: Cleanup policy implementation (future)
 
-### Phase 3: Save to Project (Future)
+### Phase 3: Preset Voice Selection ✅ Completed
 
-- [ ] Backend: Save to project API
-- [ ] Frontend: Save to Project modal
-- [ ] Frontend: Project selector (existing or new)
-- [ ] Integration testing
+- [x] Frontend: Voice source tabs (Upload / Preset)
+- [x] Frontend: Audio preview for uploaded voice files
+- [x] Frontend: Preset voice selection with filters (language, gender, BGM)
+- [x] Frontend: Preset voice preview playback
+- [x] i18n: Translations for preset voice UI
 
 ## API Summary
 
@@ -465,7 +446,8 @@ Cleanup runs on server startup and daily via background task.
 | GET | `/api/v1/quick-generate/{id}/items/{n}/download` | Download batch item |
 | GET | `/api/v1/quick-generate/history` | List history |
 | DELETE | `/api/v1/quick-generate/{id}` | Delete generation |
-| POST | `/api/v1/quick-generate/{id}/save-to-project` | Save to project |
+| GET | `/api/v1/preset-voices` | List preset voices (with filters) |
+| GET | `/api/v1/preset-voices/{filename}/preview` | Preview preset audio |
 
 ## Notes
 
