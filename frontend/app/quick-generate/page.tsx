@@ -405,6 +405,41 @@ function QuickGenerateContent() {
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
+  // Get status color for generation card
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800 border-green-300';
+      case 'failed':
+        return 'bg-red-100 text-red-800 border-red-300';
+      case 'pending':
+        return 'bg-gray-100 text-gray-800 border-gray-300';
+      case 'preprocessing':
+      case 'inferencing':
+        return 'bg-blue-100 text-blue-800 border-blue-300';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300';
+    }
+  };
+
+  // Get status label for generation
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'completed':
+        return t('quickGenerate.status.completed');
+      case 'failed':
+        return t('quickGenerate.status.failed');
+      case 'pending':
+        return t('quickGenerate.status.pending');
+      case 'preprocessing':
+        return t('quickGenerate.status.preprocessing');
+      case 'inferencing':
+        return t('quickGenerate.status.inferencing');
+      default:
+        return status;
+    }
+  };
+
   // Render generation result
   const renderGenerationResult = () => {
     if (!currentGeneration) return null;
@@ -416,126 +451,294 @@ function QuickGenerateContent() {
     const isCompleted = currentGeneration.status === 'completed';
     const isFailed = currentGeneration.status === 'failed';
 
-    return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {isInProgress ? t('quickGenerate.generating') :
-             isCompleted ? t('quickGenerate.completed') :
-             t('quickGenerate.failed')}
-          </h2>
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-            isCompleted ? 'bg-green-100 text-green-800' :
-            isFailed ? 'bg-red-100 text-red-800' :
-            'bg-blue-100 text-blue-800'
-          }`}>
-            {currentGeneration.detected_mode === 'dialogue' ?
-              t('quickGenerate.dialogueMode') :
-              t('quickGenerate.narrationMode')}
-          </span>
-        </div>
+    const batchSize = currentGeneration.batch_size || 1;
+    const currentBatchIndex = currentGeneration.current_batch_index ?? 0;
+    const items = currentGeneration.details?.generation_items || [];
+    const completedCount = items.filter(item => item.audio_path && item.audio_path.length > 0).length;
 
-        {/* Progress bar */}
-        {isInProgress && (
-          <div className="mb-4">
-            <div className="flex justify-between text-sm text-gray-600 mb-1">
-              <span>{t('quickGenerate.progress')}</span>
-              <span>{Math.round(currentGeneration.percentage || 0)}%</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${currentGeneration.percentage || 0}%` }}
-              />
-            </div>
-            {currentGeneration.is_multi_generation && currentGeneration.current_batch_index !== undefined && (
-              <p className="text-xs text-gray-500 mt-1">
-                {t('quickGenerate.batchProgress')
-                  .replace('{current}', String((currentGeneration.current_batch_index || 0) + 1))
-                  .replace('{total}', String(currentGeneration.batch_size))}
-              </p>
+    // Calculate overall progress for multi-generation
+    const overallProgress = batchSize > 1
+      ? ((currentBatchIndex + (currentGeneration.percentage ? currentGeneration.percentage / 100 : 0)) / batchSize) * 100
+      : (currentGeneration.percentage || 0);
+
+    return (
+      <div className={`border-2 rounded-lg p-6 ${getStatusColor(currentGeneration.status)}`}>
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">{t('quickGenerate.currentGeneration')}</h2>
+            {batchSize > 1 && (
+              <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs font-medium">
+                x{batchSize}
+              </span>
             )}
           </div>
-        )}
+          {isInProgress && (
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
+              <span className="text-sm font-medium">{getStatusLabel(currentGeneration.status)}</span>
+            </div>
+          )}
+        </div>
 
-        {/* Error message */}
-        {isFailed && currentGeneration.error_message && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-800">{currentGeneration.error_message}</p>
+        <div className="space-y-4">
+          {/* Status */}
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm font-medium opacity-75">{t('generation.status')}</label>
+              <p className="text-lg font-semibold">{getStatusLabel(currentGeneration.status)}</p>
+            </div>
+            <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+              currentGeneration.detected_mode === 'dialogue'
+                ? 'bg-purple-100 text-purple-800'
+                : 'bg-blue-100 text-blue-800'
+            }`}>
+              {currentGeneration.detected_mode === 'dialogue'
+                ? t('quickGenerate.dialogueMode')
+                : t('quickGenerate.narrationMode')}
+            </span>
           </div>
-        )}
 
-        {/* Completed results */}
-        {isCompleted && (
-          <div className="space-y-4">
-            {/* Single generation or multi-generation results */}
-            {currentGeneration.is_multi_generation && currentGeneration.details?.generation_items ? (
-              <div className="space-y-3">
-                {currentGeneration.details.generation_items.map((item: QuickGenerateItem, index: number) => (
-                  <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">
-                        {t('quickGenerate.generationItem').replace('{index}', String(index + 1))}
+          {/* Progress Section */}
+          {isInProgress && (
+            <div className="border border-current border-opacity-20 rounded-lg p-4 bg-white bg-opacity-30">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2 4.25A2.25 2.25 0 014.25 2h2.5A2.25 2.25 0 019 4.25v2.5A2.25 2.25 0 016.75 9h-2.5A2.25 2.25 0 012 6.75v-2.5zM2 13.25A2.25 2.25 0 014.25 11h2.5A2.25 2.25 0 019 13.25v2.5A2.25 2.25 0 016.75 18h-2.5A2.25 2.25 0 012 15.75v-2.5zM11 4.25A2.25 2.25 0 0113.25 2h2.5A2.25 2.25 0 0118 4.25v2.5A2.25 2.25 0 0115.75 9h-2.5A2.25 2.25 0 0111 6.75v-2.5zM11 13.25A2.25 2.25 0 0113.25 11h2.5A2.25 2.25 0 0118 13.25v2.5A2.25 2.25 0 0115.75 18h-2.5A2.25 2.25 0 0111 15.75v-2.5z" />
+                </svg>
+                <span className="text-sm font-medium">{t('generation.overallProgress')}</span>
+              </div>
+
+              {batchSize > 1 && (
+                <p className="text-sm mb-2">
+                  {t('quickGenerate.batchProgress')
+                    .replace('{current}', String(currentBatchIndex + 1))
+                    .replace('{total}', String(batchSize))}
+                </p>
+              )}
+
+              <div className="w-full bg-white bg-opacity-50 rounded-full h-3">
+                <div
+                  className="bg-indigo-500 h-3 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.max(0, overallProgress))}%` }}
+                />
+              </div>
+              <p className="text-xs mt-1 opacity-75">{overallProgress.toFixed(1)}%</p>
+
+              {/* Generated Items Progress */}
+              {batchSize > 1 && (
+                <div className="mt-4 pt-4 border-t border-current border-opacity-20">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">{t('generation.generatedItems')}</span>
+                    <span className="px-2 py-0.5 bg-current bg-opacity-20 rounded text-xs">
+                      {completedCount}/{batchSize}
+                    </span>
+                  </div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {Array.from({ length: batchSize }, (_, idx) => {
+                      const item = items[idx];
+                      const isItemCompleted = item && item.audio_path && item.audio_path.length > 0;
+                      const isCurrent = idx === currentBatchIndex && !isItemCompleted;
+                      const isPending = idx > currentBatchIndex;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex items-center justify-between px-3 py-2 rounded ${
+                            isCurrent ? 'bg-blue-50 bg-opacity-50' : 'bg-white bg-opacity-30'
+                          }`}
+                        >
+                          <span className="text-sm font-medium">#{idx + 1}</span>
+                          {isItemCompleted && (
+                            <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-medium">
+                              {t('quickGenerate.status.completed')}
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium flex items-center gap-1">
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-800"></div>
+                              {t('quickGenerate.status.inferencing')}
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                              {t('quickGenerate.status.pending')}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Error message */}
+          {isFailed && currentGeneration.error_message && (
+            <div className="bg-red-50 bg-opacity-50 rounded-lg p-4">
+              <label className="text-sm font-medium opacity-75 block mb-2">{t('generation.errorInformation')}</label>
+              <pre className="text-xs whitespace-pre-wrap text-red-900">
+                {currentGeneration.error_message}
+              </pre>
+            </div>
+          )}
+
+          {/* Completed results */}
+          {isCompleted && (
+            <div className="space-y-4">
+              {/* Audio Player Section */}
+              <div className="bg-white bg-opacity-90 rounded-lg p-4 border-2 border-white">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M18 3a1 1 0 00-1.196-.98l-10 2A1 1 0 006 5v9.114A4.369 4.369 0 005 14c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V7.82l8-1.6v5.894A4.37 4.37 0 0015 12c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2V3z" />
+                    </svg>
+                    <label className="text-sm font-semibold">{t('quickGenerate.generatedAudio')}</label>
+                    {batchSize > 1 && (
+                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded text-xs">
+                        {items.length} {t('quickGenerate.items')}
                       </span>
-                      <span className="text-xs text-gray-500">
-                        {t('quickGenerate.seed')}: {item.seeds}
-                      </span>
-                    </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Multi-generation results */}
+                {batchSize > 1 && items.length > 0 ? (
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {items.map((item: QuickGenerateItem, index: number) => (
+                      <div key={index} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-indigo-700">#{index + 1}</span>
+                            <span className="text-xs text-gray-600">
+                              {t('quickGenerate.seed')}: {item.seeds}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-gray-600">
+                            {item.audio_duration_seconds !== undefined && (
+                              <span>{t('generation.duration')}: {item.audio_duration_seconds.toFixed(2)}s</span>
+                            )}
+                            {item.real_time_factor !== undefined && (
+                              <span>RTF: {item.real_time_factor.toFixed(2)}x</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <audio
+                            controls
+                            className="flex-1 h-8"
+                            preload="metadata"
+                            src={api.getQuickGenerationItemDownloadUrl(currentGeneration.request_id, index)}
+                          />
+                          <a
+                            href={`${api.getQuickGenerationItemDownloadUrl(currentGeneration.request_id, index)}?download=true`}
+                            className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                            download
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* Single generation result */
+                  <div>
                     <audio
                       controls
-                      className="w-full mb-2"
-                      src={api.getQuickGenerationItemDownloadUrl(currentGeneration.request_id, index)}
+                      className="w-full"
+                      preload="metadata"
+                      src={api.getQuickGenerationDownloadUrl(currentGeneration.request_id)}
                     />
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>
-                        {item.audio_duration_seconds ?
-                          t('quickGenerate.duration').replace('{duration}', formatDuration(item.audio_duration_seconds)) :
-                          ''}
-                      </span>
+                    <div className="mt-2 flex items-center justify-between text-xs opacity-75">
+                      {currentGeneration.details?.generation_items?.[0]?.audio_duration_seconds && (
+                        <span>{t('generation.duration')}: {currentGeneration.details.generation_items[0].audio_duration_seconds.toFixed(2)}s</span>
+                      )}
                       <a
-                        href={`${api.getQuickGenerationItemDownloadUrl(currentGeneration.request_id, index)}?download=true`}
-                        className="text-blue-600 hover:underline"
+                        href={`${api.getQuickGenerationDownloadUrl(currentGeneration.request_id)}?download=true`}
+                        className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
+                        download
                       >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
                         {t('quickGenerate.download')}
                       </a>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
-            ) : (
-              <div>
-                <audio
-                  controls
-                  className="w-full mb-2"
-                  src={api.getQuickGenerationDownloadUrl(currentGeneration.request_id)}
-                />
-                <div className="flex justify-end">
-                  <a
-                    href={`${api.getQuickGenerationDownloadUrl(currentGeneration.request_id)}?download=true`}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    {t('quickGenerate.download')}
-                  </a>
+
+              {/* Performance Statistics */}
+              {items.length > 0 && (
+                <div className="bg-white bg-opacity-90 rounded-lg p-4">
+                  <p className="text-xs font-medium mb-3 opacity-75">⚡ {t('generation.performanceMetrics')}</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold">
+                        {items.reduce((sum, item) => sum + (item.audio_duration_seconds || 0), 0).toFixed(2)}s
+                      </p>
+                      <p className="text-xs opacity-75 mt-1">{t('generation.totalAudioDuration')}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold">
+                        {items.reduce((sum, item) => sum + (item.generation_time || 0), 0).toFixed(2)}s
+                      </p>
+                      <p className="text-xs opacity-75 mt-1">{t('generation.totalGenerationTime')}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold">
+                        {(() => {
+                          const totalAudio = items.reduce((sum, item) => sum + (item.audio_duration_seconds || 0), 0);
+                          const totalGen = items.reduce((sum, item) => sum + (item.generation_time || 0), 0);
+                          return totalGen > 0 ? (totalAudio / totalGen).toFixed(2) : '0.00';
+                        })()}×
+                      </p>
+                      <p className="text-xs opacity-75 mt-1">{t('generation.averageRTF')}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* New generation button */}
-            <button
-              onClick={handleNewGeneration}
-              className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
-              {t('quickGenerate.newGeneration')}
-            </button>
-          </div>
-        )}
+              {/* New generation button */}
+              <button
+                onClick={handleNewGeneration}
+                className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                {t('quickGenerate.newGeneration')}
+              </button>
+            </div>
+          )}
 
-        {/* In progress - show spinner */}
-        {isInProgress && (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          {/* Model Settings */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium opacity-75">{t('generation.modelType')}</label>
+              <p className="text-sm">{currentGeneration.model_dtype}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium opacity-75">{t('generation.cfgScale')}</label>
+              <p className="text-sm">{currentGeneration.cfg_scale}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium opacity-75">{t('quickGenerate.seed')}</label>
+              <p className="text-sm">{currentGeneration.seeds}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium opacity-75">{t('generation.batchSize')}</label>
+              <p className="text-sm">{batchSize}</p>
+            </div>
           </div>
-        )}
+
+          {/* Timestamps */}
+          <div className="text-xs opacity-75 pt-2 border-t border-current border-opacity-20">
+            <p>{t('generation.created')}: {new Date(currentGeneration.created_at).toLocaleString()}</p>
+            <p>{t('generation.updated')}: {new Date(currentGeneration.updated_at).toLocaleString()}</p>
+          </div>
+        </div>
       </div>
     );
   };

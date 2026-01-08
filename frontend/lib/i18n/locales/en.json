@@ -678,6 +678,8 @@
     "fullText": "Full Text",
     "generatedAudio": "Generated Audio",
     "cfgScale": "CFG Scale",
+    "currentGeneration": "Current Generation",
+    "items": "items",
     "status": {
       "pending": "Pending",
       "preprocessing": "Preprocessing",
