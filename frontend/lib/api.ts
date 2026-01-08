@@ -1058,6 +1058,13 @@ class ApiClient {
   getQuickGenerationVoicePreviewUrl(requestId: string): string {
     return `${this.baseUrl}/quick-generate/${encodeURIComponent(requestId)}/voice/preview`;
   }
+
+  /**
+   * Get voice preview URL for quick generation by index
+   */
+  getQuickGenerationVoicePreviewByIndexUrl(requestId: string, voiceIndex: number): string {
+    return `${this.baseUrl}/quick-generate/${encodeURIComponent(requestId)}/voice/${voiceIndex}/preview`;
+  }
 }
 
 // Export singleton instance

@@ -35,7 +35,8 @@ export interface QuickGenerateDetails {
  */
 export interface QuickGenerate {
   request_id: string;
-  voice_file: string;
+  voice_files: string[];  // Paths to uploaded voice files (up to 4)
+  voice_file?: string;    // Backward compatibility - first voice file
   text: string;
   detected_mode: QuickGenerateMode;
   status: InferencePhase;

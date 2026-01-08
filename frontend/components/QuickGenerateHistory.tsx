@@ -298,12 +298,32 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
                   <div className="px-3 pb-3 pt-2 border-t border-gray-100 space-y-3">
                     {/* Voice Preview */}
                     <div>
-                      <p className="text-xs font-medium text-gray-500 mb-1">{t('quickGenerate.voicePrompt')}</p>
-                      <audio
-                        controls
-                        className="w-full h-8"
-                        src={api.getQuickGenerationVoicePreviewUrl(gen.request_id)}
-                      />
+                      <p className="text-xs font-medium text-gray-500 mb-1">
+                        {t('quickGenerate.voicePrompt')}
+                        {expandedGeneration.voice_files && expandedGeneration.voice_files.length > 1 && (
+                          <span className="ml-1 text-gray-400">({expandedGeneration.voice_files.length})</span>
+                        )}
+                      </p>
+                      {expandedGeneration.voice_files && expandedGeneration.voice_files.length > 1 ? (
+                        <div className="space-y-2">
+                          {expandedGeneration.voice_files.map((_: string, idx: number) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 w-6">#{idx + 1}</span>
+                              <audio
+                                controls
+                                className="flex-1 h-8"
+                                src={api.getQuickGenerationVoicePreviewByIndexUrl(gen.request_id, idx)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <audio
+                          controls
+                          className="w-full h-8"
+                          src={api.getQuickGenerationVoicePreviewUrl(gen.request_id)}
+                        />
+                      )}
                     </div>
 
                     {/* Full Text */}
