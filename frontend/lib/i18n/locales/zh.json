@@ -54,6 +54,7 @@
     "viewRunningTask": "查看正在运行的任务",
     "viewRunningInference": "查看正在运行的推理任务",
     "viewRunningTraining": "查看正在运行的训练任务",
+    "viewRunningQuickGeneration": "查看正在运行的快速生成",
     "noRunningTasks": "无正在运行的任务",
     "githubTooltip": "在 GitHub 上给项目点赞和 Fork"
   },

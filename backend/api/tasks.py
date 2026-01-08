@@ -1,10 +1,11 @@
 """
 Unified Tasks API endpoints
-Provides a single endpoint to check all running tasks (inference and training)
+Provides a single endpoint to check all running tasks (inference, training, and quick generation)
 """
 from flask import jsonify, current_app
 from backend.api import api_bp
 from backend.inference.inference import InferenceBase
+from backend.inference.quick_generate_inference import QuickGenerateInferenceBase
 from backend.training.engine import BaseTrainingEngine
 from backend.task_manager.task import gm, Task
 from backend.services.project_service import ProjectService
@@ -123,6 +124,20 @@ def get_current_task():
                 'type': 'training',
                 'project_id': project_id,
                 'data': state_dict
+            }
+        }), 200
+
+    # Check if it's a quick generation task
+    if isinstance(unwrapped, QuickGenerateInferenceBase):
+        quick_gen_inference: QuickGenerateInferenceBase = unwrapped
+        quick_gen = quick_gen_inference.get_quick_gen()
+
+        return jsonify({
+            'message': 'Current quick generation task retrieved successfully',
+            'task': {
+                'type': 'quick_generation',
+                'project_id': None,  # Quick generation has no project
+                'data': quick_gen.to_dict()
             }
         }), 200
 

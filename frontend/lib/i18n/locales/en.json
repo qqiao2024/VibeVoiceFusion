@@ -54,6 +54,7 @@
     "viewRunningTask": "View running task",
     "viewRunningInference": "View running inference task",
     "viewRunningTraining": "View running training task",
+    "viewRunningQuickGeneration": "View running quick generation",
     "noRunningTasks": "No running tasks",
     "githubTooltip": "Star & Fork on GitHub"
   },
