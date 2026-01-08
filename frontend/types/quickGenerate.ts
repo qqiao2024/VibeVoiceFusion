@@ -19,6 +19,8 @@ export interface QuickGenerateItem {
   generation_time: number;
   audio_duration_seconds?: number;
   real_time_factor?: number;
+  current_step?: number;      // Current step in generation process
+  total_steps?: number;       // Total steps in generation process
 }
 
 /**

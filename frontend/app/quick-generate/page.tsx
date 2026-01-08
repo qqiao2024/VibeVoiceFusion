@@ -526,29 +526,36 @@ function QuickGenerateContent() {
               <p className="text-xs mt-1 opacity-75">{overallProgress.toFixed(1)}%</p>
 
               {/* Generated Items Progress */}
-              {batchSize > 1 && (
-                <div className="mt-4 pt-4 border-t border-current border-opacity-20">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">{t('generation.generatedItems')}</span>
-                    <span className="px-2 py-0.5 bg-current bg-opacity-20 rounded text-xs">
-                      {completedCount}/{batchSize}
-                    </span>
-                  </div>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {Array.from({ length: batchSize }, (_, idx) => {
-                      const item = items[idx];
-                      const isItemCompleted = item && item.audio_path && item.audio_path.length > 0;
-                      const isCurrent = idx === currentBatchIndex && !isItemCompleted;
-                      const isPending = idx > currentBatchIndex;
+              <div className="mt-4 pt-4 border-t border-current border-opacity-20">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">{t('generation.generatedItems')}</span>
+                  <span className="px-2 py-0.5 bg-current bg-opacity-20 rounded text-xs">
+                    {completedCount}/{batchSize}
+                  </span>
+                </div>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {Array.from({ length: batchSize }, (_, idx) => {
+                    const item = items[idx];
+                    const isItemCompleted = item && item.audio_path && item.audio_path.length > 0;
+                    const isCurrent = idx === currentBatchIndex && !isItemCompleted;
+                    const isPending = idx > currentBatchIndex || (!item && idx <= currentBatchIndex);
 
-                      return (
-                        <div
-                          key={idx}
-                          className={`flex items-center justify-between px-3 py-2 rounded ${
-                            isCurrent ? 'bg-blue-50 bg-opacity-50' : 'bg-white bg-opacity-30'
-                          }`}
-                        >
-                          <span className="text-sm font-medium">#{idx + 1}</span>
+                    return (
+                      <div
+                        key={idx}
+                        className={`px-3 py-2 rounded border-b border-current border-opacity-10 last:border-b-0 ${
+                          isCurrent ? 'bg-blue-50 bg-opacity-50' : 'bg-white bg-opacity-30'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium">#{idx + 1}</span>
+                            {item && (
+                              <span className="text-xs opacity-75">
+                                {t('quickGenerate.seed')}: {item.seeds}
+                              </span>
+                            )}
+                          </div>
                           {isItemCompleted && (
                             <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs font-medium">
                               {t('quickGenerate.status.completed')}
@@ -557,20 +564,50 @@ function QuickGenerateContent() {
                           {isCurrent && (
                             <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium flex items-center gap-1">
                               <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-800"></div>
-                              {t('quickGenerate.status.inferencing')}
+                              {t('generation.generating')}
                             </span>
                           )}
-                          {isPending && (
+                          {isPending && !isCurrent && (
                             <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
                               {t('quickGenerate.status.pending')}
                             </span>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        {/* Current item progress bar */}
+                        {isCurrent && item && item.current_step !== undefined && item.total_steps !== undefined && (
+                          <div className="mt-2">
+                            <div className="w-full bg-white bg-opacity-50 rounded-full h-2">
+                              <div
+                                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${(item.current_step / item.total_steps) * 100}%` }}
+                              />
+                            </div>
+                            <p className="text-xs mt-1 opacity-75">
+                              Step {item.current_step}/{item.total_steps}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Completed item details */}
+                        {isItemCompleted && item && (
+                          <div className="mt-2 flex items-center gap-4 text-xs opacity-75">
+                            {item.audio_duration_seconds !== undefined && (
+                              <span>{t('generation.duration')}: {item.audio_duration_seconds.toFixed(2)}s</span>
+                            )}
+                            {item.real_time_factor !== undefined && (
+                              <span>RTF: {item.real_time_factor.toFixed(2)}x</span>
+                            )}
+                            {item.generation_time !== undefined && (
+                              <span>{t('generation.generationTime')}: {item.generation_time.toFixed(2)}s</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
             </div>
           )}
 
