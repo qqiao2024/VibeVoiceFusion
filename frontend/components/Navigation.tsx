@@ -109,16 +109,24 @@ export default function Navigation() {
 
   // Navigate to the appropriate page based on task type
   const handleTaskIconClick = () => {
-    if (currentTask && currentTask.project_id) {
-      // Select the project if it's different
-      if (currentProject?.id !== currentTask.project_id) {
-        selectProject(currentTask.project_id);
+    if (currentTask) {
+      // Quick generation has no project, navigate directly
+      if (currentTask.type === 'quick_generation') {
+        router.push('/quick-generate');
+        return;
       }
-      // Navigate to the appropriate page based on task type
-      if (currentTask.type === 'inference') {
-        router.push('/generate-voice');
-      } else if (currentTask.type === 'training') {
-        router.push('/fine-tuning');
+
+      // For project-based tasks, select the project first
+      if (currentTask.project_id) {
+        if (currentProject?.id !== currentTask.project_id) {
+          selectProject(currentTask.project_id);
+        }
+        // Navigate to the appropriate page based on task type
+        if (currentTask.type === 'inference') {
+          router.push('/generate-voice');
+        } else if (currentTask.type === 'training') {
+          router.push('/fine-tuning');
+        }
       }
     }
   };
@@ -133,6 +141,9 @@ export default function Navigation() {
     }
     if (taskType === 'training') {
       return t('navigation.viewRunningTraining');
+    }
+    if (taskType === 'quick_generation') {
+      return t('navigation.viewRunningQuickGeneration');
     }
     return t('navigation.viewRunningTask');
   };
@@ -180,23 +191,27 @@ export default function Navigation() {
       </a>
 
       <nav className="w-64 bg-gray-900 text-white flex flex-col h-screen fixed left-0 top-0 z-50">
-        {/* Logo/Header */}
-        <div className="p-6 border-b border-gray-800">
+        {/* Logo/Header - Clickable to go home */}
+        <div
+          className="p-6 border-b border-gray-800 cursor-pointer hover:bg-gray-800/50 transition-colors"
+          onClick={() => router.push('/')}
+          title={t('navigation.goToHome')}
+        >
           <div className="flex items-center gap-3 mb-3">
-          {/* Logo */}
-          <Image
-            src="/icon-rect-pulse.svg"
-            alt="VibeVoice Logo"
-            width={40}
-            height={40}
-            className="w-10 h-10 flex-shrink-0"
-          />
-          <div>
-            <h1 className="text-xl font-bold text-white">{t('app.title')}</h1>
-            <p className="text-xs text-gray-400 mt-1">{t('app.subtitle')}</p>
+            {/* Logo */}
+            <Image
+              src="/icon-rect-pulse.svg"
+              alt="VibeVoice Logo"
+              width={40}
+              height={40}
+              className="w-10 h-10 flex-shrink-0"
+            />
+            <div>
+              <h1 className="text-xl font-bold text-white">{t('app.title')}</h1>
+              <p className="text-xs text-gray-400 mt-1">{t('app.subtitle')}</p>
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Current Project Display */}
       <div className="px-4 py-3 border-b border-gray-800 bg-gray-800/50 relative z-50">
@@ -344,6 +359,8 @@ export default function Navigation() {
               className={`relative p-2 rounded-lg transition-all cursor-pointer ${
                 taskType === 'inference'
                   ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : taskType === 'quick_generation'
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
                   : 'bg-purple-600 hover:bg-purple-700 text-white'
               }`}
               title={getTaskTooltip()}
@@ -353,6 +370,11 @@ export default function Navigation() {
                 // Microphone/Generation Icon
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              ) : taskType === 'quick_generation' ? (
+                // Lightning/Quick Generation Icon
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               ) : (
                 // Training/Learning Icon

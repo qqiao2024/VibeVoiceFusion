@@ -4,16 +4,17 @@
 
 import type { Generation } from './generation';
 import type { TrainingState } from './training';
+import type { QuickGenerate } from './quickGenerate';
 
 /**
  * Task type enum
  */
-export type TaskType = 'inference' | 'training' | null;
+export type TaskType = 'inference' | 'training' | 'quick_generation' | null;
 
 /**
- * Unified task data - can be either inference (Generation) or training (TrainingState)
+ * Unified task data - can be inference (Generation), training (TrainingState), or quick generation (QuickGenerate)
  */
-export type TaskData = Generation | TrainingState | null;
+export type TaskData = Generation | TrainingState | QuickGenerate | null;
 
 /**
  * Unified task response from GET /api/v1/tasks/current
@@ -44,6 +45,13 @@ export function isInferenceTask(task: CurrentTask): task is CurrentTask & { type
  */
 export function isTrainingTask(task: CurrentTask): task is CurrentTask & { type: 'training'; data: TrainingState } {
   return task.type === 'training' && task.data !== null;
+}
+
+/**
+ * Type guard to check if task data is a QuickGenerate (quick generation task)
+ */
+export function isQuickGenerationTask(task: CurrentTask): task is CurrentTask & { type: 'quick_generation'; data: QuickGenerate } {
+  return task.type === 'quick_generation' && task.data !== null;
 }
 
 /**

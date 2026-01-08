@@ -30,6 +30,15 @@ import type {
   BatchDeletePresetsResponse
 } from '@/types/preset';
 
+import type {
+  QuickGenerate,
+  StartQuickGenerateResponse,
+  CurrentQuickGenerateResponse,
+  QuickGenerateHistoryResponse
+} from '@/types/quickGenerate';
+
+import type { OffloadingConfig } from '@/types/generation';
+
 // API base URL configuration
 // Development: Full URL to backend server (different origin)
 // Production: Relative path (same origin, backend serves frontend)
@@ -918,6 +927,143 @@ class ApiClient {
    */
   async listLoRAFiles(projectId: string): Promise<{ lora_files: LoRAFile[]; count: number }> {
     return this.fetch(`/projects/${encodeURIComponent(projectId)}/training/lora-files`);
+  }
+
+  // ============ Quick Generate API ============
+
+  /**
+   * Start a quick generation task
+   */
+  async startQuickGeneration(data: {
+    voice_files: File[];
+    text: string;
+    seeds?: number;
+    batch_size?: number;
+    cfg_scale?: number;
+    model_dtype?: string;
+    attn_implementation?: string;
+    offloading?: OffloadingConfig;
+  }): Promise<StartQuickGenerateResponse> {
+    const formData = new FormData();
+
+    // Append voice files with indexed keys (voice_file_0, voice_file_1, etc.)
+    data.voice_files.forEach((file, index) => {
+      formData.append(`voice_file_${index}`, file);
+    });
+
+    formData.append('text', data.text);
+
+    if (data.seeds !== undefined) {
+      formData.append('seeds', data.seeds.toString());
+    }
+    if (data.batch_size !== undefined) {
+      formData.append('batch_size', data.batch_size.toString());
+    }
+    if (data.cfg_scale !== undefined) {
+      formData.append('cfg_scale', data.cfg_scale.toString());
+    }
+    if (data.model_dtype) {
+      formData.append('model_dtype', data.model_dtype);
+    }
+    if (data.attn_implementation) {
+      formData.append('attn_implementation', data.attn_implementation);
+    }
+    if (data.offloading) {
+      formData.append('offloading', JSON.stringify(data.offloading));
+    }
+
+    const url = `${this.baseUrl}/quick-generate`;
+    const locale = typeof window !== 'undefined'
+      ? localStorage.getItem('vibevoice-locale') || 'en'
+      : 'en';
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Language': locale,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        error: 'Unknown error',
+        message: response.statusText
+      }));
+      throw new Error(error.message || error.error || response.statusText);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Get status of a quick generation request
+   */
+  async getQuickGeneration(requestId: string): Promise<QuickGenerate> {
+    return this.fetch(`/quick-generate/${encodeURIComponent(requestId)}`);
+  }
+
+  /**
+   * Get current running quick generation task
+   */
+  async getCurrentQuickGeneration(): Promise<CurrentQuickGenerateResponse> {
+    return this.fetch('/quick-generate/current');
+  }
+
+  /**
+   * List quick generation history
+   */
+  async listQuickGenerationHistory(options?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<QuickGenerateHistoryResponse> {
+    const params = new URLSearchParams();
+    if (options?.limit !== undefined) {
+      params.append('limit', options.limit.toString());
+    }
+    if (options?.offset !== undefined) {
+      params.append('offset', options.offset.toString());
+    }
+
+    const queryString = params.toString();
+    return this.fetch(`/quick-generate/history${queryString ? '?' + queryString : ''}`);
+  }
+
+  /**
+   * Delete a quick generation
+   */
+  async deleteQuickGeneration(requestId: string): Promise<{ message: string; request_id: string }> {
+    return this.fetch(`/quick-generate/${encodeURIComponent(requestId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Get download URL for quick generation audio
+   */
+  getQuickGenerationDownloadUrl(requestId: string): string {
+    return `${this.baseUrl}/quick-generate/${encodeURIComponent(requestId)}/download`;
+  }
+
+  /**
+   * Get download URL for quick generation item (multi-generation)
+   */
+  getQuickGenerationItemDownloadUrl(requestId: string, itemIndex: number): string {
+    return `${this.baseUrl}/quick-generate/${encodeURIComponent(requestId)}/items/${itemIndex}/download`;
+  }
+
+  /**
+   * Get voice preview URL for quick generation
+   */
+  getQuickGenerationVoicePreviewUrl(requestId: string): string {
+    return `${this.baseUrl}/quick-generate/${encodeURIComponent(requestId)}/voice/preview`;
+  }
+
+  /**
+   * Get voice preview URL for quick generation by index
+   */
+  getQuickGenerationVoicePreviewByIndexUrl(requestId: string, voiceIndex: number): string {
+    return `${this.baseUrl}/quick-generate/${encodeURIComponent(requestId)}/voice/${voiceIndex}/preview`;
   }
 }
 

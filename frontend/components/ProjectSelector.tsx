@@ -142,6 +142,12 @@ export default function ProjectSelector() {
           <p className="text-sm text-gray-500 mt-2">{t('project.selectProject')}</p>
         </div>
 
+        {/* Projects Section Header */}
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-lg font-semibold text-gray-700">{t('project.yourProjects')}</h2>
+          <span className="text-sm text-gray-500">({projects.length})</span>
+        </div>
+
         {/* Projects Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {projects.map((project) => (
@@ -194,6 +200,20 @@ export default function ProjectSelector() {
             </div>
             <h3 className="text-xl font-semibold mb-2">{t('project.createNew')}</h3>
             <p className="text-sm text-white/80">{t('project.selectProject')}</p>
+          </div>
+
+          {/* Quick Generate Card */}
+          <div
+            onClick={() => router.push('/quick-generate')}
+            className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-md hover:shadow-xl transition-all duration-200 p-6 cursor-pointer flex flex-col items-center justify-center text-white min-h-[200px] group hover:scale-105"
+          >
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-white/30 transition-colors">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold mb-2">{t('quickGenerate.cardTitle')}</h3>
+            <p className="text-sm text-white/80">{t('quickGenerate.cardDescription')}</p>
           </div>
         </div>
 
