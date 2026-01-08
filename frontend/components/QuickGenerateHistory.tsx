@@ -26,6 +26,11 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Confirmation dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<'single' | 'bulk'>('single');
+  const [singleDeleteId, setSingleDeleteId] = useState<string | null>(null);
+
   // Load history
   const loadHistory = useCallback(async () => {
     try {
@@ -99,34 +104,42 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
   const isAllSelected = generations.length > 0 && selectedIds.size === generations.length;
 
   // Delete handlers
-  const handleDelete = useCallback(async (requestId: string, e: React.MouseEvent) => {
+  const handleDeleteClick = useCallback((requestId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(t('quickGenerate.confirmDelete'))) return;
+    setSingleDeleteId(requestId);
+    setDeleteTarget('single');
+    setShowDeleteDialog(true);
+  }, []);
 
-    try {
-      await api.deleteQuickGeneration(requestId);
-      toast.success(t('quickGenerate.deleted'));
-      loadHistory();
-    } catch (err) {
-      console.error('Failed to delete generation:', err);
-      toast.error(t('quickGenerate.errorDelete'));
-    }
-  }, [t, loadHistory]);
-
-  const handleBulkDelete = useCallback(async () => {
+  const handleBulkDeleteClick = useCallback(() => {
     if (selectedIds.size === 0) return;
-    if (!confirm(t('quickGenerate.confirmBulkDelete').replace('{count}', String(selectedIds.size)))) return;
+    setDeleteTarget('bulk');
+    setShowDeleteDialog(true);
+  }, [selectedIds.size]);
 
+  const handleConfirmDelete = useCallback(async () => {
     try {
-      await Promise.all(Array.from(selectedIds).map(id => api.deleteQuickGeneration(id)));
-      toast.success(t('quickGenerate.bulkDeleted').replace('{count}', String(selectedIds.size)));
-      setSelectedIds(new Set());
+      if (deleteTarget === 'single' && singleDeleteId) {
+        await api.deleteQuickGeneration(singleDeleteId);
+        toast.success(t('quickGenerate.deleted'));
+      } else if (deleteTarget === 'bulk') {
+        await Promise.all(Array.from(selectedIds).map(id => api.deleteQuickGeneration(id)));
+        toast.success(t('quickGenerate.bulkDeleted').replace('{count}', String(selectedIds.size)));
+        setSelectedIds(new Set());
+      }
+      setShowDeleteDialog(false);
+      setSingleDeleteId(null);
       loadHistory();
     } catch (err) {
-      console.error('Failed to bulk delete generations:', err);
+      console.error('Failed to delete generation(s):', err);
       toast.error(t('quickGenerate.errorDelete'));
     }
-  }, [selectedIds, t, loadHistory]);
+  }, [deleteTarget, singleDeleteId, selectedIds, t, loadHistory]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteDialog(false);
+    setSingleDeleteId(null);
+  }, []);
 
   const handleSelectGeneration = useCallback(async (gen: QuickGenerateHistoryItem) => {
     try {
@@ -174,9 +187,12 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
         <div className="flex items-center gap-2">
           {selectedIds.size > 0 && (
             <button
-              onClick={handleBulkDelete}
-              className="px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              onClick={handleBulkDeleteClick}
+              className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-1.5 transition-colors"
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
               {t('quickGenerate.deleteSelected')} ({selectedIds.size})
             </button>
           )}
@@ -282,12 +298,13 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
                         </svg>
                       </button>
                       <button
-                        onClick={(e) => handleDelete(gen.request_id, e)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        onClick={(e) => handleDeleteClick(gen.request_id, e)}
+                        className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-1 transition-colors"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
+                        {t('common.delete')}
                       </button>
                     </div>
                   </div>
@@ -403,6 +420,36 @@ export default function QuickGenerateHistory({ onSelectGeneration, currentGenera
             </div>
           )}
         </>
+      )}
+
+      {/* Confirmation Dialog */}
+      {showDeleteDialog && (
+        <div className="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold mb-2">{t('quickGenerate.confirmDeletionTitle')}</h3>
+            <p className="text-gray-600 mb-4">
+              {deleteTarget === 'single'
+                ? t('quickGenerate.confirmSingleDelete')
+                : t('quickGenerate.confirmBulkDelete')
+                    .replace('{count}', selectedIds.size.toString())
+                    .replace('{plural}', selectedIds.size > 1 ? 's' : '')}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelDelete}
+                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+              >
+                {t('common.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
