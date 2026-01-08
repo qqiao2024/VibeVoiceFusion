@@ -18,6 +18,8 @@ class QuickGenerateItem:
     batch_index: int = 0
     audio_duration_seconds: Optional[float] = None
     real_time_factor: Optional[float] = None
+    current_step: Optional[int] = None  # Current step in generation process
+    total_steps: Optional[int] = None   # Total steps in generation process
 
 
 @dataclass

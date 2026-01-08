@@ -128,6 +128,11 @@ class QuickGenerateVisitor:
 
     def visit_inference_step_start(self, current_step: int, total_steps: int):
         if self._quick_gen.current_batch_index is not None:
+            # Update current item's step progress
+            current_item = self._quick_gen.details.generation_items[self._quick_gen.current_batch_index]
+            current_item.current_step = current_step
+            current_item.total_steps = total_steps
+
             # Calculate overall percentage
             batch_progress = current_step / total_steps if total_steps > 0 else 0
             batch_weight = 1.0 / self._quick_gen.batch_size if self._quick_gen.batch_size > 0 else 1.0
