@@ -130,7 +130,7 @@ def get_current_task():
     # Check if it's a quick generation task
     if isinstance(unwrapped, QuickGenerateInferenceBase):
         quick_gen_inference: QuickGenerateInferenceBase = unwrapped
-        quick_gen = quick_gen_inference.get_quick_gen()
+        quick_gen = quick_gen_inference.get_quick_generate()
 
         return jsonify({
             'message': 'Current quick generation task retrieved successfully',
