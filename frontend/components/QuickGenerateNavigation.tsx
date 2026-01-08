@@ -4,10 +4,51 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
+import { useGlobalTask } from "@/lib/GlobalTaskContext";
+import { hasActiveTask } from "@/types/task";
 
 export default function QuickGenerateNavigation() {
   const router = useRouter();
   const { t, locale, setLocale } = useLanguage();
+  const { currentTask } = useGlobalTask();
+
+  // Check if there's an active task
+  const isTaskRunning = hasActiveTask(currentTask);
+  const taskType = currentTask?.type;
+
+  // Navigate to the appropriate page based on task type
+  const handleTaskIconClick = () => {
+    if (currentTask) {
+      // Quick generation - already on this page, do nothing special
+      if (currentTask.type === 'quick_generation') {
+        return;
+      }
+
+      // For project-based tasks, navigate to appropriate page
+      if (currentTask.type === 'inference') {
+        router.push('/generate-voice');
+      } else if (currentTask.type === 'training') {
+        router.push('/fine-tuning');
+      }
+    }
+  };
+
+  // Get the tooltip text based on task type
+  const getTaskTooltip = () => {
+    if (!isTaskRunning) {
+      return t('navigation.noRunningTasks');
+    }
+    if (taskType === 'inference') {
+      return t('navigation.viewRunningInference');
+    }
+    if (taskType === 'training') {
+      return t('navigation.viewRunningTraining');
+    }
+    if (taskType === 'quick_generation') {
+      return t('navigation.viewRunningQuickGeneration');
+    }
+    return t('navigation.viewRunningTask');
+  };
 
   return (
     <>
@@ -116,10 +157,50 @@ export default function QuickGenerateNavigation() {
             </button>
           </div>
 
-          {/* Version Info */}
-          <div className="text-xs text-gray-500">
-            <p>{process.env.NEXT_PUBLIC_APP_VERSION || 'dev'}</p>
-            <p className="mt-1">{t('app.copyright')}</p>
+          <div className="flex items-center justify-between gap-3">
+            {/* Version Info */}
+            <div className="text-xs text-gray-500 flex-1">
+              <p>{process.env.NEXT_PUBLIC_APP_VERSION || 'dev'}</p>
+              <p className="mt-1">{t('app.copyright')}</p>
+            </div>
+
+            {/* Task Status Icon */}
+            {isTaskRunning && (
+              <button
+                onClick={handleTaskIconClick}
+                className={`relative p-2 rounded-lg transition-all cursor-pointer ${
+                  taskType === 'inference'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : taskType === 'quick_generation'
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white'
+                }`}
+                title={getTaskTooltip()}
+              >
+                {/* Icon based on task type */}
+                {taskType === 'inference' ? (
+                  // Microphone/Generation Icon
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                ) : taskType === 'quick_generation' ? (
+                  // Lightning/Quick Generation Icon
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                ) : (
+                  // Training/Learning Icon
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                )}
+                {/* Animated pulse indicator */}
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </nav>
