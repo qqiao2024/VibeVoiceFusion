@@ -153,10 +153,10 @@ class QuickGenerateVisitor:
 class QuickGenerateInferenceBase(ABC):
     """Base class for quick generate inference"""
 
-    def __init__(self, quick_gen: QuickGenerate, voice_path: str, output_dir: str):
+    def __init__(self, quick_gen: QuickGenerate, voice_paths: List[str], output_dir: str):
         self._quick_gen = quick_gen
         self.visitor = QuickGenerateVisitor(quick_gen)
-        self.voice_path = voice_path
+        self.voice_paths = voice_paths  # List of voice file paths (1-4)
         self.output_dir = Path(output_dir)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -174,7 +174,7 @@ class QuickGenerateInferenceBase(ABC):
         return copy.deepcopy(self._quick_gen)
 
     @staticmethod
-    def create(quick_gen: QuickGenerate, voice_path: str, output_dir: str,
+    def create(quick_gen: QuickGenerate, voice_paths: List[str], output_dir: str,
                offload_config: Optional[Dict[str, Any]] = None,
                fake: bool = False) -> 'QuickGenerateInferenceBase':
         """
@@ -182,7 +182,7 @@ class QuickGenerateInferenceBase(ABC):
 
         Args:
             quick_gen: QuickGenerate object
-            voice_path: Path to voice sample file
+            voice_paths: List of paths to voice sample files (1-4)
             output_dir: Directory to save output files
             offload_config: Offloading configuration dict
             fake: Use fake inference engine for testing
@@ -216,11 +216,11 @@ class QuickGenerateInferenceBase(ABC):
 
         if fake:
             return FakeQuickGenerateInferenceEngine(
-                quick_gen, voice_path, output_dir, offload_config=offload_config_obj
+                quick_gen, voice_paths, output_dir, offload_config=offload_config_obj
             )
 
         return QuickGenerateInferenceEngine(
-            quick_gen, voice_path, output_dir, offload_config=offload_config_obj
+            quick_gen, voice_paths, output_dir, offload_config=offload_config_obj
         )
 
     @abstractmethod
@@ -245,8 +245,10 @@ class QuickGenerateInferenceBase(ABC):
         """
         Prepare the script and voice samples for generation.
 
-        For dialogue mode: Parse speakers and create voice sample list (same voice for all)
-        For narration mode: Convert to dialog format with "Speaker 1:" prefix on each paragraph
+        For dialogue mode: Parse speakers and assign voice paths in order.
+                          If more speakers than voices, cycle through available voices.
+        For narration mode: Convert to dialog format with "Speaker 1:" prefix,
+                           using the first voice path.
 
         Returns:
             Tuple of (full_script, voice_samples)
@@ -258,18 +260,24 @@ class QuickGenerateInferenceBase(ABC):
                 # No speakers found, treat as narration
                 logger.warning("Dialogue mode detected but no speakers found, treating as narration")
                 full_script = self._convert_narration_to_script(self.text)
-                return full_script, [self.voice_path]
+                return full_script, [self.voice_paths[0]]
 
-            # Use the same voice for all speakers
+            # Assign voice paths to speakers in order
+            # If more speakers than voice paths, cycle through available voices
+            voice_samples = []
+            for i in range(len(speakers)):
+                voice_idx = i % len(self.voice_paths)
+                voice_samples.append(self.voice_paths[voice_idx])
+
             full_script = self.text.replace("'", "'")
-            voice_samples = [self.voice_path] * len(speakers)
             logger.info(f"Dialogue mode: {len(speakers)} speakers detected: {speakers}")
+            logger.info(f"Voice assignment: {[f'Speaker {i+1} -> voice_{j % len(self.voice_paths)}' for i, j in enumerate(range(len(speakers)))]}")
             return full_script, voice_samples
         else:
             # For narration, convert to dialog format with "Speaker 1:" prefix
             full_script = self._convert_narration_to_script(self.text)
             logger.info("Narration mode: converted to dialog format")
-            return full_script, [self.voice_path]
+            return full_script, [self.voice_paths[0]]
 
     def _convert_narration_to_script(self, text: str) -> str:
         """
@@ -377,9 +385,9 @@ class QuickGenerateInferenceBase(ABC):
 class QuickGenerateInferenceEngine(QuickGenerateInferenceBase):
     """Real inference engine for quick generate"""
 
-    def __init__(self, quick_gen: QuickGenerate, voice_path: str, output_dir: str,
+    def __init__(self, quick_gen: QuickGenerate, voice_paths: List[str], output_dir: str,
                  offload_config=None):
-        super().__init__(quick_gen, voice_path, output_dir)
+        super().__init__(quick_gen, voice_paths, output_dir)
         self.offload_config = offload_config
         self.model_file = current_app.config['MODEL_PATH']
 
@@ -442,9 +450,9 @@ class QuickGenerateInferenceEngine(QuickGenerateInferenceBase):
 class FakeQuickGenerateInferenceEngine(QuickGenerateInferenceBase):
     """Fake inference engine for testing"""
 
-    def __init__(self, quick_gen: QuickGenerate, voice_path: str, output_dir: str,
+    def __init__(self, quick_gen: QuickGenerate, voice_paths: List[str], output_dir: str,
                  offload_config=None):
-        super().__init__(quick_gen, voice_path, output_dir)
+        super().__init__(quick_gen, voice_paths, output_dir)
         self.offload_config = offload_config
 
     def _load_model(self, dtype: torch.dtype):

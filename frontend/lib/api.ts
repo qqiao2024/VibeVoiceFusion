@@ -935,7 +935,7 @@ class ApiClient {
    * Start a quick generation task
    */
   async startQuickGeneration(data: {
-    voice_file: File;
+    voice_files: File[];
     text: string;
     seeds?: number;
     batch_size?: number;
@@ -945,7 +945,12 @@ class ApiClient {
     offloading?: OffloadingConfig;
   }): Promise<StartQuickGenerateResponse> {
     const formData = new FormData();
-    formData.append('voice_file', data.voice_file);
+
+    // Append voice files with indexed keys (voice_file_0, voice_file_1, etc.)
+    data.voice_files.forEach((file, index) => {
+      formData.append(`voice_file_${index}`, file);
+    });
+
     formData.append('text', data.text);
 
     if (data.seeds !== undefined) {

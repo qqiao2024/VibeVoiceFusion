@@ -86,7 +86,7 @@ def start_quick_generation():
     Start a new quick generation task.
 
     Form Data:
-        - voice_file: Audio file (required)
+        - voice_file_0, voice_file_1, ... voice_file_3: Audio files (at least one required, max 4)
         - text: Text to generate (required)
         - seeds: Random seed (optional, default: random)
         - batch_size: Number of generations 1-20 (optional, default: 1)
@@ -98,24 +98,25 @@ def start_quick_generation():
         JSON with request_id, detected_mode, and status
     """
     try:
-        # Check for voice file
-        if 'voice_file' not in request.files:
+        # Collect voice files (support up to 4)
+        voice_files = []
+        for i in range(4):
+            key = f'voice_file_{i}'
+            if key in request.files:
+                voice_file = request.files[key]
+                if voice_file.filename and voice_file.filename != '':
+                    if not _allowed_file(voice_file.filename):
+                        return jsonify({
+                            'error': t('errors.bad_request'),
+                            'message': t('errors.invalid_file_type', formats=', '.join(ALLOWED_EXTENSIONS))
+                        }), 400
+                    voice_files.append(voice_file)
+
+        # Check for at least one voice file
+        if not voice_files:
             return jsonify({
                 'error': t('errors.bad_request'),
                 'message': t('errors.quick_generate_voice_required')
-            }), 400
-
-        voice_file = request.files['voice_file']
-        if voice_file.filename == '':
-            return jsonify({
-                'error': t('errors.bad_request'),
-                'message': t('errors.quick_generate_voice_required')
-            }), 400
-
-        if not _allowed_file(voice_file.filename):
-            return jsonify({
-                'error': t('errors.bad_request'),
-                'message': t('errors.invalid_file_type', formats=', '.join(ALLOWED_EXTENSIONS))
             }), 400
 
         # Get text
@@ -169,13 +170,16 @@ def start_quick_generation():
         # Get service
         service = _get_quick_generate_service()
 
-        # Save voice file
-        voice_data = voice_file.read()
-        voice_filename = service.save_voice_file(voice_data, voice_file.filename)
+        # Save voice files
+        voice_filenames = []
+        for voice_file in voice_files:
+            voice_data = voice_file.read()
+            voice_filename = service.save_voice_file(voice_data, voice_file.filename)
+            voice_filenames.append(voice_filename)
 
         # Start generation
         quick_gen = service.start_generation(
-            voice_file=voice_filename,
+            voice_files=voice_filenames,
             text=text,
             seeds=seeds,
             batch_size=batch_size,
@@ -437,10 +441,25 @@ def delete_quick_generation(request_id: str):
 @api_bp.route('/quick-generate/<request_id>/voice/preview', methods=['GET'])
 def preview_quick_generation_voice(request_id: str):
     """
-    Preview the voice file used in a quick generation.
+    Preview the first voice file used in a quick generation.
 
     Args:
         request_id: Generation request ID
+
+    Returns:
+        Voice audio file or error message
+    """
+    return preview_quick_generation_voice_by_index(request_id, 0)
+
+
+@api_bp.route('/quick-generate/<request_id>/voice/<int:voice_index>/preview', methods=['GET'])
+def preview_quick_generation_voice_by_index(request_id: str, voice_index: int):
+    """
+    Preview a specific voice file used in a quick generation.
+
+    Args:
+        request_id: Generation request ID
+        voice_index: Index of the voice file (0-3)
 
     Returns:
         Voice audio file or error message
@@ -455,7 +474,14 @@ def preview_quick_generation_voice(request_id: str):
                 'message': t('errors.quick_generate_not_found')
             }), 404
 
-        voice_path = service.get_voice_path(quick_gen.voice_file)
+        # Check index bounds
+        if voice_index < 0 or voice_index >= len(quick_gen.voice_files):
+            return jsonify({
+                'error': t('errors.not_found'),
+                'message': t('errors.quick_generate_voice_not_found')
+            }), 404
+
+        voice_path = service.get_voice_path(quick_gen.voice_files[voice_index])
         if not voice_path:
             return jsonify({
                 'error': t('errors.not_found'),

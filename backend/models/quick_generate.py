@@ -32,7 +32,7 @@ class QuickGenerateDetails:
 class QuickGenerate:
     """Quick generate metadata model"""
     request_id: str
-    voice_file: str  # Path to uploaded voice file
+    voice_files: List[str]  # Paths to uploaded voice files (up to 4)
     text: str  # Original text input
     detected_mode: str  # "dialogue" or "narration"
     status: str  # InferencePhase constant (e.g., 'pending', 'completed')
@@ -53,6 +53,12 @@ class QuickGenerate:
     is_multi_generation: bool = False
     text_preview: Optional[str] = None  # First 100 chars for history display
 
+    # Backward compatibility property
+    @property
+    def voice_file(self) -> str:
+        """Return first voice file for backward compatibility"""
+        return self.voice_files[0] if self.voice_files else ""
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         data = asdict(self)
@@ -64,6 +70,14 @@ class QuickGenerate:
         """Create from dictionary"""
         # Status is stored as string, keep it as-is (InferencePhase is a class with string constants)
         # No conversion needed - status is already a string like 'pending', 'completed', etc.
+
+        # Handle backward compatibility: convert old 'voice_file' to 'voice_files'
+        if 'voice_file' in data and 'voice_files' not in data:
+            data['voice_files'] = [data.pop('voice_file')]
+        elif 'voice_file' in data:
+            # Remove old field if both exist
+            data.pop('voice_file')
+
         # Handle details
         if 'details' in data and isinstance(data['details'], dict):
             items = data['details'].get('generation_items', [])
@@ -75,21 +89,33 @@ class QuickGenerate:
         return cls(**data)
 
     @classmethod
-    def create(cls, request_id: str, voice_file: str, text: str,
+    def create(cls, request_id: str, voice_files: List[str], text: str,
                seeds: int = 42,
                batch_size: int = 1,
                cfg_scale: float = 1.3,
                model_dtype: str = "bf16",
                attn_implementation: str = "sdpa",
                offloading: Optional[Dict[str, Any]] = None) -> 'QuickGenerate':
-        """Create a new quick generate request"""
+        """Create a new quick generate request
+
+        Args:
+            request_id: Unique request identifier
+            voice_files: List of voice file paths (1-4 files)
+            text: Text to generate
+            seeds: Random seed
+            batch_size: Number of generations (1-20)
+            cfg_scale: CFG scale
+            model_dtype: Model dtype
+            attn_implementation: Attention implementation
+            offloading: Offloading configuration
+        """
         now = datetime.utcnow().isoformat()
         detected_mode = detect_mode(text)
         text_preview = text[:100] + "..." if len(text) > 100 else text
 
         return cls(
             request_id=request_id,
-            voice_file=voice_file,
+            voice_files=voice_files,
             text=text,
             detected_mode=detected_mode,
             status=InferencePhase.PENDING,

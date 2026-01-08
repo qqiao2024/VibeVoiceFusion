@@ -120,7 +120,7 @@ class QuickGenerateService:
 
         return voice_filename
 
-    def start_generation(self, voice_file: str, text: str,
+    def start_generation(self, voice_files: List[str], text: str,
                         seeds: int = 42,
                         batch_size: int = 1,
                         cfg_scale: float = 1.3,
@@ -131,7 +131,7 @@ class QuickGenerateService:
         Start a quick generation task.
 
         Args:
-            voice_file: Filename of uploaded voice in voices directory
+            voice_files: List of filenames of uploaded voices in voices directory (1-4 files)
             text: Text to generate
             seeds: Random seed
             batch_size: Number of generations (1-20)
@@ -152,7 +152,7 @@ class QuickGenerateService:
         # Create quick generate object
         quick_gen = QuickGenerate.create(
             request_id=request_id,
-            voice_file=voice_file,
+            voice_files=voice_files,
             text=text,
             seeds=seeds,
             batch_size=batch_size,
@@ -166,11 +166,11 @@ class QuickGenerateService:
         if offloading_config:
             quick_gen.details.offloading_config = offloading_config
 
-        # Create inference engine
-        voice_path = str(self.voices_dir / voice_file)
+        # Create inference engine with voice paths
+        voice_paths = [str(self.voices_dir / vf) for vf in voice_files]
         inference = QuickGenerateInferenceBase.create(
             quick_gen=quick_gen,
-            voice_path=voice_path,
+            voice_paths=voice_paths,
             output_dir=str(request_output_dir),
             offload_config=offloading_config,
             fake=self.fake_model
@@ -282,17 +282,23 @@ class QuickGenerateService:
         if output_dir.exists():
             shutil.rmtree(output_dir)
 
-        # Delete voice file if it exists and is unique to this generation
-        voice_file = gen_data.get('voice_file')
-        if voice_file:
-            voice_path = self.voices_dir / voice_file
-            # Check if any other generation uses this voice file
-            other_uses = any(
-                g.get('voice_file') == voice_file and g.get('request_id') != request_id
-                for g in history
-            )
-            if not other_uses and voice_path.exists():
-                voice_path.unlink()
+        # Delete voice files if they exist and are unique to this generation
+        # Support both old (voice_file) and new (voice_files) format
+        voice_files = gen_data.get('voice_files', [])
+        if not voice_files and gen_data.get('voice_file'):
+            voice_files = [gen_data.get('voice_file')]
+
+        for voice_file in voice_files:
+            if voice_file:
+                voice_path = self.voices_dir / voice_file
+                # Check if any other generation uses this voice file
+                other_uses = any(
+                    (voice_file in g.get('voice_files', []) or g.get('voice_file') == voice_file)
+                    and g.get('request_id') != request_id
+                    for g in history
+                )
+                if not other_uses and voice_path.exists():
+                    voice_path.unlink()
 
         # Remove from history
         updated_history = [g for g in history if g.get('request_id') != request_id]

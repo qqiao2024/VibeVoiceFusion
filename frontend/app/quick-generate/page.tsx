@@ -34,14 +34,17 @@ function QuickGenerateContent() {
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Voice source state
+  // Voice source state - supports up to 4 voice prompts
+  const MAX_VOICE_PROMPTS = 4;
+  type VoiceSource = { type: 'upload'; file: File } | { type: 'preset'; preset: PresetVoice };
+  const [voiceSources, setVoiceSources] = useState<VoiceSource[]>([]);
+  const [activeVoiceSlot, setActiveVoiceSlot] = useState<number>(0);
   type VoiceSourceTab = 'upload' | 'preset';
   const [voiceSourceTab, setVoiceSourceTab] = useState<VoiceSourceTab>('upload');
-  const [voiceFile, setVoiceFile] = useState<File | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<PresetVoice | null>(null);
-  const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null);
+  const [uploadedAudioUrls, setUploadedAudioUrls] = useState<(string | null)[]>([]);
   const uploadedAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlayingUploadedAudio, setIsPlayingUploadedAudio] = useState(false);
+  const [playingVoiceIndex, setPlayingVoiceIndex] = useState<number | null>(null);
+  const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Preset voice state
   const [presets, setPresets] = useState<PresetVoice[]>([]);
@@ -114,19 +117,27 @@ function QuickGenerateContent() {
     loadPresets();
   }, [selectedLanguage, selectedGender, showBgmOnly]);
 
-  // Create/revoke object URL for uploaded audio preview
+  // Create/revoke object URLs for uploaded audio previews
   useEffect(() => {
-    if (voiceFile) {
-      const url = URL.createObjectURL(voiceFile);
-      setUploadedAudioUrl(url);
-      return () => {
-        URL.revokeObjectURL(url);
-        setUploadedAudioUrl(null);
-      };
-    } else {
-      setUploadedAudioUrl(null);
-    }
-  }, [voiceFile]);
+    const newUrls: (string | null)[] = [];
+    const urlsToRevoke: string[] = [];
+
+    voiceSources.forEach((source, index) => {
+      if (source.type === 'upload') {
+        const url = URL.createObjectURL(source.file);
+        newUrls[index] = url;
+        urlsToRevoke.push(url);
+      } else {
+        newUrls[index] = null;
+      }
+    });
+
+    setUploadedAudioUrls(newUrls);
+
+    return () => {
+      urlsToRevoke.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [voiceSources]);
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -182,39 +193,86 @@ function QuickGenerateContent() {
     }
   }, [searchParams]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file selection for a specific slot
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, slotIndex?: number) => {
     const file = e.target.files?.[0];
     if (file) {
-      setVoiceFile(file);
+      addVoiceSource({ type: 'upload', file }, slotIndex);
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent, slotIndex?: number) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('audio/')) {
-      setVoiceFile(file);
+      addVoiceSource({ type: 'upload', file }, slotIndex);
     }
   };
 
-  // Toggle uploaded audio preview
-  const toggleUploadedAudioPreview = () => {
-    if (!uploadedAudioRef.current || !uploadedAudioUrl) return;
-    if (isPlayingUploadedAudio) {
-      uploadedAudioRef.current.pause();
-      setIsPlayingUploadedAudio(false);
+  // Add a voice source to the list
+  const addVoiceSource = (source: VoiceSource, replaceIndex?: number) => {
+    setVoiceSources(prev => {
+      if (replaceIndex !== undefined && replaceIndex < prev.length) {
+        // Replace existing slot
+        const newSources = [...prev];
+        newSources[replaceIndex] = source;
+        return newSources;
+      } else if (prev.length < MAX_VOICE_PROMPTS) {
+        // Add new slot
+        return [...prev, source];
+      }
+      return prev;
+    });
+  };
+
+  // Remove a voice source by index
+  const removeVoiceSource = (index: number) => {
+    setVoiceSources(prev => prev.filter((_, i) => i !== index));
+    if (playingVoiceIndex === index) {
+      uploadedAudioRef.current?.pause();
+      presetAudioRef.current?.pause();
+      setPlayingVoiceIndex(null);
+    }
+  };
+
+  // Toggle voice preview playback
+  const toggleVoicePreview = (index: number) => {
+    const source = voiceSources[index];
+    if (!source) return;
+
+    if (playingVoiceIndex === index) {
+      // Stop playing
+      uploadedAudioRef.current?.pause();
+      presetAudioRef.current?.pause();
+      setPlayingVoiceIndex(null);
     } else {
-      uploadedAudioRef.current.play();
-      setIsPlayingUploadedAudio(true);
+      // Stop any current playback
+      uploadedAudioRef.current?.pause();
+      presetAudioRef.current?.pause();
+
+      // Start new playback
+      if (source.type === 'upload' && uploadedAudioUrls[index]) {
+        if (uploadedAudioRef.current) {
+          uploadedAudioRef.current.src = uploadedAudioUrls[index]!;
+          uploadedAudioRef.current.play();
+          setPlayingVoiceIndex(index);
+        }
+      } else if (source.type === 'preset') {
+        if (presetAudioRef.current) {
+          presetAudioRef.current.src = api.getPresetPreviewUrl(source.preset.filename);
+          presetAudioRef.current.play();
+          setPlayingVoiceIndex(index);
+        }
+      }
     }
   };
 
-  // Handle uploaded audio ended
-  const handleUploadedAudioEnded = () => {
-    setIsPlayingUploadedAudio(false);
+  // Handle audio ended
+  const handleAudioEnded = () => {
+    setPlayingVoiceIndex(null);
   };
 
-  // Toggle preset audio preview
+  // Toggle preset audio preview (for selection grid)
   const togglePresetPreview = (preset: PresetVoice) => {
     if (playingPreset === preset.filename) {
       presetAudioRef.current?.pause();
@@ -231,24 +289,20 @@ function QuickGenerateContent() {
   // Handle preset audio ended
   const handlePresetAudioEnded = () => {
     setPlayingPreset(null);
+    setPlayingVoiceIndex(null);
   };
 
-  // Select a preset voice
+  // Select a preset voice and add to voice sources
   const handleSelectPreset = (preset: PresetVoice) => {
-    setSelectedPreset(preset);
-    setVoiceFile(null); // Clear uploaded file when selecting preset
+    addVoiceSource({ type: 'preset', preset });
   };
 
-  // Clear voice selection
-  const clearVoiceSelection = () => {
-    if (voiceSourceTab === 'upload') {
-      setVoiceFile(null);
-      uploadedAudioRef.current?.pause();
-      setIsPlayingUploadedAudio(false);
+  // Get display name for a voice source
+  const getVoiceSourceDisplayName = (source: VoiceSource): string => {
+    if (source.type === 'upload') {
+      return source.file.name;
     } else {
-      setSelectedPreset(null);
-      presetAudioRef.current?.pause();
-      setPlayingPreset(null);
+      return source.preset.display_name;
     }
   };
 
@@ -270,9 +324,8 @@ function QuickGenerateContent() {
     e.preventDefault();
     setError(null);
 
-    // Validate voice source
-    const hasVoiceSource = voiceSourceTab === 'upload' ? !!voiceFile : !!selectedPreset;
-    if (!hasVoiceSource) {
+    // Validate at least one voice source
+    if (voiceSources.length === 0) {
       setError(t('quickGenerate.errorVoiceRequired'));
       return;
     }
@@ -285,23 +338,22 @@ function QuickGenerateContent() {
     setLoading(true);
 
     try {
-      let fileToUpload: File;
+      // Convert voice sources to File objects
+      const filesToUpload: File[] = [];
 
-      if (voiceSourceTab === 'upload' && voiceFile) {
-        fileToUpload = voiceFile;
-      } else if (voiceSourceTab === 'preset' && selectedPreset) {
-        // Fetch preset audio as blob and create File object
-        const presetUrl = api.getPresetPreviewUrl(selectedPreset.filename);
-        const response = await fetch(presetUrl);
-        if (!response.ok) {
-          throw new Error(t('quickGenerate.errorLoadPreset'));
+      for (const source of voiceSources) {
+        if (source.type === 'upload') {
+          filesToUpload.push(source.file);
+        } else {
+          // Fetch preset audio as blob and create File object
+          const presetUrl = api.getPresetPreviewUrl(source.preset.filename);
+          const response = await fetch(presetUrl);
+          if (!response.ok) {
+            throw new Error(t('quickGenerate.errorLoadPreset'));
+          }
+          const blob = await response.blob();
+          filesToUpload.push(new File([blob], source.preset.filename, { type: 'audio/wav' }));
         }
-        const blob = await response.blob();
-        fileToUpload = new File([blob], selectedPreset.filename, { type: 'audio/wav' });
-      } else {
-        setError(t('quickGenerate.errorVoiceRequired'));
-        setLoading(false);
-        return;
       }
 
       const offloading = offloadingEnabled ? {
@@ -314,7 +366,7 @@ function QuickGenerateContent() {
       } : undefined;
 
       const apiResponse = await api.startQuickGeneration({
-        voice_file: fileToUpload,
+        voice_files: filesToUpload,
         text: text.trim(),
         seeds,
         batch_size: batchSize,
@@ -492,167 +544,46 @@ function QuickGenerateContent() {
   const renderForm = () => (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Hidden audio elements for preview */}
-      <audio ref={uploadedAudioRef} src={uploadedAudioUrl || undefined} onEnded={handleUploadedAudioEnded} className="hidden" />
+      <audio ref={uploadedAudioRef} onEnded={handleAudioEnded} className="hidden" />
       <audio ref={presetAudioRef} onEnded={handlePresetAudioEnded} className="hidden" />
 
-      {/* Voice Source */}
+      {/* Voice Sources */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {t('quickGenerate.voiceSample')} <span className="text-red-500">*</span>
-        </label>
-
-        {/* Voice Source Tabs */}
-        <div className="flex border-b border-gray-200 mb-4">
-          <button
-            type="button"
-            onClick={() => setVoiceSourceTab('upload')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              voiceSourceTab === 'upload'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            {t('quickGenerate.uploadTab')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setVoiceSourceTab('preset')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              voiceSourceTab === 'preset'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            {t('quickGenerate.presetTab')}
-          </button>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            {t('quickGenerate.voiceSample')} <span className="text-red-500">*</span>
+          </label>
+          <span className="text-xs text-gray-500">
+            {voiceSources.length}/{MAX_VOICE_PROMPTS} {t('quickGenerate.voicesSelected')}
+          </span>
         </div>
 
-        {/* Upload Tab Content */}
-        {voiceSourceTab === 'upload' && (
-          <div>
-            <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                voiceFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400'
-              }`}
-              onClick={() => fileInputRef.current?.click()}
-              onDrop={handleDrop}
-              onDragOver={(e) => e.preventDefault()}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              {voiceFile ? (
-                <div className="flex items-center justify-center gap-3">
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                  </svg>
-                  <span className="text-green-700 font-medium">{voiceFile.name}</span>
-                  {/* Preview button */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); toggleUploadedAudioPreview(); }}
-                    className="p-1.5 rounded-full bg-green-100 hover:bg-green-200 text-green-700 transition-colors"
-                    title={isPlayingUploadedAudio ? t('preset.stop') : t('preset.preview')}
-                  >
-                    {isPlayingUploadedAudio ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    )}
-                  </button>
-                  {/* Remove button */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); clearVoiceSelection(); }}
-                    className="p-1.5 rounded-full bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-500 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+        {/* Selected voice sources list */}
+        {voiceSources.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {voiceSources.map((source, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg"
+              >
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-green-600 text-white text-xs font-medium">
+                  {index + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-green-800 truncate">
+                    {getVoiceSourceDisplayName(source)}
+                  </p>
+                  <p className="text-xs text-green-600">
+                    {source.type === 'upload' ? t('quickGenerate.uploadTab') : t('quickGenerate.presetTab')}
+                  </p>
                 </div>
-              ) : (
-                <>
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="mt-2 text-sm text-gray-600">
-                    {t('quickGenerate.dropOrClick')}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    WAV, MP3, M4A, FLAC, WEBM
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Preset Tab Content */}
-        {voiceSourceTab === 'preset' && (
-          <div className="space-y-3">
-            {/* Filters */}
-            <div className="flex flex-wrap gap-2">
-              <select
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">{t('preset.allLanguages')}</option>
-                {presetLanguages.map((lang) => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.name} ({lang.count})
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedGender}
-                onChange={(e) => setSelectedGender(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">{t('preset.allGenders')}</option>
-                <option value="woman">{t('preset.female')}</option>
-                <option value="man">{t('preset.male')}</option>
-              </select>
-
-              <select
-                value={showBgmOnly === null ? '' : showBgmOnly.toString()}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setShowBgmOnly(value === '' ? null : value === 'true');
-                }}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">{t('preset.allTypes')}</option>
-                <option value="false">{t('preset.withoutBgm')}</option>
-                <option value="true">{t('preset.withBgm')}</option>
-              </select>
-            </div>
-
-            {/* Selected preset display */}
-            {selectedPreset && (
-              <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span className="text-green-800 font-medium">{selectedPreset.display_name}</span>
                 <button
                   type="button"
-                  onClick={() => togglePresetPreview(selectedPreset)}
+                  onClick={() => toggleVoicePreview(index)}
                   className="p-1.5 rounded-full bg-green-100 hover:bg-green-200 text-green-700 transition-colors"
+                  title={playingVoiceIndex === index ? t('preset.stop') : t('preset.preview')}
                 >
-                  {playingPreset === selectedPreset.filename ? (
+                  {playingVoiceIndex === index ? (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
@@ -666,76 +597,191 @@ function QuickGenerateContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={clearVoiceSelection}
-                  className="ml-auto p-1.5 rounded-full bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-500 transition-colors"
+                  onClick={() => removeVoiceSource(index)}
+                  className="p-1.5 rounded-full bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-500 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add voice area (only show if less than max) */}
+        {voiceSources.length < MAX_VOICE_PROMPTS && (
+          <>
+            {/* Voice Source Tabs */}
+            <div className="flex border-b border-gray-200 mb-4">
+              <button
+                type="button"
+                onClick={() => setVoiceSourceTab('upload')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  voiceSourceTab === 'upload'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {t('quickGenerate.uploadTab')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setVoiceSourceTab('preset')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  voiceSourceTab === 'preset'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {t('quickGenerate.presetTab')}
+              </button>
+            </div>
+
+            {/* Upload Tab Content */}
+            {voiceSourceTab === 'upload' && (
+              <div>
+                <div
+                  className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors border-gray-300 hover:border-blue-400"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={(e) => handleDrop(e)}
+                  onDragOver={(e) => e.preventDefault()}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => handleFileSelect(e)}
+                    className="hidden"
+                  />
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <p className="mt-2 text-sm text-gray-600">
+                    {t('quickGenerate.dropOrClick')}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    WAV, MP3, M4A, FLAC, WEBM
+                  </p>
+                </div>
+              </div>
             )}
 
-            {/* Preset grid */}
-            {presetsLoading ? (
-              <div className="flex justify-center py-6">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              </div>
-            ) : presets.length === 0 ? (
-              <div className="text-center py-6 text-gray-500">
-                <p>{t('preset.noPresetsFound')}</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                {presets.map((preset) => (
-                  <div
-                    key={preset.filename}
-                    className={`border rounded-lg p-3 cursor-pointer transition-all ${
-                      selectedPreset?.filename === preset.filename
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                    }`}
-                    onClick={() => handleSelectPreset(preset)}
+            {/* Preset Tab Content */}
+            {voiceSourceTab === 'preset' && (
+              <div className="space-y-3">
+                {/* Filters */}
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    value={selectedLanguage}
+                    onChange={(e) => setSelectedLanguage(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-medium text-gray-900 text-sm truncate">{preset.name}</h4>
-                        <p className="text-xs text-gray-500 truncate">
-                          {getLanguageDisplayName(preset.language)}
-                          {' - '}
-                          {preset.gender === 'woman' ? t('preset.female') : t('preset.male')}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 ml-2">
-                        {preset.has_bgm && (
-                          <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                            BGM
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); togglePresetPreview(preset); }}
-                          className="p-1 rounded-full hover:bg-gray-200 text-gray-500 transition-colors"
-                        >
-                          {playingPreset === preset.filename ? (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                            </svg>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                    </div>
+                    <option value="">{t('preset.allLanguages')}</option>
+                    {presetLanguages.map((lang) => (
+                      <option key={lang.code} value={lang.code}>
+                        {lang.name} ({lang.count})
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedGender}
+                    onChange={(e) => setSelectedGender(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">{t('preset.allGenders')}</option>
+                    <option value="woman">{t('preset.female')}</option>
+                    <option value="man">{t('preset.male')}</option>
+                  </select>
+
+                  <select
+                    value={showBgmOnly === null ? '' : showBgmOnly.toString()}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setShowBgmOnly(value === '' ? null : value === 'true');
+                    }}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">{t('preset.allTypes')}</option>
+                    <option value="false">{t('preset.withoutBgm')}</option>
+                    <option value="true">{t('preset.withBgm')}</option>
+                  </select>
+                </div>
+
+                {/* Preset grid */}
+                {presetsLoading ? (
+                  <div className="flex justify-center py-6">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                   </div>
-                ))}
+                ) : presets.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500">
+                    <p>{t('preset.noPresetsFound')}</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                    {presets.map((preset) => {
+                      const isAlreadySelected = voiceSources.some(
+                        s => s.type === 'preset' && s.preset.filename === preset.filename
+                      );
+                      return (
+                        <div
+                          key={preset.filename}
+                          className={`border rounded-lg p-3 transition-all ${
+                            isAlreadySelected
+                              ? 'border-green-400 bg-green-50 opacity-60 cursor-not-allowed'
+                              : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50 cursor-pointer'
+                          }`}
+                          onClick={() => !isAlreadySelected && handleSelectPreset(preset)}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-medium text-gray-900 text-sm truncate">{preset.name}</h4>
+                              <p className="text-xs text-gray-500 truncate">
+                                {getLanguageDisplayName(preset.language)}
+                                {' - '}
+                                {preset.gender === 'woman' ? t('preset.female') : t('preset.male')}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 ml-2">
+                              {preset.has_bgm && (
+                                <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                  BGM
+                                </span>
+                              )}
+                              {isAlreadySelected ? (
+                                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); togglePresetPreview(preset); }}
+                                  className="p-1 rounded-full hover:bg-gray-200 text-gray-500 transition-colors"
+                                >
+                                  {playingPreset === preset.filename ? (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
@@ -928,7 +974,7 @@ function QuickGenerateContent() {
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={loading || !(voiceSourceTab === 'upload' ? voiceFile : selectedPreset) || !text.trim()}
+        disabled={loading || voiceSources.length === 0 || !text.trim()}
         className="w-full px-4 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {loading ? (
