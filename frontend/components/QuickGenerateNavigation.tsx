@@ -66,8 +66,12 @@ export default function QuickGenerateNavigation() {
       </a>
 
       <nav className="w-64 bg-gray-900 text-white flex flex-col h-screen fixed left-0 top-0 z-50">
-        {/* Logo/Header */}
-        <div className="p-6 border-b border-gray-800">
+        {/* Logo/Header - Clickable to go home */}
+        <div
+          className="p-6 border-b border-gray-800 cursor-pointer hover:bg-gray-800/50 transition-colors"
+          onClick={() => router.push('/')}
+          title={t('navigation.goToHome')}
+        >
           <div className="flex items-center gap-3 mb-3">
             <Image
               src="/icon-rect-pulse.svg"
@@ -116,19 +120,6 @@ export default function QuickGenerateNavigation() {
             </div>
             <span className="font-medium text-sm">{t('quickGenerate.generateVoice')}</span>
           </Link>
-        </div>
-
-        {/* Back to Projects Button */}
-        <div className="px-4 py-3 border-t border-gray-800">
-          <button
-            onClick={() => router.push('/')}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-gray-300 hover:text-white"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            <span className="text-sm font-medium">{t('quickGenerate.backToProjects')}</span>
-          </button>
         </div>
 
         {/* Footer */}

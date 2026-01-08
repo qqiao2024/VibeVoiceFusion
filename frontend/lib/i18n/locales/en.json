@@ -56,7 +56,8 @@
     "viewRunningTraining": "View running training task",
     "viewRunningQuickGeneration": "View running quick generation",
     "noRunningTasks": "No running tasks",
-    "githubTooltip": "Star & Fork on GitHub"
+    "githubTooltip": "Star & Fork on GitHub",
+    "goToHome": "Go to Home"
   },
   "project": {
     "selectProject": "Select a project to get started",

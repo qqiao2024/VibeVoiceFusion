@@ -191,23 +191,27 @@ export default function Navigation() {
       </a>
 
       <nav className="w-64 bg-gray-900 text-white flex flex-col h-screen fixed left-0 top-0 z-50">
-        {/* Logo/Header */}
-        <div className="p-6 border-b border-gray-800">
+        {/* Logo/Header - Clickable to go home */}
+        <div
+          className="p-6 border-b border-gray-800 cursor-pointer hover:bg-gray-800/50 transition-colors"
+          onClick={() => router.push('/')}
+          title={t('navigation.goToHome')}
+        >
           <div className="flex items-center gap-3 mb-3">
-          {/* Logo */}
-          <Image
-            src="/icon-rect-pulse.svg"
-            alt="VibeVoice Logo"
-            width={40}
-            height={40}
-            className="w-10 h-10 flex-shrink-0"
-          />
-          <div>
-            <h1 className="text-xl font-bold text-white">{t('app.title')}</h1>
-            <p className="text-xs text-gray-400 mt-1">{t('app.subtitle')}</p>
+            {/* Logo */}
+            <Image
+              src="/icon-rect-pulse.svg"
+              alt="VibeVoice Logo"
+              width={40}
+              height={40}
+              className="w-10 h-10 flex-shrink-0"
+            />
+            <div>
+              <h1 className="text-xl font-bold text-white">{t('app.title')}</h1>
+              <p className="text-xs text-gray-400 mt-1">{t('app.subtitle')}</p>
+            </div>
           </div>
         </div>
-      </div>
 
       {/* Current Project Display */}
       <div className="px-4 py-3 border-b border-gray-800 bg-gray-800/50 relative z-50">
