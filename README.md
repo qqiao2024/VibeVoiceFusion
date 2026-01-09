@@ -63,6 +63,17 @@ VibeVoice combines **autoregressive (AR)** and **diffusion** techniques for text
 
 ### Features
 
+#### Quick Generation
+
+- **One-Click Generation**: Generate voice without creating projects, speakers, or sessions
+- **Voice Source Options**:
+  - Upload custom audio files (WAV, MP3, M4A, FLAC, WebM) - up to 4 files
+  - Select from preset voice samples with language/gender filters
+- **Auto Mode Detection**: Automatically detects dialogue vs narration format
+- **Multi-Voice Support**: Use up to 4 voice prompts for generation
+- **Generation History**: Persistent history with expandable details, bulk delete
+- **Per-Item Progress**: Real-time progress tracking for each generating voice
+
 #### Complete Web Application
 
 - **Project Management**: Organize voice generation projects with metadata and descriptions
@@ -285,6 +296,27 @@ cd frontend
 npm run dev  # http://localhost:3000
 ```
 
+### Quick Generation (No Project Required)
+
+For quick testing without setting up projects:
+
+1. Click **"Quick Generate"** from the home page
+2. **Select Voice Source**:
+   - **Upload**: Drag & drop your audio file (supports up to 4 files)
+   - **Preset**: Choose from preset voices with language/gender filters
+3. **Enter Text**: Type dialogue (`Speaker 1: Hello`) or narration (plain text)
+4. **Configure**: Set seed, batch size (2-20), and offloading options
+5. **Generate**: Click generate and monitor per-item progress
+6. **Download**: Play or download generated audio
+
+**Key Points:**
+- Auto-detects dialogue vs narration mode
+- All speakers use the same voice in dialogue mode
+- No LoRA support (base model only)
+- History persists across sessions
+
+---
+
 ### Complete Workflow Guide
 
 This guide walks you through the complete process of creating multi-speaker voice generation from start to finish.
@@ -497,6 +529,7 @@ vibevoice/
 ├── frontend/               # Next.js web application
 │   ├── app/               # Next.js pages
 │   │   ├── page.tsx       # Home/Project selector
+│   │   ├── quick-generate/ # Quick generation (no project)
 │   │   ├── speaker-role/  # Speaker management
 │   │   ├── voice-editor/  # Dialog editor
 │   │   ├── generate-voice/ # Generation page
@@ -530,6 +563,10 @@ For complete API documentation including request/response examples, see [docs/AP
 ```
 workspace/
 ├── projects.json          # All projects metadata
+├── _quick-generate/       # Quick generation storage
+│   ├── voices/            # Uploaded voice samples
+│   ├── outputs/           # Generated audio files
+│   └── history.json       # Generation history
 └── {project-id}/
     ├── voices/
     │   ├── speakers.json  # Speaker metadata
