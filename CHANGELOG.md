@@ -5,6 +5,49 @@ All notable changes to VibeVoice will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.0] - 2026-01-09
+
+### Added
+
+- **Quick Generation**: Simplified voice generation workflow without project context
+  - One-click generation with preset voice selection
+  - Support for multiple voice prompt files
+  - Multiple prompt voices displayed in generation history detail view
+  - Task indicator for quick generation status
+  - Per-item progress tracking for each generating voice
+
+- **Navigation Enhancement**: Click logo to return to home page
+
+### Fixed
+
+- Task indicator display bugs in quick generation
+- Card status not updating in time
+- Styling consistency for deleting generation history
+
+---
+
+## [v2.1.0] - 2025-12-28
+
+### Added
+
+- **Narration Mode Editor**: New editing mode for single-speaker narration content
+  - Support for changing narrator
+  - Plain text editing without speaker prefixes
+
+- **Preset Voices Management**: Manage preset voice samples for quick speaker creation
+
+- **Auto Version Generation**: Frontend version automatically generated from git
+
+### Fixed
+
+- Offloading config save issue during inference
+- Offloading config error
+- Duplicated speaker ID issue
+- Missing tags in Docker repository
+- Dockerfile dependency errors
+
+---
+
 ## [v2.0.0] - 2025-12-19
 
 ### Added
@@ -118,5 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scripts not starting with ID 1
 - Various typos and documentation errors
 
+[v2.2.0]: https://github.com/zhao-kun/vibevoice/compare/v2.1.0...v2.2.0
+[v2.1.0]: https://github.com/zhao-kun/vibevoice/compare/v2.0.0...v2.1.0
 [v2.0.0]: https://github.com/zhao-kun/vibevoice/compare/v1.0.0...v2.0.0
 [v1.0.0]: https://github.com/zhao-kun/vibevoice/releases/tag/v1.0.0
