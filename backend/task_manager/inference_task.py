@@ -45,6 +45,8 @@ class InferenceTask(Task):
     def _task_finalize(self):
         try:
             self._update_metadata(self.inference.generation_info())
+            self.inference.finalize()
+            del self.inference
         except Exception as e:
             logger.warning(f"Ignored with the inference task finalize failed for task {self.task_id}:", exc_info=e)
             pass

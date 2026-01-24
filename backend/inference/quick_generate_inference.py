@@ -6,6 +6,7 @@ import copy
 import random
 import time
 import torch
+import gc
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -344,11 +345,11 @@ class QuickGenerateInferenceBase(ABC):
 
         _, _, _, VibeVoiceProcessor = _get_model_classes()
 
+        processor = VibeVoiceProcessor.from_pretrained(None)
         for batch_idx in range(self.batch_size):
             get_generator(self.seeds, force_set=True)
             self.visitor.visit_inference_batch_start(batch_index=batch_idx, seeds=self.seeds)
 
-            processor = VibeVoiceProcessor.from_pretrained(None)
             inputs = processor(
                 text=[full_script],
                 voice_samples=[voice_sample],
@@ -385,6 +386,41 @@ class QuickGenerateInferenceBase(ABC):
             self.seeds = random.randint(0, 2**64 - 1)
 
         self.visitor.visit_completed()
+        # clean up the model and tensors from GPU memory
+        del model
+        del processor
+        del inputs
+        del outputs
+    
+    def finalize(self):
+        """Clean up GPU memory after inference."""
+        if hasattr(self, 'model') and self.model is not None:
+            # Clean up offloader first (releases offloaded layer references)
+            if hasattr(self.model, 'offloader') and self.model.offloader is not None:
+                try:
+                    self.model.offloader.cleanup()
+                    self.model.offloader = None
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup offloader: {e}")
+
+            # Move model to CPU first to free VRAM
+            try:
+                self.model.to('cpu')
+            except Exception:
+                pass  # Model might already be partially on CPU
+
+            del self.model
+            self.model = None
+
+        # Force Python garbage collection to release references
+        gc.collect()
+
+        # Synchronize CUDA to ensure all operations complete
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+
+        logger.info("GPU memory cleanup completed")        
 
 
 class QuickGenerateInferenceEngine(QuickGenerateInferenceBase):

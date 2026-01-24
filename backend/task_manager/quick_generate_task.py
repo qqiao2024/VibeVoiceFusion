@@ -50,6 +50,8 @@ class QuickGenerateTask(Task):
         """Update history with final generation info"""
         try:
             self._update_history(self.inference.generation_info())
+            self.inference.finalize()
+            del self.inference
         except Exception as e:
             logger.warning(f"Failed to finalize quick generate task {self.task_id}: {e}")
 
