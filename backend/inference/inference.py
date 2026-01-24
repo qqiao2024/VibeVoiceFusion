@@ -214,10 +214,10 @@ class InferenceBase(ABC):
                                            unique_speaker_names=unique_speaker_names,
                                            voice_sample=voice_sample,
                                            max_speaker_id=max_speaker_id)
+        processor = VibeVoiceProcessor.from_pretrained(None)
         for batch_idx in range(self.batch_size):
             get_generator(self.seeds, force_set=True)
             self.visitor.visit_inference_batch_start(batch_index=batch_idx, seeds=self.seeds)
-            processor = VibeVoiceProcessor.from_pretrained(None)
             inputs = processor(text=[full_script],
                                voice_samples=[voice_sample],
                                padding=True,
@@ -249,12 +249,23 @@ class InferenceBase(ABC):
             self.seeds = random.randint(0, 2**64 - 1)
 
         self.visitor.visit_completed()
+        # clean up the model from memory
+        # clean up the model and tensors from GPU memory
+        del model
+        del processor
+        del inputs
+        del outputs
 
     def success(self, message: str):
         self.visitor.visit_completed(message)
 
     def generation_info(self) -> Dict[str, Any]:
         return self.get_generation().to_dict()
+    
+    def finalize(self):
+        if hasattr(self, 'model'):
+            del self.model
+        torch.cuda.empty_cache()
 
 class InferenceEngine(InferenceBase):
     def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
