@@ -1,6 +1,7 @@
 import base64
 import copy
 from datetime import datetime
+import gc
 import random
 from typing import Union
 import time
@@ -263,9 +264,34 @@ class InferenceBase(ABC):
         return self.get_generation().to_dict()
     
     def finalize(self):
-        if hasattr(self, 'model'):
+        """Clean up GPU memory after inference."""
+        if hasattr(self, 'model') and self.model is not None:
+            # Clean up offloader first (releases offloaded layer references)
+            if hasattr(self.model, 'offloader') and self.model.offloader is not None:
+                try:
+                    self.model.offloader.cleanup()
+                    self.model.offloader = None
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup offloader: {e}")
+
+            # Move model to CPU first to free VRAM
+            try:
+                self.model.to('cpu')
+            except Exception:
+                pass  # Model might already be partially on CPU
+
             del self.model
-        torch.cuda.empty_cache()
+            self.model = None
+
+        # Force Python garbage collection to release references
+        gc.collect()
+
+        # Synchronize CUDA to ensure all operations complete
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+
+        logger.info("GPU memory cleanup completed")
 
 class InferenceEngine(InferenceBase):
     def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
