@@ -17,8 +17,9 @@ http://localhost:9527/api/v1
 5. [Tasks API (Unified)](#tasks-api-unified)
 6. [Generation API](#generation-api)
 7. [Quick Generate API](#quick-generate-api)
-8. [Dataset Management API](#dataset-management-api)
-9. [Training Management API](#training-management-api)
+8. [OpenAI-Compatible TTS API](#openai-compatible-tts-api)
+9. [Dataset Management API](#dataset-management-api)
+10. [Training Management API](#training-management-api)
 
 ---
 
@@ -1461,6 +1462,143 @@ Quick Generate supports batch generation with different random seeds:
       }
     ]
   }
+}
+```
+
+---
+
+# OpenAI-Compatible TTS API
+
+## Overview
+
+VibeVoice provides an OpenAI-compatible Text-to-Speech endpoint at `POST /v1/audio/speech`, enabling existing OpenAI TTS clients and SDKs to use VibeVoice as a drop-in replacement.
+
+**Base URL:** `http://localhost:9527/v1` (note: `/v1`, not `/api/v1`)
+
+**Key Differences from OpenAI:**
+- Voice selection uses VibeVoice preset voice names (e.g., "Alice", "Bowen") instead of OpenAI voices
+- Synchronous blocking: waits for GPU generation to complete before returning
+- Returns 503 if the task queue is busy (single-threaded GPU queue)
+- `speed` parameter is accepted but ignored
+
+## Authentication
+
+- Accepts `Authorization: Bearer <key>` header
+- If `OPENAI_COMPAT_API_KEY` environment variable is set, the key is validated
+- If the env var is not set, authentication is skipped (open access)
+
+## Endpoints
+
+### 1. Create Speech
+
+**POST** `/v1/audio/speech`
+
+Generate speech from text using a preset voice. Returns binary audio data directly.
+
+**Request Body (JSON):**
+```json
+{
+  "model": "vibevoice-7b",
+  "input": "Hello, this is a test.",
+  "voice": "Alice",
+  "response_format": "wav",
+  "speed": 1.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `model` | string | Yes | Model name (see Model Mapping below) |
+| `input` | string | Yes | Text to speak (max 4096 characters) |
+| `voice` | string | Yes | Preset voice name (case-insensitive) |
+| `response_format` | string | No | Output format: `wav` (default), `mp3`, `flac` |
+| `speed` | number | No | Accepted but ignored (not supported by engine) |
+
+**Model Mapping:**
+
+| Model Name | VibeVoice model_dtype | Description |
+|------------|----------------------|-------------|
+| `vibevoice-7b` | `bf16` | Standard quality, faster |
+| `vibevoice-7b-hd` | `float8_e4m3fn` | Higher precision |
+| `tts-1` | `bf16` | OpenAI compatibility alias |
+| `tts-1-hd` | `float8_e4m3fn` | OpenAI compatibility alias |
+
+**Response (200 OK):**
+- Content-Type: `audio/wav`, `audio/mpeg`, or `audio/flac`
+- Binary audio data
+
+**Error Responses (OpenAI-compatible format):**
+
+```json
+{
+  "error": {
+    "message": "Descriptive error message",
+    "type": "invalid_request_error",
+    "code": "error_code"
+  }
+}
+```
+
+| Status | Type | Code | Description |
+|--------|------|------|-------------|
+| 400 | `invalid_request_error` | `missing_model` | Missing `model` parameter |
+| 400 | `invalid_request_error` | `missing_input` | Missing `input` parameter |
+| 400 | `invalid_request_error` | `missing_voice` | Missing `voice` parameter |
+| 400 | `invalid_request_error` | `input_too_long` | Input exceeds 4096 characters |
+| 400 | `invalid_request_error` | `unsupported_format` | Unsupported response_format |
+| 400 | `invalid_request_error` | `model_not_found` | Unknown model name |
+| 400 | `invalid_request_error` | `voice_not_found` | Unknown voice name |
+| 401 | `authentication_error` | `invalid_api_key` | Invalid API key |
+| 503 | `server_error` | - | Task queue is busy |
+| 504 | `server_error` | - | Generation timed out |
+| 500 | `server_error` | - | Internal error |
+
+**Examples:**
+
+```bash
+# Basic usage
+curl http://localhost:9527/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"vibevoice-7b","input":"Hello world","voice":"Alice"}' \
+  --output speech.wav
+
+# With API key and MP3 format
+curl http://localhost:9527/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{"model":"tts-1","input":"Hello world","voice":"Alice","response_format":"mp3"}' \
+  --output speech.mp3
+```
+
+```python
+# Using OpenAI Python SDK
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:9527/v1", api_key="unused")
+response = client.audio.speech.create(
+    model="vibevoice-7b",
+    voice="Alice",
+    input="Hello, this is a test."
+)
+response.stream_to_file("output.wav")
+```
+
+### 2. List Models
+
+**GET** `/v1/models`
+
+List available models in OpenAI-compatible format.
+
+**Response (200 OK):**
+```json
+{
+  "object": "list",
+  "data": [
+    {"id": "tts-1", "object": "model", "created": 0, "owned_by": "vibevoice"},
+    {"id": "tts-1-hd", "object": "model", "created": 0, "owned_by": "vibevoice"},
+    {"id": "vibevoice-7b", "object": "model", "created": 0, "owned_by": "vibevoice"},
+    {"id": "vibevoice-7b-hd", "object": "model", "created": 0, "owned_by": "vibevoice"}
+  ]
 }
 ```
 
