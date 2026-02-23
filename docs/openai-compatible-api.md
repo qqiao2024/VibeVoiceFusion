@@ -57,6 +57,8 @@ voice: "Bowen"  →  Finds preset voice named "Bowen"  →  Uses its .wav file
 | `tts-1` | `bf16` | OpenAI alias for compatibility |
 | `tts-1-hd` | `float8_e4m3fn` | OpenAI alias for compatibility |
 
+> **Fallback behavior**: If an unrecognized model name is provided, it silently falls back to `vibevoice-7b` (bf16) instead of returning an error. A warning is logged server-side.
+
 ### Response Format
 
 | Format | OpenAI | VibeVoice Compat | Notes |
@@ -93,9 +95,141 @@ OpenAI error format:
 
 5. **Multi-speaker**: VibeVoice supports multi-speaker dialogue in a single request. The OpenAI-compat API only exposes single-speaker narration mode.
 
+## Authentication
+
+The API supports optional Bearer token authentication, controlled by the `OPENAI_COMPAT_API_KEY` environment variable.
+
+### Setting Up Authentication
+
+```bash
+# Set the API key (any string you choose)
+export OPENAI_COMPAT_API_KEY="sk-your-secret-key-here"
+
+# Start the server
+python backend/run.py
+```
+
+### Behavior
+
+| `OPENAI_COMPAT_API_KEY` env var | Request has valid Bearer token | Result |
+|--------------------------------|-------------------------------|--------|
+| **Not set** | N/A | Access allowed (open access, warning logged) |
+| Set | Yes (`Authorization: Bearer <key>`) | Access allowed |
+| Set | No or invalid token | `401 Unauthorized` |
+
+When the env var is not set, **all requests are allowed without authentication** and a warning is logged on each request. This is suitable for local development but **not recommended for production or public-facing deployments**.
+
+### Token Format
+
+The API accepts the standard OpenAI `Authorization` header format:
+
+```
+Authorization: Bearer sk-your-secret-key-here
+```
+
+Both `Bearer <key>` and raw `<key>` formats are accepted, but `Bearer` prefix is recommended for SDK compatibility.
+
+## Endpoints
+
+### `POST /v1/audio/speech` — Generate Speech
+
+The primary TTS endpoint. Accepts a JSON request body and returns binary audio data synchronously. The server blocks until generation is complete (up to 300 seconds).
+
+### `GET /v1/models` — List Available Models
+
+Returns a list of available models in OpenAI-compatible format.
+
+**Response:**
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "tts-1", "object": "model", "created": 0, "owned_by": "vibevoice" },
+    { "id": "tts-1-hd", "object": "model", "created": 0, "owned_by": "vibevoice" },
+    { "id": "vibevoice-7b", "object": "model", "created": 0, "owned_by": "vibevoice" },
+    { "id": "vibevoice-7b-hd", "object": "model", "created": 0, "owned_by": "vibevoice" }
+  ]
+}
+```
+
+This endpoint does not require authentication.
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_COMPAT_API_KEY` | *(not set)* | API key for Bearer token auth. When unset, all requests are allowed without authentication. |
+
+### Server-Side Constants
+
+These are defined in `backend/services/openai_compat_service.py`:
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `DEFAULT_TIMEOUT` | `300` seconds | Maximum time the server will block waiting for generation to complete. Returns `504 Gateway Timeout` if exceeded. |
+| `POLL_INTERVAL` | `0.5` seconds | Internal polling frequency when checking generation status. |
+| Max input length | `4096` characters | Maximum allowed length for the `input` text field. |
+
+### Client-Side Timeout Recommendations
+
+Since the server blocks synchronously for the entire generation duration, **clients must set appropriate timeouts**:
+
+```python
+# Python SDK — set a longer timeout
+import httpx
+client = OpenAI(
+    base_url="http://localhost:9527/v1",
+    api_key="sk-your-key",
+    timeout=httpx.Timeout(360.0, connect=10.0),  # 6 min read timeout
+)
+```
+
+```javascript
+// Node.js SDK — set a longer timeout
+const client = new OpenAI({
+    baseURL: "http://localhost:9527/v1",
+    apiKey: "sk-your-key",
+    timeout: 360000,  // 6 minutes in milliseconds
+});
+```
+
+```bash
+# curl — set a longer timeout
+curl --max-time 360 http://localhost:9527/v1/audio/speech \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "vibevoice-7b", "input": "Hello", "voice": "Alice"}' \
+  --output speech.wav
+```
+
+## HTTP Status Codes
+
+| Code | Meaning | When |
+|------|---------|------|
+| `200` | Success | Audio generated and returned as binary data |
+| `400` | Bad Request | Missing required parameters, unsupported format, invalid JSON, input too long |
+| `401` | Unauthorized | `OPENAI_COMPAT_API_KEY` is set but request has no/invalid Bearer token |
+| `500` | Internal Server Error | Generation failed, voice file not found, audio conversion failed |
+| `503` | Service Unavailable | GPU task queue is busy with another generation request |
+| `504` | Gateway Timeout | Generation did not complete within the 300-second timeout |
+
+### Error Codes Reference
+
+| HTTP Status | `error.code` | Description |
+|-------------|-------------|-------------|
+| 400 | `missing_model` | `model` parameter not provided |
+| 400 | `missing_input` | `input` parameter not provided |
+| 400 | `missing_voice` | `voice` parameter not provided |
+| 400 | `input_too_long` | Input text exceeds 4096 characters |
+| 400 | `unsupported_format` | Requested format not in (wav, mp3, flac) |
+| 401 | `invalid_api_key` | Bearer token missing or does not match |
+| 500 | `voice_not_found` | Preset voice name not recognized |
+
 ## VibeVoice Extension Parameters
 
-The API accepts additional VibeVoice-specific parameters that OpenAI clients will simply ignore:
+> **Note**: The following extension parameters are defined in the design but **not yet implemented** in the current API. They are reserved for future use. Currently, `seeds` defaults to `42` and `offloading` follows the server's global configuration.
 
 ```json
 {
@@ -104,7 +238,6 @@ The API accepts additional VibeVoice-specific parameters that OpenAI clients wil
   "voice": "Alice",
   "response_format": "wav",
 
-  // VibeVoice extensions (optional)
   "seeds": 42,
   "cfg_scale": 1.3,
   "offloading": "balanced"
@@ -114,7 +247,9 @@ The API accepts additional VibeVoice-specific parameters that OpenAI clients wil
 ## Usage Examples
 
 ### curl
+
 ```bash
+# Without authentication (when OPENAI_COMPAT_API_KEY is not set)
 curl http://localhost:9527/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
@@ -122,40 +257,64 @@ curl http://localhost:9527/v1/audio/speech \
     "input": "Hello, this is VibeVoice speaking.",
     "voice": "Alice"
   }' \
+  --max-time 360 \
   --output speech.wav
+
+# With authentication
+curl http://localhost:9527/v1/audio/speech \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "vibevoice-7b",
+    "input": "Hello, this is VibeVoice speaking.",
+    "voice": "Alice",
+    "response_format": "mp3"
+  }' \
+  --max-time 360 \
+  --output speech.mp3
+
+# List available models
+curl http://localhost:9527/v1/models
 ```
 
 ### OpenAI Python SDK
+
 ```python
+import httpx
 from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:9527/v1",
-    api_key="unused"  # Required by SDK but not validated
+    api_key="sk-your-key",  # Or any string if auth is disabled
+    timeout=httpx.Timeout(360.0, connect=10.0),
 )
 
 response = client.audio.speech.create(
     model="vibevoice-7b",
     voice="Alice",
-    input="Hello, this is VibeVoice speaking."
+    input="Hello, this is VibeVoice speaking.",
+    response_format="wav",
 )
 
 response.stream_to_file("output.wav")
 ```
 
 ### OpenAI Node.js SDK
+
 ```javascript
 import OpenAI from "openai";
+import fs from "fs";
 
 const client = new OpenAI({
     baseURL: "http://localhost:9527/v1",
-    apiKey: "unused"
+    apiKey: "sk-your-key",  // Or any string if auth is disabled
+    timeout: 360000,        // 6 minutes
 });
 
 const response = await client.audio.speech.create({
     model: "vibevoice-7b",
     voice: "Alice",
-    input: "Hello, this is VibeVoice speaking."
+    input: "Hello, this is VibeVoice speaking.",
 });
 
 const buffer = Buffer.from(await response.arrayBuffer());
@@ -164,10 +323,12 @@ await fs.promises.writeFile("output.wav", buffer);
 
 ## Limitations
 
-- No streaming support (full audio returned after generation)
-- Single concurrent request (503 if queue busy)
-- Higher latency than OpenAI (~10-60s vs ~1-3s)
-- Limited output formats (wav, mp3, flac only)
-- Speed parameter accepted but ignored
-- Instructions parameter not supported
-- No billing/usage tracking
+- **No streaming support** — full audio is returned after generation completes; no chunked transfer encoding
+- **Single concurrent request** — GPU task queue allows only one generation at a time; additional requests get `503`
+- **Higher latency** — generation takes ~10-60+ seconds vs OpenAI's ~1-3 seconds; clients must set appropriate timeouts
+- **Limited output formats** — only `wav`, `mp3`, `flac` supported; `opus`, `aac`, `pcm` return `400`
+- **`speed` parameter ignored** — accepted for compatibility but has no effect on generation
+- **`instructions` parameter not supported** — this is an OpenAI GPT-4o-mini-tts-only feature
+- **No billing/usage tracking** — no token counting or usage metering
+- **Extension parameters not yet wired** — `seeds`, `cfg_scale`, `offloading` in request body are currently ignored (reserved for future implementation)
+- **mp3/flac conversion requires ffmpeg** — if `ffmpeg` is not installed, requesting these formats will return `500`
