@@ -1511,7 +1511,7 @@ Generate speech from text using a preset voice. Returns binary audio data direct
 | `model` | string | Yes | Model name (see Model Mapping below) |
 | `input` | string | Yes | Text to speak (max 4096 characters) |
 | `voice` | string | Yes | Preset voice name (case-insensitive) |
-| `response_format` | string | No | Output format: `wav` (default), `mp3`, `flac` |
+| `response_format` | string | No | Output format: `wav` (default), `mp3`, `flac`, `opus`, `aac`, `pcm` |
 | `speed` | number | No | Accepted but ignored (not supported by engine) |
 
 **Model Mapping:**
@@ -1524,7 +1524,7 @@ Generate speech from text using a preset voice. Returns binary audio data direct
 | `tts-1-hd` | `float8_e4m3fn` | OpenAI compatibility alias |
 
 **Response (200 OK):**
-- Content-Type: `audio/wav`, `audio/mpeg`, or `audio/flac`
+- Content-Type: `audio/wav`, `audio/mpeg`, `audio/flac`, `audio/opus`, `audio/aac`, or `audio/pcm`
 - Binary audio data
 
 **Error Responses (OpenAI-compatible format):**

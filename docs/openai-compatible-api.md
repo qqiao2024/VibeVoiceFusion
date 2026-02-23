@@ -28,7 +28,7 @@ VibeVoice OpenAI-Compat (Synchronous wrapper):
 | `model` | string (required) | `model_dtype` | `tts-1`→bf16, `tts-1-hd`→float8 |
 | `input` | string (required) | `text` | Max 4096 chars in OpenAI, no limit in VibeVoice |
 | `voice` | string (required) | Preset voice name | OpenAI has fixed set; VibeVoice uses preset voices |
-| `response_format` | string | N/A (wav only) | Need conversion for mp3/flac |
+| `response_format` | string | N/A (wav only) | Conversion via ffmpeg for other formats |
 | `speed` | number | N/A | Not supported by VibeVoice engine |
 | `instructions` | string | N/A | GPT-4o-mini-tts only, not applicable |
 | N/A | | `seeds` | VibeVoice-specific: random seed |
@@ -65,10 +65,10 @@ voice: "Bowen"  →  Finds preset voice named "Bowen"  →  Uses its .wav file
 |--------|--------|-----------------|-------|
 | `mp3` | Default | Supported (via ffmpeg) | Requires ffmpeg |
 | `wav` | Supported | Native output | No conversion needed |
-| `flac` | Supported | Supported (via soundfile) | |
-| `opus` | Supported | Not supported | Return 400 |
-| `aac` | Supported | Not supported | Return 400 |
-| `pcm` | Supported | Not supported | Return 400 |
+| `flac` | Supported | Supported (via ffmpeg) | Requires ffmpeg |
+| `opus` | Supported | Supported (via ffmpeg) | Encoded with libopus in OGG container |
+| `aac` | Supported | Supported (via ffmpeg) | Requires ffmpeg |
+| `pcm` | Supported | Supported (via ffmpeg) | 16-bit signed LE, 24kHz mono |
 
 ### Error Format
 
@@ -223,7 +223,7 @@ curl --max-time 360 http://localhost:9527/v1/audio/speech \
 | 400 | `missing_input` | `input` parameter not provided |
 | 400 | `missing_voice` | `voice` parameter not provided |
 | 400 | `input_too_long` | Input text exceeds 4096 characters |
-| 400 | `unsupported_format` | Requested format not in (wav, mp3, flac) |
+| 400 | `unsupported_format` | Requested format not in (wav, mp3, flac, opus, aac, pcm) |
 | 401 | `invalid_api_key` | Bearer token missing or does not match |
 | 500 | `voice_not_found` | Preset voice name not recognized |
 
@@ -272,6 +272,19 @@ curl http://localhost:9527/v1/audio/speech \
   }' \
   --max-time 360 \
   --output speech.mp3
+
+# With opus format
+curl http://localhost:9527/v1/audio/speech \
+  -H "Authorization: Bearer sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "vibevoice-7b",
+    "input": "Hello, this is VibeVoice speaking.",
+    "voice": "Alice",
+    "response_format": "opus"
+  }' \
+  --max-time 360 \
+  --output speech.ogg
 
 # List available models
 curl http://localhost:9527/v1/models
@@ -326,9 +339,9 @@ await fs.promises.writeFile("output.wav", buffer);
 - **No streaming support** — full audio is returned after generation completes; no chunked transfer encoding
 - **Single concurrent request** — GPU task queue allows only one generation at a time; additional requests get `503`
 - **Higher latency** — generation takes ~10-60+ seconds vs OpenAI's ~1-3 seconds; clients must set appropriate timeouts
-- **Limited output formats** — only `wav`, `mp3`, `flac` supported; `opus`, `aac`, `pcm` return `400`
+- **All OpenAI output formats supported** — `wav` (native), `mp3`, `flac`, `opus`, `aac`, `pcm` (all non-wav formats require ffmpeg)
 - **`speed` parameter ignored** — accepted for compatibility but has no effect on generation
 - **`instructions` parameter not supported** — this is an OpenAI GPT-4o-mini-tts-only feature
 - **No billing/usage tracking** — no token counting or usage metering
 - **Extension parameters not yet wired** — `seeds`, `cfg_scale`, `offloading` in request body are currently ignored (reserved for future implementation)
-- **mp3/flac conversion requires ffmpeg** — if `ffmpeg` is not installed, requesting these formats will return `500`
+- **Non-wav format conversion requires ffmpeg** — if `ffmpeg` is not installed, requesting `mp3`, `flac`, `opus`, `aac`, or `pcm` formats will return `500`

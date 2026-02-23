@@ -29,10 +29,14 @@ MODEL_MAPPING = {
 }
 
 # Supported output formats and their MIME types
+# Matches OpenAI's supported formats: mp3, opus, aac, flac, wav, pcm
 FORMAT_MIME_TYPES = {
     'wav': 'audio/wav',
     'mp3': 'audio/mpeg',
     'flac': 'audio/flac',
+    'opus': 'audio/opus',
+    'aac': 'audio/aac',
+    'pcm': 'audio/pcm',
 }
 
 # Polling and timeout configuration
@@ -190,7 +194,10 @@ class OpenAICompatService:
 
         Returns the path to the converted file, or None on failure.
         """
-        target_path = source_path.with_suffix(f'.{target_format}')
+        # Map format to file extension (opus uses .ogg container, pcm uses .raw)
+        ext_map = {'opus': 'ogg', 'pcm': 'raw'}
+        ext = ext_map.get(target_format, target_format)
+        target_path = source_path.with_suffix(f'.{ext}')
 
         try:
             cmd = ['ffmpeg', '-y', '-i', str(source_path)]
@@ -199,6 +206,13 @@ class OpenAICompatService:
                 cmd.extend(['-codec:a', 'libmp3lame', '-qscale:a', '2'])
             elif target_format == 'flac':
                 cmd.extend(['-codec:a', 'flac'])
+            elif target_format == 'opus':
+                cmd.extend(['-codec:a', 'libopus', '-b:a', '96k'])
+            elif target_format == 'aac':
+                cmd.extend(['-codec:a', 'aac', '-b:a', '128k'])
+            elif target_format == 'pcm':
+                # PCM: 16-bit signed little-endian, 24kHz mono (OpenAI convention)
+                cmd.extend(['-f', 's16le', '-acodec', 'pcm_s16le', '-ar', '24000', '-ac', '1'])
 
             cmd.append(str(target_path))
 

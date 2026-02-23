@@ -5,7 +5,6 @@ Implements POST /v1/audio/speech for drop-in compatibility with OpenAI TTS clien
 This uses a separate blueprint registered at /v1 (not /api/v1) to match the OpenAI URL scheme.
 """
 from flask import Blueprint, request, jsonify, send_file, current_app
-from pathlib import Path
 
 from backend.services.openai_compat_service import (
     OpenAICompatService, MODEL_MAPPING, FORMAT_MIME_TYPES,
@@ -51,7 +50,7 @@ def create_speech():
             "model": "vibevoice-7b",         // Required
             "input": "Hello world",           // Required, max 4096 chars
             "voice": "Alice",                 // Required, preset voice name
-            "response_format": "wav",         // Optional, default: wav
+            "response_format": "wav",         // Optional, default: wav (supports: wav, mp3, flac, opus, aac, pcm)
             "speed": 1.0                      // Optional, accepted but ignored
         }
 
@@ -142,11 +141,14 @@ def create_speech():
 
     # --- Return audio ---
     mime_type = FORMAT_MIME_TYPES[response_format]
+    # Map format to download extension (opus→ogg, pcm→raw)
+    ext_map = {'opus': 'ogg', 'pcm': 'raw'}
+    ext = ext_map.get(response_format, response_format)
     return send_file(
         str(audio_path),
         mimetype=mime_type,
         as_attachment=False,
-        download_name=f"speech.{response_format}",
+        download_name=f"speech.{ext}",
     )
 
 
