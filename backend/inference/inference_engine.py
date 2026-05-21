@@ -1,0 +1,506 @@
+import base64
+import copy
+from datetime import datetime
+import gc
+import random
+from typing import Union
+import time
+import torch
+
+from abc import ABC, abstractmethod
+from flask import current_app
+from pathlib import Path
+from vibevoice.generation.visitor import GenerationVisitor
+from vibevoice.modular.modeling_vibevoice_inference import VibeVoiceForConditionalInference, VibeVoiceGenerationOutput
+from vibevoice.modular.custom_offloading_utils import OffloadConfig
+from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
+from config.configuration_vibevoice import DEFAULT_CONFIG, VibeVoiceConfig
+from backend.models.generation import Generation
+from backend.services.speaker_service import SpeakerService
+from backend.services.dialog_session_service import DialogSessionService
+from util.rand_init import get_generator
+from typing import Dict, Any, Optional
+from util.logger import get_logger
+
+# DUAL-GPU PATCH: new import
+from vibevoice.modular.dual_gpu_offloading import (
+    DualGPULayerSplitter, is_dual_gpu_available, make_dual_gpu_config
+)
+
+logger = get_logger(__name__)
+
+# Preset mapping for offloading configurations
+OFFLOAD_PRESETS = {
+    "balanced": OffloadConfig(
+        enabled=True,
+        num_layers_on_gpu=12,
+        pin_memory=True,
+        prefetch_next_layer=True,
+        profile=True,
+    ),
+    "aggressive": OffloadConfig(
+        enabled=True,
+        num_layers_on_gpu=8,
+        pin_memory=True,
+        prefetch_next_layer=True,
+        profile=True,
+    ),
+    "extreme": OffloadConfig(
+        enabled=True,
+        num_layers_on_gpu=4,
+        pin_memory=True,
+        prefetch_next_layer=True,
+        profile=True,
+    ),
+    # DUAL-GPU PATCH: sentinel value — triggers DualGPULayerSplitter instead
+    "dual_gpu": None,
+}
+
+
+class FakeModel:
+    def __init__(self):
+        pass
+
+    def generate(self, **kwargs) -> Union[torch.LongTensor, VibeVoiceGenerationOutput]:
+        visitor: GenerationVisitor = kwargs.get("generation_visitor", None)
+        steps = random.randint(20, 100)
+        for i in range(steps):
+            if visitor is not None:
+                visitor.visit_inference_step_start(current_step=i+1, total_steps=steps)
+            time.sleep(random.uniform(0.1, 0.5))
+            if visitor is not None:
+                visitor.visit_inference_step_end(current_step=i+1, total_steps=steps)
+        return torch.randn(1, 16000 * 5)
+
+
+class InferenceBase(ABC):
+    def __init__(self, generation: Generation, speaker_service: SpeakerService,
+                 dialog_service: DialogSessionService, meta_file_path: str):
+        self.visitor: GenerationVisitor = generation
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.speaker_service = speaker_service
+        self.dialog_service = dialog_service
+        self.model_file = current_app.config['MODEL_PATH']
+        self.meta_file_path = meta_file_path
+        self.lora_model_path = generation.lora_model_path
+        self.lora_weight = generation.lora_weight
+        self.model_dtype = generation.model_dtype
+        self.attn_implementation = generation.attn_implementation
+        self.batch_size = generation.batch_size if generation.is_multi_generation else 1
+        self.seeds = generation.seeds
+        self.project_dir = generation.project_dir
+        self.request_id = generation.request_id
+        self.session_id = generation.session_id
+        self.cfg_scale = generation.cfg_scale
+        self._generation = generation
+
+    def get_generation(self) -> Generation:
+        return copy.deepcopy(self._generation)
+
+    @staticmethod
+    def create(generation: Generation, speaker_service: SpeakerService,
+               dialog_service: DialogSessionService, meta_file_path: str,
+               offload_config: Optional[Dict[str, Any]] = None,
+               fake: bool = False) -> 'InferenceBase':
+        offload_config_obj = None
+        # DUAL-GPU PATCH: track whether dual_gpu preset was requested
+        use_dual_gpu = False
+
+        if offload_config and offload_config.get('enabled', False):
+            mode = offload_config.get('mode', 'preset')
+
+            if mode == 'preset':
+                preset = offload_config.get('preset', 'balanced')
+                # DUAL-GPU PATCH: handle dual_gpu preset
+                if preset == 'dual_gpu':
+                    use_dual_gpu = True
+                    offload_config_obj = None  # no CPU offloading
+                else:
+                    offload_config_obj = OFFLOAD_PRESETS.get(preset)
+                    if not offload_config_obj:
+                        logger.warning(f"Unknown preset '{preset}', using 'balanced'")
+                        offload_config_obj = OFFLOAD_PRESETS['balanced']
+
+            elif mode == 'manual':
+                num_gpu_layers = offload_config.get('num_gpu_layers', 20)
+                offload_config_obj = OffloadConfig(
+                    enabled=True,
+                    num_layers_on_gpu=num_gpu_layers,
+                    pin_memory=True,
+                    prefetch_next_layer=True,
+                    profile=True,
+                )
+
+        if fake:
+            return FakeInferenceEngine(
+                generation, speaker_service, dialog_service, meta_file_path,
+                offload_config=offload_config_obj
+            )
+
+        return InferenceEngine(
+            generation, speaker_service, dialog_service, meta_file_path,
+            offload_config=offload_config_obj,
+            use_dual_gpu=use_dual_gpu,  # DUAL-GPU PATCH
+        )
+
+    @abstractmethod
+    def _load_model(self, dtype: torch.dtype, config: str = None):
+        pass
+
+    def failure(self, message: str, failure_type: str):
+        self.visitor.visit_failed(message, failure_type)
+
+    @abstractmethod
+    def _save_audio(self, outputs: Union[torch.LongTensor, VibeVoiceGenerationOutput],
+                    processor: VibeVoiceProcessor,
+                    generation_time: float,
+                    input_tokens: int,
+                    batch_index: int,
+                    **kwargs) -> None:
+        pass
+
+    def run_inference(self):
+        self.visitor.visit_preprocessing(datetime.now().timestamp())
+
+        session = self.dialog_service.get_session(self.session_id)
+        if not session:
+            raise RuntimeError(f"Dialog session with ID '{self.session_id}' not found")
+
+        if session.mode == "narration":
+            txt_content, scripts, narrator_speaker_id = self.dialog_service.parse_narration_script(self.session_id)
+            if not scripts:
+                raise RuntimeError("No content found in the narration session.")
+            unique_speaker_names = [narrator_speaker_id]
+            voice_names = [narrator_speaker_id]
+            max_speaker_id = 1
+            logger.info(f"Narration mode: narrator={narrator_speaker_id}, paragraphs={len(scripts)}")
+        else:
+            txt_content, scripts, unique_speaker_names, max_speaker_id = self.dialog_service.parse_session_txt_script(self.session_id)
+            if not scripts or not unique_speaker_names:
+                raise RuntimeError("No scripts, speaker_numbers found for the specified dialog session.")
+            voice_names = []
+            for i in range(max_speaker_id):
+                voice_names.append(f"Speaker {i+1}")
+            logger.info(f"Dialogue mode: max_speaker_id={max_speaker_id}, unique speakers: {unique_speaker_names}")
+
+        voice_sample = self.speaker_service.get_speakers_filepath(voice_names)
+        logger.info(f"Voice samples: {voice_sample}")
+
+        full_script = '\n'.join(scripts)
+        full_script = full_script.replace("\u2019", "'")
+
+        load_dtype = torch.bfloat16
+        if self.model_dtype == "float8_e4m3fn":
+            load_dtype = torch.float8_e4m3fn
+
+        logger.info(f"Loading model with dtype: {load_dtype}, attn_implementation: {self.attn_implementation}")
+
+        model = self._load_model(dtype=load_dtype)
+
+        self.visitor.visit_inference_start(scripts=scripts,
+                                           unique_speaker_names=unique_speaker_names,
+                                           voice_sample=voice_sample,
+                                           max_speaker_id=max_speaker_id)
+        processor = VibeVoiceProcessor.from_pretrained(None)
+        for batch_idx in range(self.batch_size):
+            get_generator(self.seeds, force_set=True)
+            self.visitor.visit_inference_batch_start(batch_index=batch_idx, seeds=self.seeds)
+            inputs = processor(text=[full_script],
+                               voice_samples=[voice_sample],
+                               padding=True,
+                               return_tensors="pt",
+                               return_attention_mask=True)
+
+            for k, v in inputs.items():
+                if torch.is_tensor(v):
+                    inputs[k] = v.to(self.device)
+
+            start_time = time.time()
+            outputs = model.generate(**inputs,
+                                     max_new_tokens=None,
+                                     cfg_scale=self.cfg_scale,
+                                     tokenizer=processor.tokenizer,
+                                     generation_config={'do_sample': False},
+                                     verbose=False,
+                                     generation_visitor=self.visitor)
+
+            generation_time = time.time() - start_time
+            self._save_audio(outputs, processor, generation_time,
+                             inputs['input_ids'].shape[1],
+                             unique_speaker_names=unique_speaker_names,
+                             number_of_segments=len(scripts),
+                             batch_index=batch_idx)
+
+            self.visitor.visit_inference_batch_end(batch_index=batch_idx)
+            self.seeds = random.randint(0, 2**64 - 1)
+
+        self.visitor.visit_completed()
+        del model
+        del processor
+        del inputs
+        del outputs
+
+    def success(self, message: str):
+        self.visitor.visit_completed(message)
+
+    def generation_info(self) -> Dict[str, Any]:
+        return self.get_generation().to_dict()
+
+    def finalize(self):
+        """Clean up GPU memory after inference."""
+        if hasattr(self, 'model') and self.model is not None:
+            if hasattr(self.model, 'offloader') and self.model.offloader is not None:
+                try:
+                    self.model.offloader.cleanup()
+                    self.model.offloader = None
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup offloader: {e}")
+
+            # DUAL-GPU PATCH: cleanup splitter
+            if hasattr(self, 'dual_gpu_splitter') and self.dual_gpu_splitter is not None:
+                try:
+                    self.dual_gpu_splitter.cleanup()
+                    self.dual_gpu_splitter = None
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup dual_gpu_splitter: {e}")
+
+            try:
+                self.model.to('cpu')
+            except Exception:
+                pass
+
+            del self.model
+            self.model = None
+
+        gc.collect()
+
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+
+        logger.info("GPU memory cleanup completed")
+
+
+class InferenceEngine(InferenceBase):
+    def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
+                 offload_config: Optional[OffloadConfig] = None,
+                 use_dual_gpu: bool = False):  # DUAL-GPU PATCH
+        super().__init__(generation, speaker_service, dialog_service, meta_file_path)
+        self.offload_config = offload_config
+        self.use_dual_gpu = use_dual_gpu          # DUAL-GPU PATCH
+        self.dual_gpu_splitter = None             # DUAL-GPU PATCH
+
+    def _load_model(self, dtype: torch.dtype, config: str = None):
+        config_dict = {}
+        if config:
+            with open(config, 'r') as f:
+                import json
+                config_dict = json.load(f)
+        else:
+            config_dict = DEFAULT_CONFIG
+
+        vibevoice_config = VibeVoiceConfig.from_dict(config_dict,
+                                                     torch_dtype=dtype,
+                                                     device_map="cuda",
+                                                     attn_implementation=self.attn_implementation)
+
+        # DUAL-GPU PATCH: auto-enable dual GPU if two cards present and no CPU offload
+        effective_dual_gpu = self.use_dual_gpu or (
+            not (self.offload_config and self.offload_config.enabled)
+            and is_dual_gpu_available()
+        )
+
+        if effective_dual_gpu and is_dual_gpu_available():
+            logger.info("Two GPUs detected — using dual-GPU layer split (no CPU offloading).")
+            # Load model entirely onto cuda:0 first, then split
+            model = VibeVoiceForConditionalInference.from_pretrain(
+                str((Path(self.model_file) / f"vibevoice7b_{'bf16' if dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors").resolve()),
+                vibevoice_config,
+                device=self.device,
+                offload_config=None,  # no CPU offloading
+                lora_model_path=self.lora_model_path,
+                lora_weight=self.lora_weight,
+            )
+            # Apply dual-GPU split to the language model backbone
+            dual_cfg = make_dual_gpu_config(total_layers=28)
+            self.dual_gpu_splitter = DualGPULayerSplitter(
+                language_model=model.language_model.model,
+                config=dual_cfg,
+                primary_device=self.device,
+                logger=logger,
+            )
+        else:
+            if self.offload_config and self.offload_config.enabled:
+                logger.info(f"CPU offloading enabled: {self.offload_config.num_layers_on_gpu} layers on GPU")
+            else:
+                logger.info("Single GPU, no offloading.")
+
+            model_file = Path(self.model_file) / f"vibevoice7b_{'bf16' if dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors"
+            model = VibeVoiceForConditionalInference.from_pretrain(
+                str(model_file.resolve()),
+                vibevoice_config,
+                device=self.device,
+                offload_config=self.offload_config,
+                lora_model_path=self.lora_model_path,
+                lora_weight=self.lora_weight,
+            )
+
+        model.eval()
+        self.model = model
+        return model
+
+    def _collect_offloading_metrics(self, generation_time: float) -> Optional[Dict[str, Any]]:
+        if not hasattr(self, 'model') or self.model.offloader is None:
+            return None
+
+        stats = self.model.offloader.get_stats()
+        vram_saved_gb = stats['cpu_layers'] * 0.31
+        transfer_overhead_sec = stats['total_transfer_time_ms'] / 1000
+        overhead_percentage = (transfer_overhead_sec / generation_time * 100) if generation_time > 0 else 0
+
+        return {
+            "enabled": True,
+            "gpu_layers": stats['gpu_layers'],
+            "cpu_layers": stats['cpu_layers'],
+            "transfer_overhead_ms": stats['total_transfer_time_ms'],
+            "avg_layer_transfer_ms": stats['avg_layer_transfer_time_ms'],
+            "overhead_percentage": overhead_percentage,
+            "time_breakdown": {
+                "pure_computation_ms": stats.get('total_compute_time_ms', 0),
+                "cpu_to_gpu_transfer_ms": stats.get('total_pre_transfer_time_ms', 0),
+                "gpu_to_cpu_release_ms": stats.get('total_post_transfer_time_ms', 0),
+            },
+            "theoretical_async_savings_ms": stats.get('theoretical_savings_with_async_ms', 0),
+            "vram_saved_gb": round(vram_saved_gb, 2),
+        }
+
+    def _save_audio(self, outputs: Union[torch.LongTensor, VibeVoiceGenerationOutput],
+                    processor: VibeVoiceProcessor,
+                    generation_time: float,
+                    input_tokens: int,
+                    batch_index: int,
+                    **kwargs) -> None:
+        if outputs.speech_outputs is None or len(outputs.speech_outputs) == 0:
+            raise RuntimeError("No audio output generated.")
+
+        sample_rate = 24000
+        audio_samples = outputs.speech_outputs[0].shape[-1] \
+            if len(outputs.speech_outputs[0].shape) > 0 else len(outputs.speech_outputs[0])
+        audio_duration = audio_samples / sample_rate
+        rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
+
+        output_tokens = outputs.sequences.shape[1]
+        generated_tokens = output_tokens - input_tokens
+
+        offloading_metrics = self._collect_offloading_metrics(generation_time)
+        if offloading_metrics:
+            logger.info(
+                f"Offloading metrics: {offloading_metrics['gpu_layers']} GPU layers, "
+                f"{offloading_metrics['overhead_percentage']:.1f}% overhead"
+            )
+
+        output_filename = f"{self.request_id}_{batch_index}.wav"
+        output_audio_path = Path(self.project_dir) / output_filename
+        processor.save_audio(outputs.speech_outputs[0], output_path=output_audio_path)
+
+        self.visitor.visit_inference_save_audio_file(
+            output_audio_path=str(output_audio_path),
+            generation_time=generation_time,
+            prefilling_tokens=input_tokens,
+            total_tokens=output_tokens,
+            generated_tokens=generated_tokens,
+            audio_duration_seconds=audio_duration,
+            real_time_factor=rtf,
+            **kwargs)
+
+        logger.info(f"Saving generated audio to {output_audio_path}")
+
+
+class FakeInferenceEngine(InferenceBase):
+    def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
+                 offload_config: Optional[OffloadConfig] = None):
+        super().__init__(generation, speaker_service, dialog_service, meta_file_path)
+        self.offload_config = offload_config
+
+    def _load_model(self, dtype: torch.dtype, config: str = None):
+        if self.offload_config and self.offload_config.enabled:
+            logger.info(f"[FAKE] Layer offloading enabled: {self.offload_config.num_layers_on_gpu} layers on GPU")
+        else:
+            logger.info("[FAKE] Layer offloading disabled")
+        return FakeModel()
+
+    def _generate_fake_offloading_metrics(self, generation_time: float, num_tokens: int = 100) -> Optional[Dict[str, Any]]:
+        if not self.offload_config or not self.offload_config.enabled:
+            return None
+
+        total_layers = 28
+        gpu_layers = self.offload_config.num_layers_on_gpu
+        cpu_layers = total_layers - gpu_layers
+        avg_cpu_to_gpu_ms = 37.8
+        avg_gpu_to_cpu_ms = 35.8
+
+        if gpu_layers >= 12:
+            target_overhead = 0.75
+        elif gpu_layers >= 8:
+            target_overhead = 0.82
+        else:
+            target_overhead = 0.87
+
+        generation_time_ms = generation_time * 1000
+        total_transfer_ms = generation_time_ms * target_overhead
+        total_compute_ms = generation_time_ms * (1 - target_overhead)
+        total_cpu_to_gpu_ms = total_transfer_ms * (avg_cpu_to_gpu_ms / (avg_cpu_to_gpu_ms + avg_gpu_to_cpu_ms))
+        total_gpu_to_cpu_ms = total_transfer_ms * (avg_gpu_to_cpu_ms / (avg_cpu_to_gpu_ms + avg_gpu_to_cpu_ms))
+        theoretical_savings_ms = total_gpu_to_cpu_ms * 0.9
+        vram_saved_gb = cpu_layers * 0.31
+        avg_layer_transfer_ms = (avg_cpu_to_gpu_ms + avg_gpu_to_cpu_ms) / 2
+
+        return {
+            "enabled": True,
+            "gpu_layers": gpu_layers,
+            "cpu_layers": cpu_layers,
+            "transfer_overhead_ms": round(total_transfer_ms, 2),
+            "avg_layer_transfer_ms": round(avg_layer_transfer_ms, 2),
+            "overhead_percentage": round(target_overhead * 100, 2),
+            "time_breakdown": {
+                "pure_computation_ms": round(total_compute_ms, 2),
+                "cpu_to_gpu_transfer_ms": round(total_cpu_to_gpu_ms, 2),
+                "gpu_to_cpu_release_ms": round(total_gpu_to_cpu_ms, 2),
+            },
+            "theoretical_async_savings_ms": round(theoretical_savings_ms, 2),
+            "vram_saved_gb": round(vram_saved_gb, 2),
+        }
+
+    def _save_audio(self, outputs: Union[torch.LongTensor, VibeVoiceGenerationOutput],
+                    processor: VibeVoiceProcessor,
+                    generation_time: float,
+                    input_tokens: int,
+                    batch_index: int,
+                    **kwargs) -> None:
+        base64_wav_audio = "UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA"
+        audio_data = base64.b64decode(base64_wav_audio)
+        fake_generated_tokens = 100
+        fake_total_tokens = input_tokens + fake_generated_tokens
+        offloading_metrics = self._generate_fake_offloading_metrics(generation_time, fake_generated_tokens)
+        if offloading_metrics:
+            logger.info(
+                f"[FAKE] Offloading metrics: {offloading_metrics['gpu_layers']} GPU layers, "
+                f"{offloading_metrics['overhead_percentage']:.1f}% overhead"
+            )
+
+        output_filename = f"{self.request_id}_{batch_index}.wav"
+        output_audio_path = Path(self.project_dir) / output_filename
+        with open(output_audio_path, 'wb') as f:
+            f.write(audio_data)
+
+        self.visitor.visit_inference_save_audio_file(
+            output_audio_path=str(output_audio_path),
+            prefilling_tokens=input_tokens,
+            generation_time=generation_time,
+            total_tokens=fake_total_tokens,
+            generated_tokens=fake_generated_tokens,
+            audio_duration_seconds=5.0,
+            real_time_factor=1.0,
+            **kwargs
+        )
+        logger.info(f"Saving generated audio to {output_audio_path}")
