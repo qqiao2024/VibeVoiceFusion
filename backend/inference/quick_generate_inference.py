@@ -333,15 +333,25 @@ class QuickGenerateInferenceEngine(QuickGenerateInferenceBase):
             and is_dual_gpu_available()
         )
 
+        # Use cpu device_map when doing dual-GPU split
+        config_device_map = "cpu" if (effective_dual_gpu and is_dual_gpu_available()) else "cuda"
+        vibevoice_config = VibeVoiceConfig.from_dict(
+            DEFAULT_CONFIG, torch_dtype=dtype, device_map=config_device_map,
+            attn_implementation=self.attn_implementation
+        )
+
         model_file = Path(self.model_file) / f"vibevoice7b_{'bf16' if dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors"
 
         if effective_dual_gpu and is_dual_gpu_available():
-            logger.info("Two GPUs detected — using dual-GPU layer split.")
+            logger.info("Two GPUs detected — loading to CPU first, then splitting across both GPUs.")
+            # Load to CPU first to avoid OOM (14GB BF16 won't fit on one 12GB card)
             model = VibeVoiceForConditionalInference.from_pretrain(
                 str(model_file.resolve()), vibevoice_config,
-                device=self.device, offload_config=None,
+                device='cpu',  # <-- CPU first, splitter moves layers to GPUs
+                offload_config=None,
                 lora_model_path=None, lora_weight=1.0,
             )
+            # Now split layers across both GPUs
             dual_cfg = make_dual_gpu_config(total_layers=28)
             self.dual_gpu_splitter = DualGPULayerSplitter(
                 language_model=model.language_model.model,
@@ -349,6 +359,13 @@ class QuickGenerateInferenceEngine(QuickGenerateInferenceBase):
                 primary_device=self.device,
                 logger=logger,
             )
+            # Move non-layer components to primary GPU
+            model.language_model.model.embed_tokens.to(self.device)
+            model.language_model.model.norm.to(self.device)
+            model.language_model.lm_head.to(self.device)
+            for name, module in model.named_children():
+                if name != 'language_model':
+                    module.to(self.device)
         else:
             if self.offload_config and self.offload_config.enabled:
                 logger.info(f"CPU offloading enabled: {self.offload_config.num_layers_on_gpu} layers on GPU")
@@ -356,7 +373,7 @@ class QuickGenerateInferenceEngine(QuickGenerateInferenceBase):
                 logger.info("Single GPU, no offloading.")
             model = VibeVoiceForConditionalInference.from_pretrain(
                 str(model_file.resolve()), vibevoice_config,
-                device=self.device, offload_config=self.offload_config,
+                device=str(self.device), offload_config=self.offload_config,
                 lora_model_path=None, lora_weight=1.0,
             )
 
@@ -412,3 +429,4 @@ class FakeQuickGenerateInferenceEngine(QuickGenerateInferenceBase):
             real_time_factor=1.0
         )
         logger.info(f"[FAKE] Saving generated audio to {output_audio_path}")
+

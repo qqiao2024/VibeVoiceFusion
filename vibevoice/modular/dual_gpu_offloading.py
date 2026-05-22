@@ -87,15 +87,19 @@ class DualGPULayerSplitter:
         # Hook 1: move activations to cuda:1 before the boundary layer
         boundary_layer = self.language_model.layers[split]
 
+        def _to_secondary(x):
+            """Recursively move tensors/tuples to secondary device."""
+            if isinstance(x, torch.Tensor):
+                return x.to(self.secondary_device)
+            if isinstance(x, tuple):
+                return tuple(_to_secondary(i) for i in x)
+            if isinstance(x, list):
+                return [_to_secondary(i) for i in x]
+            return x
+
         def pre_boundary_hook(module, args, kwargs):
-            new_args = tuple(
-                a.to(self.secondary_device) if isinstance(a, torch.Tensor) else a
-                for a in args
-            )
-            new_kwargs = {
-                k: v.to(self.secondary_device) if isinstance(v, torch.Tensor) else v
-                for k, v in kwargs.items()
-            }
+            new_args = tuple(_to_secondary(a) for a in args)
+            new_kwargs = {k: _to_secondary(v) for k, v in kwargs.items()}
             return new_args, new_kwargs
 
         self._hooks.append(
@@ -156,7 +160,8 @@ def make_dual_gpu_config(total_layers: int = 28) -> DualGPUConfig:
     """Balanced split: first half on GPU 0, second half on GPU 1."""
     return DualGPUConfig(
         enabled=True,
-        gpu0_layers=total_layers // 2,
+        gpu0_layers=total_layers * 2 // 7,
         gpu1_device="cuda:1",
         verbose=False,
     )
+

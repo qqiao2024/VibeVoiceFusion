@@ -37,7 +37,9 @@ ARG GITHUB_BRANCH
 ARG CACHE_BUST=unknown
 
 # Install git
-RUN apk add --no-cache git
+# RUN apk add --no-cache git
+RUN apk add --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/v3.23/main git
+
 
 # Cache bust: Force rebuild from here when CACHE_BUST changes
 RUN echo "Cache bust: ${CACHE_BUST}"

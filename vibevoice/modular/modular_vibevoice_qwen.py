@@ -470,6 +470,8 @@ class QwenModel(nn.Module):
 
         for decoder_layer in self.layers[: self.config.num_hidden_layers]:
 
+            pos_emb_device = next(decoder_layer.parameters()).device
+            layer_position_embeddings = (position_embeddings[0].to(pos_emb_device), position_embeddings[1].to(pos_emb_device))
             layer_outputs = decoder_layer(
                 hidden_states,
                 attention_mask=causal_mask,
@@ -478,7 +480,7 @@ class QwenModel(nn.Module):
                 output_attentions=output_attentions,
                 use_cache=use_cache,
                 cache_position=cache_position,
-                position_embeddings=position_embeddings,
+                position_embeddings=layer_position_embeddings,
                 **kwargs,
             )
 

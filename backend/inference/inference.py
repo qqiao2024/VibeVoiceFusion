@@ -22,32 +22,29 @@ from util.rand_init import get_generator
 from typing import Dict, Any, Optional
 from util.logger import get_logger
 
+# DUAL-GPU PATCH
+from vibevoice.modular.dual_gpu_offloading import (
+    DualGPULayerSplitter, is_dual_gpu_available, make_dual_gpu_config
+)
+
 logger = get_logger(__name__)
 
-# Preset mapping for offloading configurations
 OFFLOAD_PRESETS = {
     "balanced": OffloadConfig(
-        enabled=True,
-        num_layers_on_gpu=12,  # 12 GPU + 16 CPU
-        pin_memory=True,
-        prefetch_next_layer=True,
-        profile=True,  # Enable profiling for metrics collection
+        enabled=True, num_layers_on_gpu=12,
+        pin_memory=True, prefetch_next_layer=True, profile=True,
     ),
     "aggressive": OffloadConfig(
-        enabled=True,
-        num_layers_on_gpu=8,  # 8 GPU + 20 CPU
-        pin_memory=True,
-        prefetch_next_layer=True,
-        profile=True,  # Enable profiling for metrics collection
+        enabled=True, num_layers_on_gpu=8,
+        pin_memory=True, prefetch_next_layer=True, profile=True,
     ),
     "extreme": OffloadConfig(
-        enabled=True,
-        num_layers_on_gpu=4,  # 4 GPU + 24 CPU
-        pin_memory=True,
-        prefetch_next_layer=True,
-        profile=True,  # Enable profiling for metrics collection
+        enabled=True, num_layers_on_gpu=4,
+        pin_memory=True, prefetch_next_layer=True, profile=True,
     ),
+    "dual_gpu": None,  # DUAL-GPU PATCH: sentinel
 }
+
 
 class FakeModel:
     def __init__(self):
@@ -59,10 +56,11 @@ class FakeModel:
         for i in range(steps):
             if visitor is not None:
                 visitor.visit_inference_step_start(current_step=i+1, total_steps=steps)
-            time.sleep(random.uniform(0.1, 0.5))  # Simulate some processing time
+            time.sleep(random.uniform(0.1, 0.5))
             if visitor is not None:
                 visitor.visit_inference_step_end(current_step=i+1, total_steps=steps)
-        return torch.randn(1, 16000 * 5)  # Simulate 5 seconds of audio at 16kHz
+        return torch.randn(1, 16000 * 5)
+
 
 class InferenceBase(ABC):
     def __init__(self, generation: Generation, speaker_service: SpeakerService,
@@ -84,7 +82,7 @@ class InferenceBase(ABC):
         self.session_id = generation.session_id
         self.cfg_scale = generation.cfg_scale
         self._generation = generation
-        
+
     def get_generation(self) -> Generation:
         return copy.deepcopy(self._generation)
 
@@ -93,37 +91,23 @@ class InferenceBase(ABC):
                dialog_service: DialogSessionService, meta_file_path: str,
                offload_config: Optional[Dict[str, Any]] = None,
                fake: bool = False) -> 'InferenceBase':
-        """
-        Create inference engine instance.
-
-        Args:
-            generation: Generation object
-            speaker_service: Speaker service
-            dialog_service: Dialog service
-            meta_file_path: Path to metadata
-            fake: Use fake inference engine for testing
-            offload_config: Offloading configuration dict (optional)
-                {
-                    'enabled': True/False,
-                    'mode': 'preset' or 'manual',
-                    'preset': 'balanced'/'aggressive'/'extreme',  # for preset mode
-                    'num_gpu_layers': int  # for manual mode
-                }
-
-        Returns:
-            InferenceBase instance
-        """
-        # Parse offload config dict to create OffloadConfig object (for both real and fake engines)
         offload_config_obj = None
+        use_dual_gpu = False  # DUAL-GPU PATCH
+
         if offload_config and offload_config.get('enabled', False):
             mode = offload_config.get('mode', 'preset')
 
             if mode == 'preset':
                 preset = offload_config.get('preset', 'balanced')
-                offload_config_obj = OFFLOAD_PRESETS.get(preset)
-                if not offload_config_obj:
-                    logger.warning(f"Unknown preset '{preset}', using 'balanced'")
-                    offload_config_obj = OFFLOAD_PRESETS['balanced']
+                # DUAL-GPU PATCH
+                if preset == 'dual_gpu':
+                    use_dual_gpu = True
+                    offload_config_obj = None
+                else:
+                    offload_config_obj = OFFLOAD_PRESETS.get(preset)
+                    if not offload_config_obj:
+                        logger.warning(f"Unknown preset '{preset}', using 'balanced'")
+                        offload_config_obj = OFFLOAD_PRESETS['balanced']
 
             elif mode == 'manual':
                 num_gpu_layers = offload_config.get('num_gpu_layers', 20)
@@ -132,7 +116,7 @@ class InferenceBase(ABC):
                     num_layers_on_gpu=num_gpu_layers,
                     pin_memory=True,
                     prefetch_next_layer=True,
-                    profile=True,  # Enable profiling for metrics collection
+                    profile=True,
                 )
 
         if fake:
@@ -141,8 +125,11 @@ class InferenceBase(ABC):
                 offload_config=offload_config_obj
             )
 
-        return InferenceEngine(generation, speaker_service, dialog_service, meta_file_path, 
-                               offload_config=offload_config_obj)
+        return InferenceEngine(
+            generation, speaker_service, dialog_service, meta_file_path,
+            offload_config=offload_config_obj,
+            use_dual_gpu=use_dual_gpu,  # DUAL-GPU PATCH
+        )
 
     @abstractmethod
     def _load_model(self, dtype: torch.dtype, config: str = None):
@@ -161,54 +148,39 @@ class InferenceBase(ABC):
         pass
 
     def run_inference(self):
-
         self.visitor.visit_preprocessing(datetime.now().timestamp())
 
-        # Get session to check mode
         session = self.dialog_service.get_session(self.session_id)
         if not session:
             raise RuntimeError(f"Dialog session with ID '{self.session_id}' not found")
 
         if session.mode == "narration":
-            # Narration mode: single speaker
             txt_content, scripts, narrator_speaker_id = self.dialog_service.parse_narration_script(self.session_id)
             if not scripts:
                 raise RuntimeError("No content found in the narration session.")
-
             unique_speaker_names = [narrator_speaker_id]
             voice_names = [narrator_speaker_id]
             max_speaker_id = 1
-
             logger.info(f"Narration mode: narrator={narrator_speaker_id}, paragraphs={len(scripts)}")
         else:
-            # Dialogue mode: multiple speakers
             txt_content, scripts, unique_speaker_names, max_speaker_id = self.dialog_service.parse_session_txt_script(self.session_id)
             if not scripts or not unique_speaker_names:
                 raise RuntimeError("No scripts, speaker_numbers found for the specified dialog session.")
-
-            voice_names = []
-            for i in range(max_speaker_id):
-                voice_names.append(f"Speaker {i+1}")
-
+            voice_names = [f"Speaker {i+1}" for i in range(max_speaker_id)]
             logger.info(f"Dialogue mode: max_speaker_id={max_speaker_id}, unique speakers: {unique_speaker_names}")
 
         voice_sample = self.speaker_service.get_speakers_filepath(voice_names)
-
         logger.info(f"Voice samples: {voice_sample}")
-        # Proceed with inference using txt_content, scripts, and speaker_numbers
-        # ...
-        full_script = '\n'.join(scripts)
-        full_script = full_script.replace("’", "'")
 
+        full_script = '\n'.join(scripts)
+        full_script = full_script.replace("\u2019", "'")
 
         load_dtype = torch.bfloat16
         if self.model_dtype == "float8_e4m3fn":
             load_dtype = torch.float8_e4m3fn
 
-        logger.info(f"Loading model with dtype: {load_dtype}, "
-                    f"attn_implementation: {self.attn_implementation}")
+        logger.info(f"Loading model with dtype: {load_dtype}, attn_implementation: {self.attn_implementation}")
 
-        # only for testing purpose, load a fake model
         model = self._load_model(dtype=load_dtype)
 
         self.visitor.visit_inference_start(scripts=scripts,
@@ -246,27 +218,20 @@ class InferenceBase(ABC):
                              batch_index=batch_idx)
 
             self.visitor.visit_inference_batch_end(batch_index=batch_idx)
-
             self.seeds = random.randint(0, 2**64 - 1)
 
         self.visitor.visit_completed()
-        # clean up the model from memory
-        # clean up the model and tensors from GPU memory
-        del model
-        del processor
-        del inputs
-        del outputs
+        del model, processor, inputs, outputs
 
     def success(self, message: str):
         self.visitor.visit_completed(message)
 
     def generation_info(self) -> Dict[str, Any]:
         return self.get_generation().to_dict()
-    
+
     def finalize(self):
         """Clean up GPU memory after inference."""
         if hasattr(self, 'model') and self.model is not None:
-            # Clean up offloader first (releases offloaded layer references)
             if hasattr(self.model, 'offloader') and self.model.offloader is not None:
                 try:
                     self.model.offloader.cleanup()
@@ -274,42 +239,38 @@ class InferenceBase(ABC):
                 except Exception as e:
                     logger.warning(f"Failed to cleanup offloader: {e}")
 
-            # Move model to CPU first to free VRAM
+            # DUAL-GPU PATCH: cleanup splitter
+            if hasattr(self, 'dual_gpu_splitter') and self.dual_gpu_splitter is not None:
+                try:
+                    self.dual_gpu_splitter.cleanup()
+                    self.dual_gpu_splitter = None
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup dual_gpu_splitter: {e}")
+
             try:
                 self.model.to('cpu')
             except Exception:
-                pass  # Model might already be partially on CPU
+                pass
 
             del self.model
             self.model = None
 
-        # Force Python garbage collection to release references
         gc.collect()
-
-        # Synchronize CUDA to ensure all operations complete
         if torch.cuda.is_available():
             torch.cuda.synchronize()
             torch.cuda.empty_cache()
 
         logger.info("GPU memory cleanup completed")
 
+
 class InferenceEngine(InferenceBase):
     def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
-                 offload_config: Optional[OffloadConfig] = None):
-        """
-        Initialize inference engine with optional layer offloading.
-
-        Args:
-            generation: Generation object with parameters
-            speaker_service: Service for managing speakers
-            dialog_service: Service for managing dialogs
-            meta_file_path: Path to metadata file
-            offload_config: OffloadConfig object or None (default: no offloading)
-        """
+                 offload_config: Optional[OffloadConfig] = None,
+                 use_dual_gpu: bool = False):  # DUAL-GPU PATCH
         super().__init__(generation, speaker_service, dialog_service, meta_file_path)
-
-        # Offloading configuration
         self.offload_config = offload_config
+        self.use_dual_gpu = use_dual_gpu      # DUAL-GPU PATCH
+        self.dual_gpu_splitter = None         # DUAL-GPU PATCH
 
     def _load_model(self, dtype: torch.dtype, config: str = None):
         config_dict = {}
@@ -318,55 +279,77 @@ class InferenceEngine(InferenceBase):
                 import json
                 config_dict = json.load(f)
         else:
-            # Use default configuration
-            print(f"Using default configuration: {DEFAULT_CONFIG}")
             config_dict = DEFAULT_CONFIG
 
-        config = VibeVoiceConfig.from_dict(config_dict,
-                                           torch_dtype=dtype,
-                                           device_map="cuda",
-                                           attn_implementation=self.attn_implementation)
-
-        # Use offload config if provided
-        if self.offload_config and self.offload_config.enabled:
-            logger.info(f"Layer offloading enabled: {self.offload_config.num_layers_on_gpu} layers on GPU")
-        else:
-            logger.info("Layer offloading disabled")
-
-        # Load model with device-specific logic
-        model_file = Path(self.model_file) / Path(f"vibevoice7b_{'bf16' if dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors")
-        model = VibeVoiceForConditionalInference.from_pretrain(
-            str(model_file.resolve()),
-            config,
-            device=self.device,
-            offload_config=self.offload_config,
-            lora_model_path=self.lora_model_path,
-            lora_weight=self.lora_weight
+        # DUAL-GPU PATCH: auto-enable when two GPUs present and no CPU offload
+        effective_dual_gpu = self.use_dual_gpu or (
+            not (self.offload_config and self.offload_config.enabled)
+            and is_dual_gpu_available()
         )
 
+        # Use cpu device_map when doing dual-GPU split to avoid loading onto single GPU
+        config_device_map = "cpu" if (effective_dual_gpu and is_dual_gpu_available()) else "cuda"
+
+        vibevoice_config = VibeVoiceConfig.from_dict(config_dict,
+                                                     torch_dtype=dtype,
+                                                     device_map=config_device_map,
+                                                     attn_implementation=self.attn_implementation)
+
+        model_file = Path(self.model_file) / f"vibevoice7b_{'bf16' if dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors"
+
+        if effective_dual_gpu and is_dual_gpu_available():
+            logger.info("Two GPUs detected — loading to CPU first, then splitting across both GPUs.")
+            model = VibeVoiceForConditionalInference.from_pretrain(
+                str(model_file.resolve()),
+                vibevoice_config,
+                device='cpu',  # load to RAM first
+                offload_config=None,
+                lora_model_path=self.lora_model_path,
+                lora_weight=self.lora_weight,
+            )
+            # Split transformer layers across both GPUs
+            dual_cfg = make_dual_gpu_config(total_layers=28)
+            self.dual_gpu_splitter = DualGPULayerSplitter(
+                language_model=model.model.language_model,
+                config=dual_cfg,
+                primary_device=self.device,
+                logger=logger,
+            )
+            # Move non-layer components to primary GPU
+            model.model.language_model.embed_tokens.to(self.device)
+            model.model.language_model.norm.to(self.device)
+            model.model.language_model.rotary_emb.to(self.device)
+            model.lm_head.to(self.device)
+            model.model.acoustic_tokenizer.to(self.device)
+            model.model.semantic_tokenizer.to(self.device)
+            model.model.acoustic_connector.to(self.device)
+            model.model.semantic_connector.to(self.device)
+            model.model.prediction_head.to(self.device)
+        else:
+            if self.offload_config and self.offload_config.enabled:
+                logger.info(f"Layer offloading enabled: {self.offload_config.num_layers_on_gpu} layers on GPU")
+            else:
+                logger.info("Layer offloading disabled")
+
+            model = VibeVoiceForConditionalInference.from_pretrain(
+                str(model_file.resolve()),
+                vibevoice_config,
+                device=str(self.device),
+                offload_config=self.offload_config,
+                lora_model_path=self.lora_model_path,
+                lora_weight=self.lora_weight,
+            )
+
         model.eval()
-        self.model = model  # Store model for later access (e.g., metrics collection)
+        self.model = model
         return model
 
     def _collect_offloading_metrics(self, generation_time: float) -> Optional[Dict[str, Any]]:
-        """
-        Collect offloading statistics after generation.
-
-        Args:
-            generation_time: Total generation time in seconds
-
-        Returns:
-            Dictionary with offloading metrics or None if offloading not enabled
-        """
         if not hasattr(self, 'model') or self.model.offloader is None:
             return None
 
         stats = self.model.offloader.get_stats()
-
-        # Calculate VRAM savings estimate (~310MB per layer in Float8)
-        vram_saved_gb = (stats['cpu_layers'] * 0.31)
-
-        # Calculate overhead percentage
+        vram_saved_gb = stats['cpu_layers'] * 0.31
         transfer_overhead_sec = stats['total_transfer_time_ms'] / 1000
         overhead_percentage = (transfer_overhead_sec / generation_time * 100) if generation_time > 0 else 0
 
@@ -400,22 +383,17 @@ class InferenceEngine(InferenceBase):
             if len(outputs.speech_outputs[0].shape) > 0 else len(outputs.speech_outputs[0])
         audio_duration = audio_samples / sample_rate
         rtf = generation_time / audio_duration if audio_duration > 0 else float('inf')
-
-        output_tokens = outputs.sequences.shape[1]  # Total tokens (input + generated)
+        output_tokens = outputs.sequences.shape[1]
         generated_tokens = output_tokens - input_tokens
 
-        # Collect offloading metrics if enabled
         offloading_metrics = self._collect_offloading_metrics(generation_time)
         if offloading_metrics:
             logger.info(
-                f"Offloading metrics collected: {offloading_metrics['gpu_layers']} GPU layers, "
+                f"Offloading metrics: {offloading_metrics['gpu_layers']} GPU layers, "
                 f"{offloading_metrics['overhead_percentage']:.1f}% overhead"
             )
 
-        # Generate output filename and set it in the generation object
         output_filename = f"{self.request_id}_{batch_index}.wav"
-
-        # Save output (processor handles device internally)
         output_audio_path = Path(self.project_dir) / output_filename
         processor.save_audio(outputs.speech_outputs[0], output_path=output_audio_path)
 
@@ -430,28 +408,15 @@ class InferenceEngine(InferenceBase):
             **kwargs)
 
         logger.info(f"Saving generated audio to {output_audio_path}")
-        return
+
 
 class FakeInferenceEngine(InferenceBase):
     def __init__(self, generation, speaker_service, dialog_service, meta_file_path: str,
                  offload_config: Optional[OffloadConfig] = None):
-        """
-        Initialize fake inference engine with optional layer offloading.
-
-        Args:
-            generation: Generation object with parameters
-            speaker_service: Service for managing speakers
-            dialog_service: Service for managing dialogs
-            meta_file_path: Path to metadata file
-            offload_config: OffloadConfig object or None (default: no offloading)
-        """
         super().__init__(generation, speaker_service, dialog_service, meta_file_path)
-
-        # Offloading configuration
         self.offload_config = offload_config
 
     def _load_model(self, dtype: torch.dtype, config: str = None):
-        # Log offloading config for fake engine
         if self.offload_config and self.offload_config.enabled:
             logger.info(f"[FAKE] Layer offloading enabled: {self.offload_config.num_layers_on_gpu} layers on GPU")
         else:
@@ -459,55 +424,29 @@ class FakeInferenceEngine(InferenceBase):
         return FakeModel()
 
     def _generate_fake_offloading_metrics(self, generation_time: float, num_tokens: int = 100) -> Optional[Dict[str, Any]]:
-        """
-        Generate realistic fake offloading metrics.
-
-        Args:
-            generation_time: Total generation time in seconds
-            num_tokens: Number of generated tokens (ignored, calculated from generation_time)
-
-        Returns:
-            Dictionary with fake offloading metrics or None if offloading not enabled
-        """
         if not self.offload_config or not self.offload_config.enabled:
             return None
 
         total_layers = 28
         gpu_layers = self.offload_config.num_layers_on_gpu
         cpu_layers = total_layers - gpu_layers
-
-        # Realistic transfer times based on real measurements (from CLAUDE.md Phase 2 metrics)
-        # CPU→GPU: ~37.8ms per layer, GPU→CPU: ~35.8ms per layer
         avg_cpu_to_gpu_ms = 37.8
         avg_gpu_to_cpu_ms = 35.8
 
-        # Calculate realistic overhead percentages based on GPU layer count
-        # These match the expected overhead from CLAUDE.md
-        if gpu_layers >= 12:  # Balanced
-            target_overhead = 0.75  # 75% overhead
-        elif gpu_layers >= 8:   # Aggressive
-            target_overhead = 0.82  # 82% overhead
-        else:                    # Extreme (4 layers)
-            target_overhead = 0.87  # 87% overhead
+        if gpu_layers >= 12:
+            target_overhead = 0.75
+        elif gpu_layers >= 8:
+            target_overhead = 0.82
+        else:
+            target_overhead = 0.87
 
-        # Calculate transfer time from target overhead
         generation_time_ms = generation_time * 1000
         total_transfer_ms = generation_time_ms * target_overhead
-
-        # Compute time is the remaining time
         total_compute_ms = generation_time_ms * (1 - target_overhead)
-
-        # Distribute transfer time across CPU→GPU and GPU→CPU (roughly equal)
         total_cpu_to_gpu_ms = total_transfer_ms * (avg_cpu_to_gpu_ms / (avg_cpu_to_gpu_ms + avg_gpu_to_cpu_ms))
         total_gpu_to_cpu_ms = total_transfer_ms * (avg_gpu_to_cpu_ms / (avg_cpu_to_gpu_ms + avg_gpu_to_cpu_ms))
-
-        # Calculate theoretical async savings (could hide ~90% of GPU→CPU transfers)
         theoretical_savings_ms = total_gpu_to_cpu_ms * 0.9
-
-        # VRAM savings (~310MB per layer for Float8)
         vram_saved_gb = cpu_layers * 0.31
-
-        # Average layer transfer time (CPU→GPU + GPU→CPU) / 2
         avg_layer_transfer_ms = (avg_cpu_to_gpu_ms + avg_gpu_to_cpu_ms) / 2
 
         return {
@@ -528,28 +467,23 @@ class FakeInferenceEngine(InferenceBase):
 
     def _save_audio(self, outputs: Union[torch.LongTensor, VibeVoiceGenerationOutput],
                     processor: VibeVoiceProcessor,
-                    generation_time: float, 
+                    generation_time: float,
                     input_tokens: int,
                     batch_index: int,
                     **kwargs) -> None:
-        base64_wav_audio = "UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA"  # Fake short audio for test
+        base64_wav_audio = "UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA"
         audio_data = base64.b64decode(base64_wav_audio)
-
-        # Fake token counts
         fake_generated_tokens = 100
         fake_total_tokens = input_tokens + fake_generated_tokens
 
-        # Generate fake offloading metrics if enabled
         offloading_metrics = self._generate_fake_offloading_metrics(generation_time, fake_generated_tokens)
         if offloading_metrics:
             logger.info(
-                f"[FAKE] Offloading metrics generated: {offloading_metrics['gpu_layers']} GPU layers, "
+                f"[FAKE] Offloading metrics: {offloading_metrics['gpu_layers']} GPU layers, "
                 f"{offloading_metrics['overhead_percentage']:.1f}% overhead"
             )
 
-        # Generate output filename and set it in the generation object
         output_filename = f"{self.request_id}_{batch_index}.wav"
-
         output_audio_path = Path(self.project_dir) / output_filename
         with open(output_audio_path, 'wb') as f:
             f.write(audio_data)
@@ -560,10 +494,9 @@ class FakeInferenceEngine(InferenceBase):
             generation_time=generation_time,
             total_tokens=fake_total_tokens,
             generated_tokens=fake_generated_tokens,
-            audio_duration_seconds=5.0,               # fake value
-            real_time_factor=1.0,                     # fake value
+            audio_duration_seconds=5.0,
+            real_time_factor=1.0,
             **kwargs
         )
-
         logger.info(f"Saving generated audio to {output_audio_path}")
-        return
+

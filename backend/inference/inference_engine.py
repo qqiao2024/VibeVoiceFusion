@@ -299,29 +299,31 @@ class InferenceEngine(InferenceBase):
         else:
             config_dict = DEFAULT_CONFIG
 
-        vibevoice_config = VibeVoiceConfig.from_dict(config_dict,
-                                                     torch_dtype=dtype,
-                                                     device_map="cuda",
-                                                     attn_implementation=self.attn_implementation)
-
         # DUAL-GPU PATCH: auto-enable dual GPU if two cards present and no CPU offload
         effective_dual_gpu = self.use_dual_gpu or (
             not (self.offload_config and self.offload_config.enabled)
             and is_dual_gpu_available()
         )
 
+        # Use cpu device_map when doing dual-GPU split to avoid loading onto single GPU
+        config_device_map = "cpu" if (effective_dual_gpu and is_dual_gpu_available()) else "cuda"
+        vibevoice_config = VibeVoiceConfig.from_dict(config_dict,
+                                                     torch_dtype=dtype,
+                                                     device_map=config_device_map,
+                                                     attn_implementation=self.attn_implementation)
+
         if effective_dual_gpu and is_dual_gpu_available():
-            logger.info("Two GPUs detected — using dual-GPU layer split (no CPU offloading).")
-            # Load model entirely onto cuda:0 first, then split
+            logger.info("Two GPUs detected — loading to CPU first, then splitting across both GPUs.")
+            # Load to CPU first to avoid OOM (14GB BF16 won't fit on one 12GB card)
             model = VibeVoiceForConditionalInference.from_pretrain(
                 str((Path(self.model_file) / f"vibevoice7b_{'bf16' if dtype == torch.bfloat16 else 'float8_e4m3fn'}.safetensors").resolve()),
                 vibevoice_config,
-                device=self.device,
-                offload_config=None,  # no CPU offloading
+                device='cpu',  # <-- CPU first, splitter moves layers to GPUs
+                offload_config=None,
                 lora_model_path=self.lora_model_path,
                 lora_weight=self.lora_weight,
             )
-            # Apply dual-GPU split to the language model backbone
+            # Now split layers across both GPUs (moves weights GPU as it goes)
             dual_cfg = make_dual_gpu_config(total_layers=28)
             self.dual_gpu_splitter = DualGPULayerSplitter(
                 language_model=model.language_model.model,
@@ -329,6 +331,14 @@ class InferenceEngine(InferenceBase):
                 primary_device=self.device,
                 logger=logger,
             )
+            # Move non-layer components to primary GPU
+            model.language_model.model.embed_tokens.to(self.device)
+            model.language_model.model.norm.to(self.device)
+            model.language_model.lm_head.to(self.device)
+            # Move other model components (acoustic encoder, diffusion head, etc.)
+            for name, module in model.named_children():
+                if name != 'language_model':
+                    module.to(self.device)
         else:
             if self.offload_config and self.offload_config.enabled:
                 logger.info(f"CPU offloading enabled: {self.offload_config.num_layers_on_gpu} layers on GPU")
@@ -339,7 +349,7 @@ class InferenceEngine(InferenceBase):
             model = VibeVoiceForConditionalInference.from_pretrain(
                 str(model_file.resolve()),
                 vibevoice_config,
-                device=self.device,
+                device=str(self.device),
                 offload_config=self.offload_config,
                 lora_model_path=self.lora_model_path,
                 lora_weight=self.lora_weight,
@@ -504,3 +514,4 @@ class FakeInferenceEngine(InferenceBase):
             **kwargs
         )
         logger.info(f"Saving generated audio to {output_audio_path}")
+
